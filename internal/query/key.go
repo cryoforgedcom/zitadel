@@ -1,9 +1,22 @@
 package query
 
 import (
+	"context"
+	"crypto"
+	"database/sql"
 	"time"
 
+<<<<<<< HEAD
 	zcrypto "github.com/zitadel/zitadel/internal/crypto"
+=======
+	sq "github.com/Masterminds/squirrel"
+
+	"github.com/zitadel/zitadel/internal/api/authz"
+	"github.com/zitadel/zitadel/internal/api/call"
+	zcrypto "github.com/zitadel/zitadel/internal/crypto"
+	"github.com/zitadel/zitadel/internal/domain"
+	"github.com/zitadel/zitadel/internal/eventstore"
+>>>>>>> 2ddd14f8e (feat: allow ECDSA and ED25519 public keys)
 	"github.com/zitadel/zitadel/internal/query/projection"
 )
 
