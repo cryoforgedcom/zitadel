@@ -989,6 +989,7 @@ SystemDefaults:
     GeoCountryHeader: "" # ZITADEL_SYSTEMDEFAULTS_RISK_GEOCOUNTRYHEADER
     SignalStore:
       Enabled: false
+      Mode: pg # ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_MODE  (pg or redis)
       ChannelSize: 4096
       Debounce:
         MinFrequency: 1s
@@ -996,6 +997,10 @@ SystemDefaults:
       Postgres:
         PartitionInterval: 1h
         Retention: 24h
+      Redis:
+        MaxLen: 100000
+        DrainInterval: 5s
+        DrainBatchSize: 500
     Rules: # ZITADEL_SYSTEMDEFAULTS_RISK_RULES
       - id: failure-burst
         description: "Block after 5+ failures from same user in history window"

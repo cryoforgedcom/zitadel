@@ -100,17 +100,40 @@ type CBConfig struct {
 }
 
 // SignalStoreConfig configures the persistent signal store used for risk evaluation.
+// SignalStoreMode determines the hot-tier write target for signals.
+type SignalStoreMode string
+
+const (
+	// SignalStoreModePG writes signals directly to PostgreSQL (default).
+	SignalStoreModePG SignalStoreMode = "pg"
+	// SignalStoreModeRedis writes signals to a Redis Stream, which a drain
+	// worker flushes to PostgreSQL in batches.
+	SignalStoreModeRedis SignalStoreMode = "redis"
+)
+
 type SignalStoreConfig struct {
-	// Enabled activates the persistent PG signal store.
+	// Enabled activates the persistent signal store.
 	// When false, the in-memory store is used (default, backward compatible).
 	Enabled bool
+	// Mode selects the hot-tier write target: "pg" (default) or "redis".
+	Mode SignalStoreMode
 	// ChannelSize is the buffer size for the fire-and-forget emission channel.
 	// Signals are dropped (and counted) when the channel is full.
 	ChannelSize int
-	// Debounce controls batching of signal writes to PostgreSQL.
+	// Debounce controls batching of signal writes.
 	Debounce DebouncerConfig
 	// Postgres configures the warm-tier PG signal table.
 	Postgres SignalPGConfig
+	// Redis configures the hot-tier Redis Stream (used when Mode is "redis").
+	Redis SignalRedisConfig
+}
+
+// EffectiveMode returns the configured mode, defaulting to PG.
+func (c SignalStoreConfig) EffectiveMode() SignalStoreMode {
+	if c.Mode == SignalStoreModeRedis {
+		return SignalStoreModeRedis
+	}
+	return SignalStoreModePG
 }
 
 // DebouncerConfig controls how signals are batched before writing to PG.
@@ -127,6 +150,22 @@ type SignalPGConfig struct {
 	PartitionInterval time.Duration
 	// Retention is how long signals are kept in PG before partition cleanup.
 	Retention time.Duration
+}
+
+// SignalRedisConfig configures the Redis Stream hot tier.
+type SignalRedisConfig struct {
+	// MaxLen is the approximate max stream length enforced via XADD MAXLEN ~.
+	// 0 means unlimited (not recommended in production).
+	MaxLen int64
+	// DrainInterval is how often the drain worker reads from Redis and writes
+	// to PG. Default: 5s.
+	DrainInterval time.Duration
+	// DrainBatchSize is the max number of entries read per drain cycle.
+	// Default: 500.
+	DrainBatchSize int64
+	// CircuitBreaker configures the circuit breaker for Redis sink failures.
+	// When tripped, signals fall back to the PG sink directly.
+	CircuitBreaker *CBConfig
 }
 
 func (c Config) Validate() error {

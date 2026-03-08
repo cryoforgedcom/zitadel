@@ -356,6 +356,8 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 
 	// register signal store partition worker if the risk signal store is enabled
 	risk.RegisterPartitionWorker(ctx, q, commands.RiskService())
+	// register Redis drain worker if the signal store uses Redis mode
+	risk.RegisterDrainWorker(ctx, q, commands.RiskService())
 
 	if err = q.Start(ctx); err != nil {
 		return err
@@ -368,6 +370,8 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 
 	// start signal partition management periodic job
 	risk.StartPartitionSchedule(ctx, q, commands.RiskService())
+	// start Redis drain periodic job
+	risk.StartDrainSchedule(ctx, q, commands.RiskService())
 
 	router := mux.NewRouter()
 	tlsConfig, err := config.TLS.Config()

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
@@ -38,27 +39,50 @@ type Service struct {
 	emitter         *Emitter
 	emitterCancel   context.CancelFunc
 	partitionWorker *PartitionWorker
+	drainWorker     *DrainWorker
 }
 
 // New creates a risk evaluation service. When db is non-nil and
-// cfg.SignalStore.Enabled is true, it creates a PG-backed signal store
-// with a fire-and-forget emitter. Otherwise it falls back to the in-memory
-// store.
-func New(cfg Config, store Store, llm LLMClient, db *sql.DB) (*Service, error) {
+// cfg.SignalStore.Enabled is true, it creates a signal store with a
+// fire-and-forget emitter. The emitter sink depends on the configured mode:
+//   - "pg" (default): writes directly to PostgreSQL
+//   - "redis": writes to a Redis Stream, with a drain worker flushing to PG
+//
+// When redisClient is nil and mode is "redis", it falls back to PG mode.
+func New(cfg Config, store Store, llm LLMClient, db *sql.DB, redisClient *redis.Client) (*Service, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
-	// When the PG signal store is enabled and a database is provided,
-	// create PGStore + Emitter and use PGStore as the Store.
 	var emitter *Emitter
 	var partitionWorker *PartitionWorker
+	var drainWorker *DrainWorker
+
 	if cfg.SignalStore.Enabled && db != nil {
 		pgStore := NewPGStore(db, cfg)
 		if store == nil {
 			store = pgStore
 		}
-		emitter = NewEmitter(cfg.SignalStore, pgStore)
+
+		var sink SignalSink = pgStore
+		mode := cfg.SignalStore.EffectiveMode()
+
+		if mode == SignalStoreModeRedis && redisClient != nil {
+			redisSink := NewRedisStreamSink(redisClient, cfg.SignalStore.Redis)
+
+			// Ensure consumer group exists for the drain worker.
+			if err := redisSink.EnsureConsumerGroup(context.Background()); err != nil {
+				logging.WithError(context.Background(), err).Warn(
+					"risk.signal_store.redis_group_create_failed",
+				)
+				// Fall back to PG if we can't set up Redis.
+			} else {
+				sink = NewFallbackSink(redisSink, pgStore, cfg.SignalStore.Redis.CircuitBreaker)
+				drainWorker = NewDrainWorker(redisClient, pgStore, cfg.SignalStore.Redis)
+			}
+		}
+
+		emitter = NewEmitter(cfg.SignalStore, sink)
 		partitionWorker = NewPartitionWorker(db, cfg.SignalStore.Postgres)
 	}
 
@@ -91,6 +115,7 @@ func New(cfg Config, store Store, llm LLMClient, db *sql.DB) (*Service, error) {
 		db:              db,
 		emitter:         emitter,
 		partitionWorker: partitionWorker,
+		drainWorker:     drainWorker,
 	}
 	if cfg.Enabled {
 		go svc.maintenanceLoop()
@@ -101,9 +126,11 @@ func New(cfg Config, store Store, llm LLMClient, db *sql.DB) (*Service, error) {
 		ctx, cancel := context.WithCancel(context.Background())
 		svc.emitterCancel = cancel
 		go emitter.Start(ctx)
+		mode := cfg.SignalStore.EffectiveMode()
 		if instrumentation.IsStreamEnabled(instrumentation.StreamRisk) {
 			logging.Info(ctx, "risk.signal_store.started",
 				slog.Int("channel_size", cfg.SignalStore.ChannelSize),
+				slog.String("mode", string(mode)),
 			)
 		}
 	}
@@ -170,6 +197,15 @@ func (s *Service) PartitionWorker() *PartitionWorker {
 		return nil
 	}
 	return s.partitionWorker
+}
+
+// DrainWorker returns the Redis drain worker for registration with the River
+// queue, or nil when not using Redis mode.
+func (s *Service) DrainWorker() *DrainWorker {
+	if s == nil {
+		return nil
+	}
+	return s.drainWorker
 }
 
 func (s *Service) Enabled() bool {

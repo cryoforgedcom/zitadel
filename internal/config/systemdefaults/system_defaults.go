@@ -71,6 +71,7 @@ type RiskConfig struct {
 // RiskSignalStoreConfig mirrors risk.SignalStoreConfig for YAML configuration.
 type RiskSignalStoreConfig struct {
 	Enabled     bool
+	Mode        string
 	ChannelSize int
 	Debounce    struct {
 		MinFrequency time.Duration
@@ -79,6 +80,12 @@ type RiskSignalStoreConfig struct {
 	Postgres struct {
 		PartitionInterval time.Duration
 		Retention         time.Duration
+	}
+	Redis struct {
+		MaxLen         int64
+		DrainInterval  time.Duration
+		DrainBatchSize int64
+		CircuitBreaker *RiskCBConfig
 	}
 }
 

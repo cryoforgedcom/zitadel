@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
+	"github.com/redis/go-redis/v9"
 	"github.com/zitadel/logging"
 
 	"github.com/zitadel/zitadel/internal/api/authz"
@@ -265,6 +266,7 @@ func StartCommands(
 		GeoCountryHeader: defaults.Risk.GeoCountryHeader,
 		SignalStore: risk.SignalStoreConfig{
 			Enabled:     defaults.Risk.SignalStore.Enabled,
+			Mode:        risk.SignalStoreMode(defaults.Risk.SignalStore.Mode),
 			ChannelSize: defaults.Risk.SignalStore.ChannelSize,
 			Debounce: risk.DebouncerConfig{
 				MinFrequency: defaults.Risk.SignalStore.Debounce.MinFrequency,
@@ -274,13 +276,25 @@ func StartCommands(
 				PartitionInterval: defaults.Risk.SignalStore.Postgres.PartitionInterval,
 				Retention:         defaults.Risk.SignalStore.Postgres.Retention,
 			},
+			Redis: risk.SignalRedisConfig{
+				MaxLen:         defaults.Risk.SignalStore.Redis.MaxLen,
+				DrainInterval:  defaults.Risk.SignalStore.Redis.DrainInterval,
+				DrainBatchSize: defaults.Risk.SignalStore.Redis.DrainBatchSize,
+				CircuitBreaker: riskCBConfig(defaults.Risk.SignalStore.Redis.CircuitBreaker),
+			},
 		},
 	}
 	var riskLLM risk.LLMClient
 	if riskConfig.Enabled && riskConfig.LLM.Enabled() {
 		riskLLM = risk.NewOllamaClient(riskConfig.LLM, httpClient)
 	}
-	repo.riskEvaluator, err = risk.New(riskConfig, nil, riskLLM, signalDB)
+
+	// Extract Redis client from cache connectors if available.
+	var redisClient *redis.Client
+	if cacheConnectors.Redis != nil {
+		redisClient = cacheConnectors.Redis.Client
+	}
+	repo.riskEvaluator, err = risk.New(riskConfig, nil, riskLLM, signalDB, redisClient)
 	if err != nil {
 		return nil, fmt.Errorf("risk evaluator: %w", err)
 	}
