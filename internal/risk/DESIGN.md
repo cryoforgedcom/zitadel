@@ -725,9 +725,90 @@ auth flow must satisfy before proceeding.
 
 ---
 
-## 14. POC Phases
+## 14. Implementation Wiring
 
-### Phase 1: PG Signal Table + Risk Engine Integration
+### Signal Emission Hook Points
+
+| Hook Point | File | How |
+|---|---|---|
+| **V2 API requests** | `internal/api/api.go:234` | `risk.SignalConnectUnaryInterceptor(emitter)` in the Connect middleware chain. Fires after authorization, captures operation, caller, resource. Stream: `request`. |
+| **Auth flow (session)** | `internal/command/session.go:463-478` | `recordSessionRisk()` emits signals on session create/set outcomes. Stream: `auth`. Called after `enforceSessionRisk()` for both allowed and blocked decisions. |
+| **Signal interceptor** | `internal/risk/signal_interceptor.go` | Extracts HTTP headers (IP, UA, Accept-Language, Country, Sec-Fetch-Site, X-Forwarded-For) and emits fire-and-forget to the emitter channel. |
+
+### Risk Enforcement
+
+| Component | File | Behavior |
+|---|---|---|
+| **Risk evaluation** | `internal/command/session.go:430-461` | `enforceSessionRisk()` calls `Evaluate()` before each session mutation. |
+| **Block decision** | `session.go:469` | Returns `PermissionDenied` (COMMAND-RISK0) with `OutcomeBlocked` signal. |
+| **Challenge decision** | `session.go:458-467` | Returns `PreconditionFailed` (COMMAND-RISK1) with `OutcomeChallenged` signal. Client must present captcha. |
+| **Fail-open** | `session.go:439-446` | When `FailOpen=true` and evaluation errors, logs warning and allows the request. |
+
+### Service Initialization
+
+```
+cmd/start/start.go
+  └── internal/command/command.go:StartCommands()
+        └── risk.New(cfg, store, llm, db, redisClient, archiveStore)
+              ├── PGStore (always when db != nil)
+              ├── Emitter → Sink (PGStore or GuardedSink→RedisStreamSink)
+              ├── PartitionWorker (PG partition management)
+              ├── DrainWorker (Redis→PG, only in redis mode)
+              ├── ArchiveWorker (PG→Parquet, only when archive enabled)
+              └── CaptchaVerifier (Turnstile/hCaptcha/reCAPTCHA)
+
+cmd/start/start.go (worker registration)
+  ├── risk.RegisterPartitionWorker(ctx, q, svc)
+  ├── risk.RegisterDrainWorker(ctx, q, svc)
+  ├── risk.RegisterArchiveWorker(ctx, q, svc)
+  │   (after q.Start())
+  ├── risk.StartPartitionSchedule(ctx, q, svc)
+  ├── risk.StartDrainSchedule(ctx, q, svc)
+  └── risk.StartArchiveSchedule(ctx, q, svc)
+```
+
+### Data Flow
+
+```
+HTTP Request
+  │
+  ├─[V2 API]─→ SignalConnectUnaryInterceptor ─→ Emitter.Emit(signal)
+  │                                                    │
+  ├─[Session]─→ enforceSessionRisk() ─→ Evaluate()    │
+  │             recordSessionRisk() ─→ Emitter.Emit() │
+  │                                                    ▼
+  │                                          Bounded Channel (4096)
+  │                                                    │
+  │                                          ┌─────────┴─────────┐
+  │                                     [Mode=pg]           [Mode=redis]
+  │                                          │                    │
+  │                                     PGStore.WriteBatch   GuardedSink
+  │                                          │              (circuit breaker)
+  │                                          │                    │
+  │                                          ▼              RedisStreamSink
+  │                                    signals.signals       (XADD MAXLEN ~)
+  │                                    (UNLOGGED, partitioned)    │
+  │                                          │              DrainWorker
+  │                                          │              (XREADGROUP→PG)
+  │                                          │                    │
+  │                                          ▼                    ▼
+  │                                    signals.signals ◄──────────┘
+  │                                          │
+  │                                   ArchiveWorker (periodic)
+  │                                          │
+  │                                   ┌──────┴──────┐
+  │                              [Backend=fs]   [Backend=s3]
+  │                                   │              │
+  │                              Parquet files   S3/MinIO
+  │                              (ZSTD compressed)
+  └─────────────────────────────────────────────────────────
+```
+
+---
+
+## 15. POC Phases
+
+### Phase 1: PG Signal Table + Risk Engine Integration ✅ Implemented
 
 1. Define the `Signal` struct extension — add `Stream`, `Resource`, `CallerID`.
 2. Create the `signals` schema and partitioned table (migration).
@@ -739,13 +820,13 @@ auth flow must satisfy before proceeding.
 8. Add `Risk.SignalStore` config section in `defaults.yaml`.
 9. Add partition management (create future, drop expired).
 
-### Phase 2: Redis Hot Tier
+### Phase 2: Redis Hot Tier ✅ Implemented
 
 10. Implement Redis Stream sink — `XADD` with `MAXLEN`, circuit breaker fallback.
 11. Implement River drain worker — `XREADGROUP` → PG batch insert → `XACK`.
 12. Add `Mode: "redis"` configuration toggle.
 
-### Phase 3: Parquet Archival
+### Phase 3: Parquet Archival ✅ Implemented
 
 13. Implement Parquet writer (using `parquet-go` or DuckDB `COPY TO`).
 14. Implement archive storage — FS and S3 (Minio) backends.
@@ -753,14 +834,20 @@ auth flow must satisfy before proceeding.
 16. Implement DuckDB cold reader for historical queries.
 17. Add per-stream retention configuration.
 
-### Phase 4: Captcha Engine
+### Phase 4: Captcha Engine ✅ Implemented
 
 18. Add `EngineCaptcha` rule type to the risk engine.
 19. Integrate captcha challenge into the auth flow decision path.
 
+### Current Limitations (POC)
+- **S3 archive backend**: Config is parsed but falls back to FS storage. Minio client injection from static storage not yet wired.
+- **DuckDB cold queries**: Not integrated. Cold data in Parquet is queryable via external tools (DuckDB CLI, Spark, pandas).
+- **Captcha client-side**: `EngineCaptcha` produces challenge findings and the server returns `PreconditionFailed`. Client-side widget integration (Turnstile/hCaptcha/reCAPTCHA JavaScript) is not yet implemented in the login UI.
+- **Redis signal store**: Requires the `cache` profile with Redis enabled. GuardedSink drops signals (with counter) when Redis is unavailable.
+
 ---
 
-## 15. New Dependencies
+## 16. New Dependencies
 
 | Dependency | Purpose | Phase |
 |------------|---------|-------|
@@ -771,7 +858,7 @@ No new dependencies required for Phase 1 (PG) or Phase 2 (Redis).
 
 ---
 
-## 16. Open Questions
+## 17. Open Questions
 
 1. **Partition granularity** — 1-hour vs. daily partitions? Hourly is cleaner for
    archival but creates more PG objects. With unlogged tables this should be fine.
@@ -790,7 +877,7 @@ No new dependencies required for Phase 1 (PG) or Phase 2 (Redis).
 
 ---
 
-## 17. Signal Operation Taxonomy
+## 18. Signal Operation Taxonomy
 
 | Category | Operation | Description |
 |----------|-----------|-------------|

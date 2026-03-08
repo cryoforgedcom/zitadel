@@ -322,9 +322,9 @@ func StartCommands(
 	if riskConfig.SignalStore.Archive.Enabled {
 		switch riskConfig.SignalStore.Archive.EffectiveBackend() {
 		case risk.ArchiveBackendS3:
-			// S3 archive storage is wired from the startup code via
-			// the static storage minio client. For now, fall back to FS
-			// if S3 config is present but no minio client is injected.
+			// TODO(risk): Wire S3 archive backend via minio client from static
+			// storage. Currently falls back to FS — the S3 config is parsed but
+			// the minio.Client is not injected into StartCommands yet.
 			archiveStore = risk.NewFSArchiveStorage(riskConfig.SignalStore.Archive.FSPath)
 		default:
 			archiveStore = risk.NewFSArchiveStorage(riskConfig.SignalStore.Archive.FSPath)

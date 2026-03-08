@@ -125,6 +125,41 @@ func TestCommands_updateSession_blockedByRisk(t *testing.T) {
 	assert.Equal(t, risk.OutcomeBlocked, evaluator.recorded[0].Outcome)
 }
 
+func TestCommands_updateSession_challengedByRisk(t *testing.T) {
+	t.Parallel()
+
+	evaluator := &fakeRiskEvaluator{
+		enabled: true,
+		decision: risk.Decision{
+			Allow:    false,
+			Findings: []risk.Finding{{Name: "captcha_required", Challenge: true, ChallengeType: "captcha"}},
+		},
+	}
+	c := &Commands{eventstore: expectEventstore()(t), riskEvaluator: evaluator}
+
+	checks := &SessionCommands{
+		sessionWriteModel: NewSessionWriteModel("sessionID", "instance1"),
+		sessionCommands:   []SessionCommand{},
+		now: func() time.Time {
+			return time.Now().UTC()
+		},
+		operation: sessionOperationCreate,
+		currentUserAgent: &domain.UserAgent{
+			FingerprintID: gu.Ptr("fp1"),
+			IP:            net.ParseIP("2.2.2.2"),
+			Description:   gu.Ptr("safari"),
+		},
+	}
+	checks.sessionWriteModel.UserID = "user1"
+
+	got, err := c.updateSession(authz.NewMockContext("instance1", "", ""), checks, nil, 0)
+	require.Error(t, err)
+	assert.True(t, zerrors.IsPreconditionFailed(err), "challenge should return PreconditionFailed, got: %v", err)
+	assert.Nil(t, got)
+	require.Len(t, evaluator.recorded, 1)
+	assert.Equal(t, risk.OutcomeChallenged, evaluator.recorded[0].Outcome)
+}
+
 func TestCommands_updateSession_riskFailOpen(t *testing.T) {
 	t.Parallel()
 

@@ -102,6 +102,40 @@ pnpm nx run @zitadel/compose:start-ai
 
 This keeps the base stack unchanged while letting the embedded API risk evaluator call Ollama directly. The default model (`qwen2.5:7b`) is Apache 2.0 and has no restrictions on automated decisions, so you can switch to `enforce` mode once you've validated its output quality.
 
+### Verifying Risk Signals
+
+When the signal store is enabled (`ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_ENABLED=true` in
+`docker-compose.dev.yml`), ZITADEL persists behavioral signals to PostgreSQL.
+
+After performing a login flow, verify signals are being written:
+
+```bash
+# Check signal partitions exist
+docker exec zitadel-dev-postgres-1 psql -U zitadel -d zitadel -c \
+  "SELECT schemaname, tablename FROM pg_tables WHERE schemaname = 'signals' ORDER BY tablename;"
+
+# Query recent signals
+docker exec zitadel-dev-postgres-1 psql -U zitadel -d zitadel -c \
+  "SELECT stream, operation, outcome, ip, created_at FROM signals.signals ORDER BY created_at DESC LIMIT 10;"
+
+# Count signals by stream
+docker exec zitadel-dev-postgres-1 psql -U zitadel -d zitadel -c \
+  "SELECT stream, count(*) FROM signals.signals GROUP BY stream;"
+```
+
+Expected streams after a login:
+- `auth` — session create/set events from the login flow
+- `request` — V2 API calls captured by the Connect interceptor
+
+Signal store configuration (all optional, shown with defaults):
+
+| Env Var | Default | Description |
+|---------|---------|-------------|
+| `ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_ENABLED` | `false` | Enable persistent signal storage |
+| `ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_MODE` | `pg` | Write target: `pg` (direct) or `redis` (hot tier) |
+| `ZITADEL_SYSTEMDEFAULTS_RISK_CAPTCHA_ENABLED` | `false` | Enable risk-based captcha challenges |
+| `ZITADEL_SYSTEMDEFAULTS_RISK_CAPTCHA_PROVIDER` | `turnstile` | Captcha provider: `turnstile`, `hcaptcha`, `recaptcha` |
+
 ## Rejected Alternatives
 
 | Alternative | Why rejected |
