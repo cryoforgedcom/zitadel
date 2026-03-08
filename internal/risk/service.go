@@ -22,6 +22,11 @@ type Evaluator interface {
 	FailOpen() bool
 	Evaluate(ctx context.Context, signal Signal) (Decision, error)
 	Record(ctx context.Context, signal Signal, findings []Finding) error
+	// VerifyCaptcha verifies a captcha token. Returns true when captcha is
+	// not configured or verification succeeds.
+	VerifyCaptcha(ctx context.Context, token string, remoteIP string) (bool, error)
+	// CaptchaVerifier returns the configured verifier, or nil.
+	CaptchaVerifier() CaptchaVerifier
 }
 
 var tracer = instrumentation.NewTracer("risk")
@@ -40,6 +45,10 @@ type Service struct {
 	emitterCancel   context.CancelFunc
 	partitionWorker *PartitionWorker
 	drainWorker     *DrainWorker
+	archiveWorker   *ArchiveWorker
+
+	// Captcha challenge verification.
+	captchaVerifier CaptchaVerifier
 }
 
 // New creates a risk evaluation service. When db is non-nil and
@@ -49,7 +58,8 @@ type Service struct {
 //   - "redis": writes to a Redis Stream, with a drain worker flushing to PG
 //
 // When redisClient is nil and mode is "redis", it falls back to PG mode.
-func New(cfg Config, store Store, llm LLMClient, db *sql.DB, redisClient *redis.Client) (*Service, error) {
+// When archiveStore is non-nil and Archive.Enabled, an archival worker is created.
+func New(cfg Config, store Store, llm LLMClient, db *sql.DB, redisClient *redis.Client, archiveStore ArchiveStorage) (*Service, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -57,6 +67,7 @@ func New(cfg Config, store Store, llm LLMClient, db *sql.DB, redisClient *redis.
 	var emitter *Emitter
 	var partitionWorker *PartitionWorker
 	var drainWorker *DrainWorker
+	var archiveWorker *ArchiveWorker
 
 	if cfg.SignalStore.Enabled && db != nil {
 		pgStore := NewPGStore(db, cfg)
@@ -84,6 +95,11 @@ func New(cfg Config, store Store, llm LLMClient, db *sql.DB, redisClient *redis.
 
 		emitter = NewEmitter(cfg.SignalStore, sink)
 		partitionWorker = NewPartitionWorker(db, cfg.SignalStore.Postgres)
+
+		// Create archive worker when archival is enabled and storage is provided.
+		if cfg.SignalStore.Archive.Enabled && archiveStore != nil {
+			archiveWorker = NewArchiveWorker(db, archiveStore, cfg.SignalStore.Archive, cfg.SignalStore.Postgres)
+		}
 	}
 
 	if store == nil {
@@ -116,6 +132,8 @@ func New(cfg Config, store Store, llm LLMClient, db *sql.DB, redisClient *redis.
 		emitter:         emitter,
 		partitionWorker: partitionWorker,
 		drainWorker:     drainWorker,
+		archiveWorker:   archiveWorker,
+		captchaVerifier: NewCaptchaVerifier(cfg.Captcha, nil),
 	}
 	if cfg.Enabled {
 		go svc.maintenanceLoop()
@@ -208,6 +226,32 @@ func (s *Service) DrainWorker() *DrainWorker {
 	return s.drainWorker
 }
 
+// ArchiveWorker returns the Parquet archive worker for registration with the
+// River queue, or nil when archival is not enabled.
+func (s *Service) ArchiveWorker() *ArchiveWorker {
+	if s == nil {
+		return nil
+	}
+	return s.archiveWorker
+}
+
+// CaptchaVerifier returns the captcha verifier, or nil when not configured.
+func (s *Service) CaptchaVerifier() CaptchaVerifier {
+	if s == nil {
+		return nil
+	}
+	return s.captchaVerifier
+}
+
+// VerifyCaptcha verifies a captcha token. Returns true if the captcha is
+// not configured or verification succeeds.
+func (s *Service) VerifyCaptcha(ctx context.Context, token string, remoteIP string) (bool, error) {
+	if s == nil || s.captchaVerifier == nil {
+		return true, nil
+	}
+	return s.captchaVerifier.Verify(ctx, token, remoteIP)
+}
+
 func (s *Service) Enabled() bool {
 	return s != nil && s.cfg.Enabled
 }
@@ -279,7 +323,7 @@ func (s *Service) Evaluate(ctx context.Context, signal Signal) (_ Decision, err 
 
 	decision := Decision{Allow: true, Findings: findings}
 	for _, finding := range findings {
-		if finding.Block {
+		if finding.Block || finding.Challenge {
 			decision.Allow = false
 			break
 		}

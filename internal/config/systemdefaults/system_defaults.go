@@ -66,6 +66,7 @@ type RiskConfig struct {
 	Rules                 []RiskRuleConfig
 	GeoCountryHeader      string
 	SignalStore           RiskSignalStoreConfig
+	Captcha               RiskCaptchaConfig
 }
 
 // RiskSignalStoreConfig mirrors risk.SignalStoreConfig for YAML configuration.
@@ -86,6 +87,20 @@ type RiskSignalStoreConfig struct {
 		DrainInterval  time.Duration
 		DrainBatchSize int64
 		CircuitBreaker *RiskCBConfig
+	}
+	Archive struct {
+		Enabled  bool
+		Backend  string
+		FSPath   string
+		Interval time.Duration
+		S3       struct {
+			Endpoint  string
+			Bucket    string
+			AccessKey string
+			SecretKey string
+			UseSSL    bool
+		}
+		StreamRetention map[string]time.Duration
 	}
 }
 
@@ -135,6 +150,16 @@ type RiskCBConfig struct {
 	Timeout                time.Duration
 	MaxRetryRequests       uint32
 	FailOpen               bool
+}
+
+// RiskCaptchaConfig mirrors risk.CaptchaConfig for YAML configuration.
+type RiskCaptchaConfig struct {
+	Enabled   bool
+	Provider  string
+	SiteKey   string
+	SecretKey string
+	VerifyURL string
+	Timeout   time.Duration
 }
 
 func (r RiskConfig) Validate() error {

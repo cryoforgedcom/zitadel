@@ -22,6 +22,8 @@ const (
 	EngineLLM EngineType = "llm"
 	// EngineLog emits a structured log entry (observe-mode, never blocks).
 	EngineLog EngineType = "log"
+	// EngineCaptcha produces a challenge finding requiring captcha verification.
+	EngineCaptcha EngineType = "captcha"
 )
 
 // Rule is the YAML-level definition loaded from configuration.
@@ -93,7 +95,7 @@ func compileRule(r Rule) (CompiledRule, error) {
 
 	// Validate engine type.
 	switch r.Engine {
-	case EngineBlock, EngineRateLimit, EngineLLM, EngineLog:
+	case EngineBlock, EngineRateLimit, EngineLLM, EngineLog, EngineCaptcha:
 	case "":
 		return CompiledRule{}, fmt.Errorf("rule must have an engine")
 	default:

@@ -450,6 +450,21 @@ func (c *Commands) enforceSessionRisk(ctx context.Context, checks *SessionComman
 	if decision.Allow {
 		return nil
 	}
+
+	// Challenge findings require a captcha response — return a specific
+	// error code so the client can present the challenge widget.
+	if decision.HasChallenge() && !decision.HasBlockingFindings() {
+		c.recordSessionRisk(ctx, checks, risk.OutcomeChallenged, decision.Findings)
+		risklog.Info(ctx, "risk.eval.challenge_required",
+			slog.String("risk_user_id", signal.UserID),
+			slog.String("risk_session_id", signal.SessionID),
+			slog.String("risk_operation", signal.Operation),
+			slog.String("risk_challenge_type", decision.ChallengeType()),
+			slog.Any("risk_findings", riskFindingNames(decision.Findings)),
+		)
+		return zerrors.ThrowPreconditionFailed(nil, "COMMAND-RISK1", "Errors.Risk.ChallengeRequired")
+	}
+
 	c.recordSessionRisk(ctx, checks, risk.OutcomeBlocked, decision.Findings)
 	risklog.Warn(ctx, "risk.eval.blocked",
 		slog.String("risk_user_id", signal.UserID),

@@ -29,7 +29,7 @@ func newTestRiskService(t *testing.T) *risk.Service {
 		ContextChangeWindow:   15 * time.Minute,
 		MaxSignalsPerUser:     50,
 		MaxSignalsPerSession:  20,
-	}, nil, nil, nil, nil)
+	}, nil, nil, nil, nil, nil)
 	require.NoError(t, err)
 	return svc
 }
@@ -80,6 +80,14 @@ func (f *fakeRiskEvaluator) Evaluate(context.Context, risk.Signal) (risk.Decisio
 func (f *fakeRiskEvaluator) Record(_ context.Context, signal risk.Signal, findings []risk.Finding) error {
 	f.recorded = append(f.recorded, signal)
 	f.findings = append(f.findings, append([]risk.Finding(nil), findings...))
+	return nil
+}
+
+func (f *fakeRiskEvaluator) VerifyCaptcha(context.Context, string, string) (bool, error) {
+	return true, nil
+}
+
+func (f *fakeRiskEvaluator) CaptchaVerifier() risk.CaptchaVerifier {
 	return nil
 }
 

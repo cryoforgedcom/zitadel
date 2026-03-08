@@ -95,6 +95,8 @@ func (e *RuleEngine) dispatch(ctx context.Context, rule *CompiledRule, rc RiskCo
 		return e.dispatchLLM(ctx, rule, rc, sessionSignals)
 	case EngineLog:
 		return e.dispatchLog(ctx, rule, rc)
+	case EngineCaptcha:
+		return e.dispatchCaptcha(ctx, rule, rc)
 	default:
 		logging.Warn(ctx, "risk.expr.unknown_engine",
 			slog.String("rule_id", rule.ID),
@@ -290,6 +292,28 @@ func (e *RuleEngine) dispatchLog(ctx context.Context, rule *CompiledRule, rc Ris
 		Source:  "rule:" + rule.ID,
 		Message: rule.FindingCfg.Message,
 		Block:   false,
+	}
+}
+
+func (e *RuleEngine) dispatchCaptcha(ctx context.Context, rule *CompiledRule, rc RiskContext) *Finding {
+	logging.Info(ctx, "risk.captcha.challenge_required",
+		slog.String("rule_id", rule.ID),
+		slog.String("risk_user_id", rc.Current.UserID),
+		slog.String("risk_session_id", rc.Current.SessionID),
+		slog.String("risk_operation", rc.Current.Operation),
+		slog.String("risk_ip", rc.Current.IP),
+	)
+	msg := rule.FindingCfg.Message
+	if msg == "" {
+		msg = "captcha verification required"
+	}
+	return &Finding{
+		Name:          rule.FindingCfg.Name,
+		Source:        "rule:" + rule.ID,
+		Message:       msg,
+		Block:         false,
+		Challenge:     true,
+		ChallengeType: "captcha",
 	}
 }
 

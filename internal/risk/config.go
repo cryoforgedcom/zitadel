@@ -26,6 +26,8 @@ type Config struct {
 	GeoCountryHeader string
 	// SignalStore configures the persistent signal store.
 	SignalStore SignalStoreConfig
+	// Captcha configures the captcha challenge provider for risk-based challenges.
+	Captcha CaptchaConfig
 }
 
 type LLMMode string
@@ -126,6 +128,8 @@ type SignalStoreConfig struct {
 	Postgres SignalPGConfig
 	// Redis configures the hot-tier Redis Stream (used when Mode is "redis").
 	Redis SignalRedisConfig
+	// Archive configures the cold-tier Parquet archival.
+	Archive ArchiveConfig
 }
 
 // EffectiveMode returns the configured mode, defaulting to PG.
@@ -164,8 +168,51 @@ type SignalRedisConfig struct {
 	// Default: 500.
 	DrainBatchSize int64
 	// CircuitBreaker configures the circuit breaker for Redis sink failures.
-	// When tripped, signals fall back to the PG sink directly.
+	// When tripped, signals are dropped to protect the database.
 	CircuitBreaker *CBConfig
+}
+
+// ArchiveBackend selects the cold-tier storage backend.
+type ArchiveBackend string
+
+const (
+	ArchiveBackendFS ArchiveBackend = "fs"
+	ArchiveBackendS3 ArchiveBackend = "s3"
+)
+
+// ArchiveConfig configures the cold-tier Parquet archival.
+type ArchiveConfig struct {
+	// Enabled activates periodic archival of old signal partitions to Parquet.
+	Enabled bool
+	// Backend selects the storage backend: "fs" (default) or "s3".
+	Backend ArchiveBackend
+	// FSPath is the local filesystem path for the "fs" backend.
+	FSPath string
+	// S3 configures the S3-compatible storage for the "s3" backend.
+	S3 ArchiveS3Config
+	// Interval is how often the archival worker runs. Default: 1h.
+	Interval time.Duration
+	// StreamRetention is the per-stream retention in PG before archival.
+	// Streams not listed use the global Postgres.Retention.
+	// Example: {"request": "24h", "auth": "168h"}
+	StreamRetention map[SignalStream]time.Duration
+}
+
+// ArchiveS3Config configures S3-compatible storage for signal archival.
+type ArchiveS3Config struct {
+	Endpoint  string
+	Bucket    string
+	AccessKey string
+	SecretKey string
+	UseSSL    bool
+}
+
+// EffectiveBackend returns the archive backend, defaulting to FS.
+func (c ArchiveConfig) EffectiveBackend() ArchiveBackend {
+	if c.Backend == ArchiveBackendS3 {
+		return ArchiveBackendS3
+	}
+	return ArchiveBackendFS
 }
 
 func (c Config) Validate() error {

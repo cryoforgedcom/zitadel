@@ -282,6 +282,28 @@ func StartCommands(
 				DrainBatchSize: defaults.Risk.SignalStore.Redis.DrainBatchSize,
 				CircuitBreaker: riskCBConfig(defaults.Risk.SignalStore.Redis.CircuitBreaker),
 			},
+			Archive: risk.ArchiveConfig{
+				Enabled:  defaults.Risk.SignalStore.Archive.Enabled,
+				Backend:  risk.ArchiveBackend(defaults.Risk.SignalStore.Archive.Backend),
+				FSPath:   defaults.Risk.SignalStore.Archive.FSPath,
+				Interval: defaults.Risk.SignalStore.Archive.Interval,
+				S3: risk.ArchiveS3Config{
+					Endpoint:  defaults.Risk.SignalStore.Archive.S3.Endpoint,
+					Bucket:    defaults.Risk.SignalStore.Archive.S3.Bucket,
+					AccessKey: defaults.Risk.SignalStore.Archive.S3.AccessKey,
+					SecretKey: defaults.Risk.SignalStore.Archive.S3.SecretKey,
+					UseSSL:    defaults.Risk.SignalStore.Archive.S3.UseSSL,
+				},
+				StreamRetention: riskStreamRetention(defaults.Risk.SignalStore.Archive.StreamRetention),
+			},
+		},
+		Captcha: risk.CaptchaConfig{
+			Enabled:   defaults.Risk.Captcha.Enabled,
+			Provider:  defaults.Risk.Captcha.Provider,
+			SiteKey:   defaults.Risk.Captcha.SiteKey,
+			SecretKey: defaults.Risk.Captcha.SecretKey,
+			VerifyURL: defaults.Risk.Captcha.VerifyURL,
+			Timeout:   defaults.Risk.Captcha.Timeout,
 		},
 	}
 	var riskLLM risk.LLMClient
@@ -294,7 +316,22 @@ func StartCommands(
 	if cacheConnectors.Redis != nil {
 		redisClient = cacheConnectors.Redis.Client
 	}
-	repo.riskEvaluator, err = risk.New(riskConfig, nil, riskLLM, signalDB, redisClient)
+
+	// Create archive storage when archival is enabled.
+	var archiveStore risk.ArchiveStorage
+	if riskConfig.SignalStore.Archive.Enabled {
+		switch riskConfig.SignalStore.Archive.EffectiveBackend() {
+		case risk.ArchiveBackendS3:
+			// S3 archive storage is wired from the startup code via
+			// the static storage minio client. For now, fall back to FS
+			// if S3 config is present but no minio client is injected.
+			archiveStore = risk.NewFSArchiveStorage(riskConfig.SignalStore.Archive.FSPath)
+		default:
+			archiveStore = risk.NewFSArchiveStorage(riskConfig.SignalStore.Archive.FSPath)
+		}
+	}
+
+	repo.riskEvaluator, err = risk.New(riskConfig, nil, riskLLM, signalDB, redisClient, archiveStore)
 	if err != nil {
 		return nil, fmt.Errorf("risk evaluator: %w", err)
 	}
@@ -503,6 +540,17 @@ func riskRules(rules []sd.RiskRuleConfig) []risk.Rule {
 				Max:         r.RateLimit.Max,
 			},
 		}
+	}
+	return out
+}
+
+func riskStreamRetention(m map[string]time.Duration) map[risk.SignalStream]time.Duration {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[risk.SignalStream]time.Duration, len(m))
+	for k, v := range m {
+		out[risk.SignalStream(k)] = v
 	}
 	return out
 }
