@@ -14,15 +14,15 @@ import (
 // matching rules to their configured engine (block, rate_limit, llm, log).
 type RuleEngine struct {
 	rules   []CompiledRule
-	limiter *RateLimiter
+	limiter RateLimiterStore
 	llm     LLMClient
 	llmCfg  LLMConfig
 }
 
 // NewRuleEngine creates a rule engine with compiled rules and engine backends.
-func NewRuleEngine(rules []CompiledRule, limiter *RateLimiter, llm LLMClient, llmCfg LLMConfig) *RuleEngine {
+func NewRuleEngine(rules []CompiledRule, limiter RateLimiterStore, llm LLMClient, llmCfg LLMConfig) *RuleEngine {
 	if limiter == nil {
-		limiter = NewRateLimiter()
+		limiter = NewMemoryRateLimiter()
 	}
 	return &RuleEngine{
 		rules:   rules,
@@ -124,7 +124,7 @@ func (e *RuleEngine) dispatchRateLimit(ctx context.Context, rule *CompiledRule, 
 		return nil
 	}
 
-	count, allowed := e.limiter.Check(key, rule.RateLimitCfg.Window, rule.RateLimitCfg.Max, rc.Current.Timestamp)
+	count, allowed := e.limiter.Check(ctx, key, rule.RateLimitCfg.Window, rule.RateLimitCfg.Max)
 	if allowed {
 		logging.Debug(ctx, "risk.ratelimit.within_limit",
 			slog.String("rule_id", rule.ID),

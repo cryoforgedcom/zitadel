@@ -67,6 +67,12 @@ type RiskConfig struct {
 	GeoCountryHeader      string
 	SignalStore           RiskSignalStoreConfig
 	Captcha               RiskCaptchaConfig
+	RateLimit             RiskRateLimitConfig
+}
+
+// RiskRateLimitConfig mirrors risk.RateLimitConfig for YAML configuration.
+type RiskRateLimitConfig struct {
+	Mode string
 }
 
 // RiskSignalStoreConfig mirrors risk.SignalStoreConfig for YAML configuration.

@@ -223,7 +223,7 @@ func TestRuleEngine_Evaluate_BlockEngine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	engine := NewRuleEngine(rules, NewRateLimiter(), nil, LLMConfig{})
+	engine := NewRuleEngine(rules, NewMemoryRateLimiter(), nil, LLMConfig{})
 	ctx := context.Background()
 
 	// Only burst matches.
@@ -272,7 +272,7 @@ func TestRuleEngine_RateLimitEngine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	limiter := NewRateLimiter()
+	limiter := NewMemoryRateLimiter()
 	engine := NewRuleEngine(rules, limiter, nil, LLMConfig{})
 	ctx := context.Background()
 	now := time.Now()

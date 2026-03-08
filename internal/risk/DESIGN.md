@@ -847,6 +847,120 @@ HTTP Request
 
 ---
 
+## 15a. Rate Limiter Architecture
+
+### Multi-Backend Design
+
+The `rate_limit` rule engine uses a `RateLimiterStore` interface with three backends,
+following the same tiering pattern as the signal store:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  Rule Engine  │  rate_limit rule matched                 │
+│               │  key = "ip:{{.Current.IP}}"              │
+│               ▼                                          │
+│  ┌─────────────────────────────────────────────────────┐ │
+│  │ RateLimiterStore.Check(ctx, key, window, max)       │ │
+│  └──────────┬──────────────┬──────────────┬────────────┘ │
+│             ▼              ▼              ▼              │
+│    ┌─────────────┐  ┌────────────┐  ┌───────────────┐   │
+│    │ Memory      │  │ Redis      │  │ PG (UNLOGGED) │   │
+│    │ (default)   │  │ INCR+TTL   │  │ INSERT ON     │   │
+│    │ sharded map │  │ Lua script │  │ CONFLICT      │   │
+│    └─────────────┘  └────────────┘  └───────────────┘   │
+└──────────────────────────────────────────────────────────┘
+```
+
+### RateLimiterStore Interface
+
+```go
+type RateLimiterStore interface {
+    Check(ctx context.Context, key string, window time.Duration, max int) (count int, allowed bool)
+    Prune(ctx context.Context)
+}
+```
+
+### Backend Details
+
+| Backend | Shared? | Latency | Dependencies | Best For |
+|---------|---------|---------|--------------|----------|
+| `memory` (default) | No — per-instance | ~µs | None | Single-node, dev, low-scale |
+| `redis` | Yes — all instances | ~ms | Redis connection | Multi-node with Redis |
+| `pg` | Yes — all instances | ~ms | PG (already required) | Multi-node without Redis |
+
+**Memory** (`MemoryRateLimiter`):
+- 64 FNV-sharded mutexes for minimal lock contention.
+- Pruned by `maintenanceLoop` every 5 minutes.
+- Counters lost on restart — acceptable for rate limiting.
+
+**Redis** (`RedisRateLimiter`):
+- Atomic Lua script: `INCR` + `EXPIRE` on first access.
+- Keys auto-expire via TTL = window duration; Prune is a no-op.
+- Key prefix: `zitadel:ratelimit:<key>`.
+- Fails open if Redis is unavailable (logs warning, allows request).
+
+**PG** (`PGRateLimiter`):
+- `UNLOGGED` table `signals.rate_limit_counters` — no WAL overhead.
+- Atomic `INSERT ... ON CONFLICT DO UPDATE` resets expired windows inline.
+- Pruned by `maintenanceLoop` (`DELETE WHERE window expired`).
+- Fails open if PG query fails.
+
+### Key Templates and expr Integration
+
+Rate limit rules define **what to limit by** using Go `text/template` on `RiskContext`:
+
+```yaml
+rules:
+  - id: ip-flood
+    expr: 'DistinctIPs > 3'
+    engine: rate_limit
+    rate_limit:
+      key: "ip:{{.Current.IP}}"           # per IP address
+      window: 5m
+      max: 100
+
+  - id: user-auth-flood
+    expr: 'FailureCount >= 3'
+    engine: rate_limit
+    rate_limit:
+      key: "user:{{.Current.UserID}}"      # per user
+      window: 10m
+      max: 20
+
+  - id: session-burst
+    expr: 'SessionSignalCount > 50'
+    engine: rate_limit
+    rate_limit:
+      key: "session:{{.Current.SessionID}}" # per session
+      window: 1m
+      max: 60
+
+  - id: geo-anomaly
+    expr: 'CountryChanged && DistinctCountries > 2'
+    engine: rate_limit
+    rate_limit:
+      key: "geo:{{.Current.UserID}}:{{.Current.Country}}" # per user+country
+      window: 1h
+      max: 5
+```
+
+Available template fields match `RiskContext`: `Current.IP`, `Current.UserID`,
+`Current.SessionID`, `Current.Country`, `Current.Operation`, `Current.UserAgent`,
+`Current.FingerprintID`, and all computed fields.
+
+### Configuration
+
+```yaml
+SystemDefaults:
+  Risk:
+    RateLimit:
+      Mode: memory  # memory | redis | pg
+```
+
+Environment variable: `ZITADEL_SYSTEMDEFAULTS_RISK_RATELIMIT_MODE`
+
+---
+
 ## 16. New Dependencies
 
 | Dependency | Purpose | Phase |

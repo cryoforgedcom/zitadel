@@ -1024,6 +1024,12 @@ SystemDefaults:
       SecretKey: "" # ZITADEL_SYSTEMDEFAULTS_RISK_CAPTCHA_SECRETKEY
       VerifyURL: "" # ZITADEL_SYSTEMDEFAULTS_RISK_CAPTCHA_VERIFYURL (defaults to provider-specific URL)
       Timeout: 5s
+    # RateLimit configures the backend for rate_limit rules.
+    # "memory" (default) — fast in-process sharded counters, not shared across instances.
+    # "redis"            — shared via Redis INCR+EXPIRE, requires a Redis connection.
+    # "pg"               — shared via UNLOGGED PG table, works without Redis.
+    RateLimit:
+      Mode: memory # ZITADEL_SYSTEMDEFAULTS_RISK_RATELIMIT_MODE
     Rules: # ZITADEL_SYSTEMDEFAULTS_RISK_RULES
       - id: failure-burst
         description: "Block after 5+ failures from same user in history window"

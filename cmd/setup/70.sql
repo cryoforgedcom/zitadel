@@ -33,3 +33,13 @@ CREATE INDEX IF NOT EXISTS idx_signals_session
 -- Stream-filtered queries
 CREATE INDEX IF NOT EXISTS idx_signals_stream
     ON signals.signals (instance_id, caller_id, stream, created_at DESC);
+
+-- Rate limit counters for multi-instance sliding-window rate limiting.
+-- UNLOGGED: acceptable to lose on crash (counters reset to zero).
+CREATE UNLOGGED TABLE IF NOT EXISTS signals.rate_limit_counters (
+    key          TEXT        NOT NULL,
+    count        INTEGER     NOT NULL DEFAULT 1,
+    window_start TIMESTAMPTZ NOT NULL,
+    window_secs  INTEGER     NOT NULL,
+    PRIMARY KEY (key)
+);

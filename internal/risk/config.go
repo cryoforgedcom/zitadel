@@ -28,6 +28,8 @@ type Config struct {
 	SignalStore SignalStoreConfig
 	// Captcha configures the captcha challenge provider for risk-based challenges.
 	Captcha CaptchaConfig
+	// RateLimit configures the rate limiter backend.
+	RateLimit RateLimitConfig
 }
 
 type LLMMode string
@@ -213,6 +215,39 @@ func (c ArchiveConfig) EffectiveBackend() ArchiveBackend {
 		return ArchiveBackendS3
 	}
 	return ArchiveBackendFS
+}
+
+// RateLimitMode selects the rate limiter backend.
+type RateLimitMode string
+
+const (
+	// RateLimitModeMemory uses in-memory sharded counters (default).
+	// Fast but not shared across instances.
+	RateLimitModeMemory RateLimitMode = "memory"
+	// RateLimitModeRedis uses Redis for shared rate limit counters.
+	// Requires a Redis connection. Counters expire via TTL.
+	RateLimitModeRedis RateLimitMode = "redis"
+	// RateLimitModePG uses an UNLOGGED PostgreSQL table for shared counters.
+	// Works without Redis, suitable for small multi-instance deployments.
+	RateLimitModePG RateLimitMode = "pg"
+)
+
+// RateLimitConfig configures the rate limiter backend used by rate_limit rules.
+type RateLimitConfig struct {
+	// Mode selects the backend: "memory" (default), "redis", or "pg".
+	Mode RateLimitMode
+}
+
+// EffectiveMode returns the configured mode, defaulting to memory.
+func (c RateLimitConfig) EffectiveMode() RateLimitMode {
+	switch c.Mode {
+	case RateLimitModeRedis:
+		return RateLimitModeRedis
+	case RateLimitModePG:
+		return RateLimitModePG
+	default:
+		return RateLimitModeMemory
+	}
 }
 
 func (c Config) Validate() error {

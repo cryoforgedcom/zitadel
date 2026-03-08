@@ -56,7 +56,7 @@ type RuleFinding struct {
 // RuleRateLimit configures the rate_limit engine for a rule.
 type RuleRateLimit struct {
 	// KeyTemplate is a Go text/template rendered with RiskContext to produce
-	// the counter key (e.g. "ip:{{.Current.IP}}").
+	// the counter key (e.g. "ip:{{.Current.IP}}", "user:{{.Current.UserID}}").
 	KeyTemplate string        `yaml:"key"`
 	Window      time.Duration `yaml:"window"`
 	Max         int           `yaml:"max"`

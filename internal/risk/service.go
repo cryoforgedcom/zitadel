@@ -118,7 +118,8 @@ func New(cfg Config, store Store, llm LLMClient, db *sql.DB, redisClient *redis.
 		if err != nil {
 			return nil, fmt.Errorf("compile risk rules: %w", err)
 		}
-		ruleEngine = NewRuleEngine(compiled, NewRateLimiter(), llm, cfg.LLM)
+		limiter := newRateLimiterStore(cfg.RateLimit, db, redisClient)
+		ruleEngine = NewRuleEngine(compiled, limiter, llm, cfg.LLM)
 	}
 
 	svc := &Service{
@@ -175,7 +176,7 @@ func (s *Service) maintenanceLoop() {
 			}
 			// Prune expired rate limit counters.
 			if s.ruleEngine != nil {
-				s.ruleEngine.limiter.Prune(now)
+				s.ruleEngine.limiter.Prune(context.Background())
 			}
 		}
 	}
@@ -206,6 +207,27 @@ func (s *Service) Emitter() *Emitter {
 		return nil
 	}
 	return s.emitter
+}
+
+// newRateLimiterStore creates a rate limiter store based on the configured mode,
+// falling back to memory when the required backend is not available.
+func newRateLimiterStore(cfg RateLimitConfig, db *sql.DB, redisClient *redis.Client) RateLimiterStore {
+	switch cfg.EffectiveMode() {
+	case RateLimitModeRedis:
+		if redisClient != nil {
+			return NewRedisRateLimiter(redisClient)
+		}
+		logging.Warn(context.Background(), "risk.ratelimit.redis_unavailable_fallback_memory")
+		return NewMemoryRateLimiter()
+	case RateLimitModePG:
+		if db != nil {
+			return NewPGRateLimiter(db)
+		}
+		logging.Warn(context.Background(), "risk.ratelimit.pg_unavailable_fallback_memory")
+		return NewMemoryRateLimiter()
+	default:
+		return NewMemoryRateLimiter()
+	}
 }
 
 // PartitionWorker returns the partition management worker for registration

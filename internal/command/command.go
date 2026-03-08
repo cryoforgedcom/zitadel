@@ -305,6 +305,9 @@ func StartCommands(
 			VerifyURL: defaults.Risk.Captcha.VerifyURL,
 			Timeout:   defaults.Risk.Captcha.Timeout,
 		},
+		RateLimit: risk.RateLimitConfig{
+			Mode: risk.RateLimitMode(defaults.Risk.RateLimit.Mode),
+		},
 	}
 	var riskLLM risk.LLMClient
 	if riskConfig.Enabled && riskConfig.LLM.Enabled() {
