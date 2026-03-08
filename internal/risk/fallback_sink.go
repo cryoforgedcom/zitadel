@@ -2,8 +2,8 @@ package risk
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
+	"sync/atomic"
 
 	"github.com/sony/gobreaker/v2"
 
@@ -11,23 +11,21 @@ import (
 	"github.com/zitadel/zitadel/backend/v3/instrumentation/logging"
 )
 
-// FallbackSink wraps a primary [SignalSink] with a circuit breaker. When the
-// primary fails repeatedly, the circuit opens and writes go to the fallback
-// sink (typically PG). When the primary recovers, the circuit closes and
-// writes resume on the primary.
-type FallbackSink struct {
-	primary  SignalSink
-	fallback SignalSink
-	cb       *gobreaker.CircuitBreaker[struct{}]
+// GuardedSink wraps a [SignalSink] with a circuit breaker. When the primary
+// sink fails repeatedly, the circuit opens and signals are **dropped** (not
+// redirected to PG) to prevent cascading overload. A drop counter is exposed
+// for observability.
+type GuardedSink struct {
+	primary SignalSink
+	cb      *gobreaker.CircuitBreaker[struct{}]
+	dropped atomic.Int64
 }
 
-// NewFallbackSink creates a sink that writes to primary and falls back to
-// fallback when the circuit breaker trips. If cbCfg is nil, no circuit
-// breaker is applied and the primary is used directly.
-func NewFallbackSink(primary, fallback SignalSink, cbCfg *CBConfig) *FallbackSink {
-	fs := &FallbackSink{
-		primary:  primary,
-		fallback: fallback,
+// NewGuardedSink creates a sink that writes to primary and drops signals
+// when the circuit breaker trips.
+func NewGuardedSink(primary SignalSink, cbCfg *CBConfig) *GuardedSink {
+	gs := &GuardedSink{
+		primary: primary,
 	}
 
 	cfg := cbCfg
@@ -39,7 +37,7 @@ func NewFallbackSink(primary, fallback SignalSink, cbCfg *CBConfig) *FallbackSin
 		}
 	}
 
-	fs.cb = gobreaker.NewCircuitBreaker[struct{}](gobreaker.Settings{
+	gs.cb = gobreaker.NewCircuitBreaker[struct{}](gobreaker.Settings{
 		Name:        "signal-sink",
 		MaxRequests: cfg.MaxRetryRequests,
 		Interval:    cfg.Interval,
@@ -63,12 +61,13 @@ func NewFallbackSink(primary, fallback SignalSink, cbCfg *CBConfig) *FallbackSin
 		},
 	})
 
-	return fs
+	return gs
 }
 
 // WriteBatch attempts to write to the primary sink. If the circuit breaker is
-// open or the primary fails, it falls back to the fallback sink.
-func (s *FallbackSink) WriteBatch(ctx context.Context, signals []Signal) error {
+// open or the primary fails, signals are dropped and counted — they are NOT
+// redirected to PG, protecting the main database from cascading overload.
+func (s *GuardedSink) WriteBatch(ctx context.Context, signals []Signal) error {
 	_, err := s.cb.Execute(func() (struct{}, error) {
 		return struct{}{}, s.primary.WriteBatch(ctx, signals)
 	})
@@ -77,15 +76,23 @@ func (s *FallbackSink) WriteBatch(ctx context.Context, signals []Signal) error {
 		return nil
 	}
 
+	// Drop signals instead of cascading to PG.
+	dropped := int64(len(signals))
+	s.dropped.Add(dropped)
+
 	if instrumentation.IsStreamEnabled(instrumentation.StreamRisk) {
-		logging.WithError(ctx, err).Warn("signal_sink.primary_failed_fallback",
+		logging.WithError(ctx, err).Warn("signal_sink.primary_failed_dropped",
 			slog.Int("batch_size", len(signals)),
+			slog.Int64("total_dropped", s.dropped.Load()),
 		)
 	}
 
-	// Fall back to secondary sink.
-	if fbErr := s.fallback.WriteBatch(ctx, signals); fbErr != nil {
-		return fmt.Errorf("fallback sink: %w (primary: %w)", fbErr, err)
-	}
+	// Return nil — signals are intentionally dropped, not an error for the caller.
 	return nil
+}
+
+// Dropped returns the total number of signals dropped due to circuit breaker
+// or primary sink failures.
+func (s *GuardedSink) Dropped() int64 {
+	return s.dropped.Load()
 }

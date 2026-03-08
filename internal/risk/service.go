@@ -77,7 +77,7 @@ func New(cfg Config, store Store, llm LLMClient, db *sql.DB, redisClient *redis.
 				)
 				// Fall back to PG if we can't set up Redis.
 			} else {
-				sink = NewFallbackSink(redisSink, pgStore, cfg.SignalStore.Redis.CircuitBreaker)
+				sink = NewGuardedSink(redisSink, cfg.SignalStore.Redis.CircuitBreaker)
 				drainWorker = NewDrainWorker(redisClient, pgStore, cfg.SignalStore.Redis)
 			}
 		}
