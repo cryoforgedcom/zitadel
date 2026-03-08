@@ -36,7 +36,7 @@ func SignalConnectUnaryInterceptor(emitter *Emitter) connect.UnaryInterceptorFun
 				Stream:     StreamRequest,
 				Operation:  req.Spec().Procedure,
 				IP:         http_util.RemoteIPFromCtx(ctx),
-				UserAgent:  req.Header().Get(http_util.UserAgentHeader),
+				UserAgent:  truncateString(req.Header().Get(http_util.UserAgentHeader), maxUserAgentLen),
 				Outcome:    outcome,
 				Timestamp:  time.Now().UTC(),
 			})

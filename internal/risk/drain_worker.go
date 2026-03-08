@@ -103,8 +103,10 @@ func (w *DrainWorker) Work(ctx context.Context, _ *river.Job[DrainArgs]) error {
 	}
 
 	if err := w.ack(ctx, ids); err != nil {
-		// PG write succeeded but ACK failed — entries will be re-delivered
-		// and the PG sink uses INSERT ON CONFLICT DO NOTHING (idempotent).
+		// PG write succeeded but ACK failed — entries will be re-delivered.
+		// The signals table has no unique constraint, so re-delivery adds
+		// duplicate rows. This is acceptable for append-only analytics data
+		// and preferred over data loss from premature ACK.
 		return fmt.Errorf("xack: %w", err)
 	}
 

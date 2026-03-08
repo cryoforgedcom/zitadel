@@ -231,7 +231,35 @@ func (c Config) Validate() error {
 	if c.MaxSignalsPerUser <= 0 || c.MaxSignalsPerSession <= 0 {
 		return fmt.Errorf("risk signal caps must be greater than 0")
 	}
+	if err := c.SignalStore.Validate(); err != nil {
+		return err
+	}
 	return c.LLM.Validate()
+}
+
+func (c SignalStoreConfig) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+	if c.ChannelSize <= 0 {
+		return fmt.Errorf("risk signal store channel size must be greater than 0")
+	}
+	if c.Debounce.MinFrequency <= 0 {
+		return fmt.Errorf("risk signal store debounce interval must be greater than 0")
+	}
+	if c.Postgres.PartitionInterval <= 0 {
+		return fmt.Errorf("risk signal store partition interval must be greater than 0")
+	}
+	if c.Postgres.Retention <= 0 {
+		return fmt.Errorf("risk signal store retention must be greater than 0")
+	}
+	if c.Mode == SignalStoreModeRedis && c.Redis.MaxLen <= 0 {
+		return fmt.Errorf("risk signal store redis max_len must be greater than 0")
+	}
+	if c.Archive.Enabled && c.Archive.EffectiveBackend() == ArchiveBackendFS && strings.TrimSpace(c.Archive.FSPath) == "" {
+		return fmt.Errorf("risk signal store archive fs_path must not be empty when backend is fs")
+	}
+	return nil
 }
 
 func (c LLMConfig) Enabled() bool {

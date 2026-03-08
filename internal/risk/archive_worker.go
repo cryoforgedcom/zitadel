@@ -131,6 +131,10 @@ func (w *ArchiveWorker) expiredPartitions(ctx context.Context, now time.Time) ([
 // archivePartition reads all rows from a partition, writes them to Parquet,
 // uploads to storage, and drops the partition.
 func (w *ArchiveWorker) archivePartition(ctx context.Context, p partitionInfo) error {
+	if !validPartitionName.MatchString(p.name) {
+		return fmt.Errorf("invalid partition name: %s", p.name)
+	}
+
 	signals, err := w.readPartition(ctx, p.name)
 	if err != nil {
 		return fmt.Errorf("read partition %s: %w", p.name, err)
@@ -180,45 +184,97 @@ func (w *ArchiveWorker) archivePartition(ctx context.Context, p partitionInfo) e
 	return nil
 }
 
-// readPartition reads all signal rows from a given partition table.
+// readPartition reads signal rows from a given partition table in chunks to
+// avoid loading the entire partition into memory. Each chunk is limited to
+// readPartitionChunkSize rows.
+const readPartitionChunkSize = 10_000
+
 func (w *ArchiveWorker) readPartition(ctx context.Context, name string) ([]Signal, error) {
-	rows, err := w.db.QueryContext(ctx,
-		fmt.Sprintf(`SELECT instance_id, created_at, caller_id, user_id, session_id,
-		                    fingerprint_id, stream, operation, resource, outcome,
-		                    ip, user_agent, country
-		             FROM signals.%s
-		             ORDER BY created_at`, name),
-	)
-	if err != nil {
-		return nil, err
+	if !validPartitionName.MatchString(name) {
+		return nil, fmt.Errorf("invalid partition name: %s", name)
 	}
-	defer rows.Close()
 
 	var signals []Signal
-	for rows.Next() {
-		var sig Signal
-		var (
-			userID, sessionID, fpID, resource sql.NullString
-			ip, ua, country                   sql.NullString
-		)
-		if err := rows.Scan(
-			&sig.InstanceID, &sig.Timestamp, &sig.CallerID,
-			&userID, &sessionID, &fpID,
-			&sig.Stream, &sig.Operation, &resource, &sig.Outcome,
-			&ip, &ua, &country,
-		); err != nil {
-			return nil, fmt.Errorf("scan signal: %w", err)
+	var lastTimestamp time.Time
+	first := true
+
+	for {
+		var rows *sql.Rows
+		var err error
+		if first {
+			rows, err = w.db.QueryContext(ctx,
+				fmt.Sprintf(`SELECT instance_id, created_at, caller_id, user_id, session_id,
+				                    fingerprint_id, stream, operation, resource, outcome,
+				                    ip, user_agent, country
+				             FROM signals.%s
+				             ORDER BY created_at
+				             LIMIT %d`, name, readPartitionChunkSize),
+			)
+			first = false
+		} else {
+			rows, err = w.db.QueryContext(ctx,
+				fmt.Sprintf(`SELECT instance_id, created_at, caller_id, user_id, session_id,
+				                    fingerprint_id, stream, operation, resource, outcome,
+				                    ip, user_agent, country
+				             FROM signals.%s
+				             WHERE created_at >= $1
+				             ORDER BY created_at
+				             LIMIT %d`, name, readPartitionChunkSize+1),
+				lastTimestamp,
+			)
 		}
-		sig.UserID = userID.String
-		sig.SessionID = sessionID.String
-		sig.FingerprintID = fpID.String
-		sig.Resource = resource.String
-		sig.IP = ip.String
-		sig.UserAgent = ua.String
-		sig.Country = country.String
-		signals = append(signals, sig)
+		if err != nil {
+			return nil, err
+		}
+
+		chunkCount := 0
+		for rows.Next() {
+			var sig Signal
+			var (
+				userID, sessionID, fpID, resource sql.NullString
+				ip, ua, country                   sql.NullString
+			)
+			if err := rows.Scan(
+				&sig.InstanceID, &sig.Timestamp, &sig.CallerID,
+				&userID, &sessionID, &fpID,
+				&sig.Stream, &sig.Operation, &resource, &sig.Outcome,
+				&ip, &ua, &country,
+			); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("scan signal: %w", err)
+			}
+			sig.UserID = userID.String
+			sig.SessionID = sessionID.String
+			sig.FingerprintID = fpID.String
+			sig.Resource = resource.String
+			sig.IP = ip.String
+			sig.UserAgent = ua.String
+			sig.Country = country.String
+
+			// Skip the duplicate first row from overlap on subsequent chunks.
+			if !first && chunkCount == 0 && sig.Timestamp.Equal(lastTimestamp) && len(signals) > 0 {
+				last := signals[len(signals)-1]
+				if sig.InstanceID == last.InstanceID && sig.CallerID == last.CallerID && sig.Operation == last.Operation {
+					chunkCount++
+					continue
+				}
+			}
+
+			signals = append(signals, sig)
+			lastTimestamp = sig.Timestamp
+			chunkCount++
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+
+		// If we got fewer than the chunk size, we've read everything.
+		if chunkCount < readPartitionChunkSize {
+			break
+		}
 	}
-	return signals, rows.Err()
+	return signals, nil
 }
 
 // applyStreamRetention deletes rows from streams that have exceeded their

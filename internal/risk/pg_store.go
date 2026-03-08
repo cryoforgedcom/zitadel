@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -27,8 +28,9 @@ func (s *PGStore) Save(ctx context.Context, signal Signal, findings []Finding) e
 	return s.insertSignal(ctx, s.db, signal, findings)
 }
 
-// WriteBatch inserts a batch of signals into the signal table.
-// Called by the [Emitter] debouncer. Findings are nil for emitter-sourced signals.
+// WriteBatch inserts a batch of signals into the signal table using a
+// multi-row INSERT for efficiency. Called by the [Emitter] debouncer.
+// Findings are nil for emitter-sourced signals.
 func (s *PGStore) WriteBatch(ctx context.Context, signals []Signal) error {
 	if len(signals) == 0 {
 		return nil
@@ -43,8 +45,68 @@ func (s *PGStore) WriteBatch(ctx context.Context, signals []Signal) error {
 		}
 	}()
 
-	for _, sig := range signals {
-		if err = s.insertSignal(ctx, tx, sig, nil); err != nil {
+	const cols = 14
+	const maxBatch = 500
+	for start := 0; start < len(signals); start += maxBatch {
+		end := start + maxBatch
+		if end > len(signals) {
+			end = len(signals)
+		}
+		batch := signals[start:end]
+
+		placeholders := make([]string, 0, len(batch))
+		args := make([]any, 0, len(batch)*cols)
+		for i, sig := range batch {
+			meta := signalMetadata{
+				AcceptLanguage: sig.AcceptLanguage,
+				ForwardedChain: sig.ForwardedChain,
+				Referer:        sig.Referer,
+				SecFetchSite:   sig.SecFetchSite,
+				IsHTTPS:        sig.IsHTTPS,
+			}
+			var metaJSON []byte
+			hasMetadata := meta.AcceptLanguage != "" || len(meta.ForwardedChain) > 0 ||
+				meta.Referer != "" || meta.SecFetchSite != "" || meta.IsHTTPS
+			if hasMetadata {
+				metaJSON, err = json.Marshal(meta)
+				if err != nil {
+					return fmt.Errorf("signal store marshal metadata: %w", err)
+				}
+			}
+
+			var ipVal any
+			if sig.IP != "" {
+				if parsed := net.ParseIP(sig.IP); parsed != nil {
+					ipVal = parsed.String()
+				}
+			}
+
+			ts := sig.Timestamp
+			if ts.IsZero() {
+				ts = time.Now().UTC()
+			}
+			stream := string(sig.Stream)
+			if stream == "" {
+				stream = string(StreamAuth)
+			}
+
+			base := i * cols
+			placeholders = append(placeholders,
+				fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d::INET, $%d, $%d, $%d::JSONB)",
+					base+1, base+2, base+3, base+4, base+5, base+6, base+7,
+					base+8, base+9, base+10, base+11, base+12, base+13, base+14))
+			args = append(args,
+				sig.InstanceID, ts, sig.CallerID,
+				nullIfEmpty(sig.UserID), nullIfEmpty(sig.SessionID), nullIfEmpty(sig.FingerprintID),
+				stream, sig.Operation, nullIfEmpty(sig.Resource), string(sig.Outcome),
+				ipVal, nullIfEmpty(sig.UserAgent), nullIfEmpty(sig.Country), nullableJSON(metaJSON))
+		}
+
+		query := `INSERT INTO signals.signals
+			(instance_id, created_at, caller_id, user_id, session_id, fingerprint_id,
+			 stream, operation, resource, outcome, ip, user_agent, country, metadata)
+			VALUES ` + strings.Join(placeholders, ", ")
+		if _, err = tx.ExecContext(ctx, query, args...); err != nil {
 			return fmt.Errorf("signal store batch insert: %w", err)
 		}
 	}
