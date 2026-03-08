@@ -451,10 +451,6 @@ func (c *Commands) enforceSessionRisk(ctx context.Context, checks *SessionComman
 		return nil
 	}
 	c.recordSessionRisk(ctx, checks, risk.OutcomeBlocked, decision.Findings)
-	signal.Outcome = risk.OutcomeBlocked
-	signal.Stream = risk.StreamAuth
-	signal.CallerID = authz.GetCtxData(ctx).UserID
-	c.emitRiskSignal(signal)
 	risklog.Warn(ctx, "risk.eval.blocked",
 		slog.String("risk_user_id", signal.UserID),
 		slog.String("risk_session_id", signal.SessionID),
@@ -478,17 +474,6 @@ func (c *Commands) recordSessionRisk(ctx context.Context, checks *SessionCommand
 			slog.String("risk_session_id", checks.sessionWriteModel.AggregateID),
 			slog.String("risk_operation", checks.operation),
 		)
-	}
-	c.emitRiskSignal(signal)
-}
-
-// emitRiskSignal sends a signal to the fire-and-forget emitter for persistence
-// in the signal store. No-op when the risk service or emitter is disabled.
-func (c *Commands) emitRiskSignal(signal risk.Signal) {
-	if svc := c.RiskService(); svc != nil {
-		if emitter := svc.Emitter(); emitter != nil {
-			emitter.Emit(signal)
-		}
 	}
 }
 
