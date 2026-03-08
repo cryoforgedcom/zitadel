@@ -2,6 +2,7 @@ package risk
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -31,12 +32,36 @@ type Service struct {
 	ruleEngine *RuleEngine
 	now        func() time.Time
 	stopMaint  chan struct{} // closed to stop the maintenance goroutine
+
+	// Signal store components (nil when SignalStore is not enabled).
+	db              *sql.DB
+	emitter         *Emitter
+	emitterCancel   context.CancelFunc
+	partitionWorker *PartitionWorker
 }
 
-func New(cfg Config, store Store, llm LLMClient) (*Service, error) {
+// New creates a risk evaluation service. When db is non-nil and
+// cfg.SignalStore.Enabled is true, it creates a PG-backed signal store
+// with a fire-and-forget emitter. Otherwise it falls back to the in-memory
+// store.
+func New(cfg Config, store Store, llm LLMClient, db *sql.DB) (*Service, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+
+	// When the PG signal store is enabled and a database is provided,
+	// create PGStore + Emitter and use PGStore as the Store.
+	var emitter *Emitter
+	var partitionWorker *PartitionWorker
+	if cfg.SignalStore.Enabled && db != nil {
+		pgStore := NewPGStore(db, cfg)
+		if store == nil {
+			store = pgStore
+		}
+		emitter = NewEmitter(cfg.SignalStore, pgStore)
+		partitionWorker = NewPartitionWorker(db, cfg.SignalStore.Postgres)
+	}
+
 	if store == nil {
 		store = NewMemoryStore(cfg)
 	}
@@ -56,9 +81,31 @@ func New(cfg Config, store Store, llm LLMClient) (*Service, error) {
 		ruleEngine = NewRuleEngine(compiled, NewRateLimiter(), llm, cfg.LLM)
 	}
 
-	svc := &Service{cfg: cfg, store: store, llm: llm, ruleEngine: ruleEngine, now: time.Now, stopMaint: make(chan struct{})}
+	svc := &Service{
+		cfg:             cfg,
+		store:           store,
+		llm:             llm,
+		ruleEngine:      ruleEngine,
+		now:             time.Now,
+		stopMaint:       make(chan struct{}),
+		db:              db,
+		emitter:         emitter,
+		partitionWorker: partitionWorker,
+	}
 	if cfg.Enabled {
 		go svc.maintenanceLoop()
+	}
+	// Start the signal emitter independently of the full risk engine — signal
+	// collection is useful on its own for auditing and future risk analysis.
+	if emitter != nil {
+		ctx, cancel := context.WithCancel(context.Background())
+		svc.emitterCancel = cancel
+		go emitter.Start(ctx)
+		if instrumentation.IsStreamEnabled(instrumentation.StreamRisk) {
+			logging.Info(ctx, "risk.signal_store.started",
+				slog.Int("channel_size", cfg.SignalStore.ChannelSize),
+			)
+		}
 	}
 	return svc, nil
 }
@@ -89,7 +136,8 @@ func (s *Service) maintenanceLoop() {
 	}
 }
 
-// Close stops the maintenance goroutine. Safe to call multiple times.
+// Close stops the maintenance goroutine and signal emitter. Safe to call
+// multiple times.
 func (s *Service) Close() {
 	if s == nil {
 		return
@@ -100,6 +148,28 @@ func (s *Service) Close() {
 	default:
 		close(s.stopMaint)
 	}
+	if s.emitterCancel != nil {
+		s.emitterCancel()
+		<-s.emitter.Done()
+	}
+}
+
+// Emitter returns the signal emitter, or nil when the signal store is not
+// enabled. Middleware uses this to emit fire-and-forget signals.
+func (s *Service) Emitter() *Emitter {
+	if s == nil {
+		return nil
+	}
+	return s.emitter
+}
+
+// PartitionWorker returns the partition management worker for registration
+// with the River queue, or nil when the signal store is not enabled.
+func (s *Service) PartitionWorker() *PartitionWorker {
+	if s == nil {
+		return nil
+	}
+	return s.partitionWorker
 }
 
 func (s *Service) Enabled() bool {

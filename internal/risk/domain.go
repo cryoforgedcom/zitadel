@@ -4,6 +4,15 @@ import "time"
 
 type Outcome string
 
+type SignalStream string
+
+const (
+	StreamRequest      SignalStream = "request"
+	StreamAuth         SignalStream = "auth"
+	StreamAccount      SignalStream = "account"
+	StreamNotification SignalStream = "notification"
+)
+
 type Finding struct {
 	Name       string
 	Source     string
@@ -20,9 +29,16 @@ type Decision struct {
 type Signal struct {
 	InstanceID    string
 	UserID        string
+	// CallerID is the authenticated actor (user or service account).
+	// Always set — even login/register flows use the login UI's service account.
+	CallerID      string
 	SessionID     string
 	FingerprintID string
 	Operation     string
+	// Stream classifies the signal source for filtering and retention.
+	Stream        SignalStream
+	// Resource identifies the target of the operation (e.g. "users.list").
+	Resource      string
 	Outcome       Outcome
 	Timestamp     time.Time
 	IP            string
@@ -50,7 +66,9 @@ type Snapshot struct {
 const (
 	OutcomeSuccess Outcome = "success"
 	OutcomeFailure Outcome = "failure"
-	OutcomeBlocked Outcome = "blocked"
+	OutcomeBlocked    Outcome = "blocked"
+	OutcomeChallenged Outcome = "challenged"
+
 )
 
 func (d Decision) BlockingFindings() []Finding {

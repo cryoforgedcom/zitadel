@@ -33,7 +33,7 @@ func TestServiceEvaluateFailureBurst(t *testing.T) {
 		MaxSignalsPerUser:     20,
 		MaxSignalsPerSession:  20,
 	}
-	svc, err := New(cfg, nil, nil)
+	svc, err := New(cfg, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestServiceEvaluateContextDrift(t *testing.T) {
 		MaxSignalsPerUser:     20,
 		MaxSignalsPerSession:  20,
 	}
-	svc, err := New(cfg, nil, nil)
+	svc, err := New(cfg, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestServiceEvaluateLLMObserve(t *testing.T) {
 			HighRiskConfidence: 0.85,
 		},
 	}
-	svc, err := New(cfg, nil, llm)
+	svc, err := New(cfg, nil, llm, nil)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestServiceEvaluateLLMEnforce(t *testing.T) {
 			HighRiskConfidence: 0.85,
 		},
 	}
-	svc, err := New(cfg, nil, llm)
+	svc, err := New(cfg, nil, llm, nil)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestServiceEvaluateLLMCachedSession(t *testing.T) {
 			HighRiskConfidence: 0.85,
 		},
 	}
-	svc, err := New(cfg, nil, countingLLM)
+	svc, err := New(cfg, nil, countingLLM, nil)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}

@@ -65,6 +65,21 @@ type RiskConfig struct {
 	LLM                   RiskLLMConfig
 	Rules                 []RiskRuleConfig
 	GeoCountryHeader      string
+	SignalStore           RiskSignalStoreConfig
+}
+
+// RiskSignalStoreConfig mirrors risk.SignalStoreConfig for YAML configuration.
+type RiskSignalStoreConfig struct {
+	Enabled     bool
+	ChannelSize int
+	Debounce    struct {
+		MinFrequency time.Duration
+		MaxBulkSize  uint
+	}
+	Postgres struct {
+		PartitionInterval time.Duration
+		Retention         time.Duration
+	}
 }
 
 // RiskRuleConfig mirrors risk.Rule for YAML configuration.

@@ -24,6 +24,8 @@ type Config struct {
 	// Cloudflare, "X-Vercel-IP-Country" for Vercel). When empty, country-based
 	// risk signals are not available.
 	GeoCountryHeader string
+	// SignalStore configures the persistent signal store.
+	SignalStore SignalStoreConfig
 }
 
 type LLMMode string
@@ -95,6 +97,36 @@ type CBConfig struct {
 	//   true  (default) — skip the LLM call silently and allow the login to continue.
 	//   false           — return an error, which the service-level FailOpen policy then handles.
 	FailOpen bool
+}
+
+// SignalStoreConfig configures the persistent signal store used for risk evaluation.
+type SignalStoreConfig struct {
+	// Enabled activates the persistent PG signal store.
+	// When false, the in-memory store is used (default, backward compatible).
+	Enabled bool
+	// ChannelSize is the buffer size for the fire-and-forget emission channel.
+	// Signals are dropped (and counted) when the channel is full.
+	ChannelSize int
+	// Debounce controls batching of signal writes to PostgreSQL.
+	Debounce DebouncerConfig
+	// Postgres configures the warm-tier PG signal table.
+	Postgres SignalPGConfig
+}
+
+// DebouncerConfig controls how signals are batched before writing to PG.
+type DebouncerConfig struct {
+	// MinFrequency is the maximum time between flushes.
+	MinFrequency time.Duration
+	// MaxBulkSize is the maximum batch size before a flush is triggered.
+	MaxBulkSize uint
+}
+
+// SignalPGConfig configures the PostgreSQL signal table.
+type SignalPGConfig struct {
+	// PartitionInterval is the time range for each partition (e.g. "1h").
+	PartitionInterval time.Duration
+	// Retention is how long signals are kept in PG before partition cleanup.
+	Retention time.Duration
 }
 
 func (c Config) Validate() error {

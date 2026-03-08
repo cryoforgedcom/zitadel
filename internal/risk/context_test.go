@@ -255,3 +255,138 @@ func TestBuildRiskContext_NoCountry(t *testing.T) {
 		t.Errorf("DistinctCountries = %d, want 0", rc.DistinctCountries)
 	}
 }
+
+func TestBuildRiskContext_CrossOperation(t *testing.T) {
+	now := time.Date(2026, 6, 15, 10, 0, 0, 0, time.UTC)
+	signal := Signal{
+		UserID:    "u1",
+		IP:        "1.2.3.4",
+		Timestamp: now,
+		Resource:  "users",
+	}
+	snapshot := Snapshot{
+		UserSignals: []RecordedSignal{
+			// API read via HTTP GET
+			{Signal: Signal{Stream: StreamRequest, Operation: "GET /v2/users", Resource: "users", Timestamp: now.Add(-10 * time.Minute)}},
+			// API read via RPC-style GetUser
+			{Signal: Signal{Stream: StreamRequest, Operation: "zitadel.user.v2.GetUser", Resource: "users", Timestamp: now.Add(-9 * time.Minute)}},
+			// API read via List
+			{Signal: Signal{Stream: StreamRequest, Operation: "zitadel.user.v2.ListUsers", Resource: "users.list", Timestamp: now.Add(-8 * time.Minute)}},
+			// API read via Search
+			{Signal: Signal{Stream: StreamRequest, Operation: "zitadel.session.v2.SearchSessions", Resource: "sessions", Timestamp: now.Add(-7 * time.Minute)}},
+			// Non-read request (POST)
+			{Signal: Signal{Stream: StreamRequest, Operation: "POST /v2/users", Resource: "users", Timestamp: now.Add(-6 * time.Minute)}},
+			// Auth stream (not a request stream, should not count as API read)
+			{Signal: Signal{Stream: StreamAuth, Operation: "GET /auth", Resource: "auth", Timestamp: now.Add(-5 * time.Minute)}},
+			// Password change
+			{Signal: Signal{Stream: StreamAccount, Operation: "user.password.change", Timestamp: now.Add(-4 * time.Minute)}},
+			// MFA enrollment via OTP
+			{Signal: Signal{Stream: StreamAccount, Operation: "user.otp.verify", Timestamp: now.Add(-3 * time.Minute)}},
+			// Notification
+			{Signal: Signal{Stream: StreamNotification, Operation: "email.send", Timestamp: now.Add(-2 * time.Minute)}},
+			{Signal: Signal{Stream: StreamNotification, Operation: "sms.send", Timestamp: now.Add(-1 * time.Minute)}},
+		},
+	}
+
+	rc := buildRiskContext(signal, snapshot)
+
+	// RecentAPIReads: 4 (GET /v2/users, GetUser, ListUsers, SearchSessions)
+	if rc.RecentAPIReads != 4 {
+		t.Errorf("RecentAPIReads = %d, want 4", rc.RecentAPIReads)
+	}
+
+	// DataAccessVelocity: 4 reads / 10 minutes = 0.4 reads/min
+	if rc.DataAccessVelocity < 0.39 || rc.DataAccessVelocity > 0.41 {
+		t.Errorf("DataAccessVelocity = %f, want ~0.4", rc.DataAccessVelocity)
+	}
+
+	// DistinctResources: {users, users.list, sessions, auth} from history + {users} from current = 4
+	if rc.DistinctResources != 4 {
+		t.Errorf("DistinctResources = %d, want 4", rc.DistinctResources)
+	}
+
+	if !rc.PasswordChangeInWindow {
+		t.Error("PasswordChangeInWindow should be true")
+	}
+
+	if !rc.MFAEnrolledInWindow {
+		t.Error("MFAEnrolledInWindow should be true")
+	}
+
+	// RecentNotifications: 2 (email.send, sms.send)
+	if rc.RecentNotifications != 2 {
+		t.Errorf("RecentNotifications = %d, want 2", rc.RecentNotifications)
+	}
+}
+
+func TestBuildRiskContext_CrossOperation_Empty(t *testing.T) {
+	now := time.Now()
+	signal := Signal{
+		UserID:    "u1",
+		Timestamp: now,
+	}
+	snapshot := Snapshot{}
+
+	rc := buildRiskContext(signal, snapshot)
+
+	if rc.RecentAPIReads != 0 {
+		t.Errorf("RecentAPIReads = %d, want 0", rc.RecentAPIReads)
+	}
+	if rc.DataAccessVelocity != 0 {
+		t.Errorf("DataAccessVelocity = %f, want 0", rc.DataAccessVelocity)
+	}
+	if rc.DistinctResources != 0 {
+		t.Errorf("DistinctResources = %d, want 0", rc.DistinctResources)
+	}
+	if rc.PasswordChangeInWindow {
+		t.Error("PasswordChangeInWindow should be false")
+	}
+	if rc.MFAEnrolledInWindow {
+		t.Error("MFAEnrolledInWindow should be false")
+	}
+	if rc.RecentNotifications != 0 {
+		t.Errorf("RecentNotifications = %d, want 0", rc.RecentNotifications)
+	}
+}
+
+func TestBuildRiskContext_MFAVariants(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name string
+		op   string
+	}{
+		{"u2f", "user.u2f.register"},
+		{"passkey", "user.passkey.verify"},
+		{"otp", "user.otp.add"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			signal := Signal{Timestamp: now}
+			snapshot := Snapshot{
+				UserSignals: []RecordedSignal{
+					{Signal: Signal{Operation: tt.op, Timestamp: now.Add(-time.Minute)}},
+				},
+			}
+			rc := buildRiskContext(signal, snapshot)
+			if !rc.MFAEnrolledInWindow {
+				t.Errorf("MFAEnrolledInWindow should be true for operation %q", tt.op)
+			}
+		})
+	}
+}
+
+func TestBuildRiskContext_PasswordSetVariant(t *testing.T) {
+	now := time.Now()
+	signal := Signal{Timestamp: now}
+	snapshot := Snapshot{
+		UserSignals: []RecordedSignal{
+			{Signal: Signal{Operation: "user.password.set", Timestamp: now.Add(-time.Minute)}},
+		},
+	}
+
+	rc := buildRiskContext(signal, snapshot)
+
+	if !rc.PasswordChangeInWindow {
+		t.Error("PasswordChangeInWindow should be true for password.set")
+	}
+}

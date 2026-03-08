@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"database/sql"
 	"encoding/pem"
 	"fmt"
 	"math/big"
@@ -139,6 +140,7 @@ func StartCommands(
 	defaultSecretGenerators *SecretGenerators,
 	loginPaths LoginPaths,
 	actionsDeniedHostList []denylist.AddressChecker,
+	signalDB *sql.DB,
 ) (repo *Commands, err error) {
 	if externalDomain == "" {
 		return nil, zerrors.ThrowInvalidArgument(nil, "COMMAND-Df21s", "no external domain specified")
@@ -259,19 +261,42 @@ func StartCommands(
 			LogPrompts:         defaults.Risk.LLM.LogPrompts,
 			CircuitBreaker:     riskCBConfig(defaults.Risk.LLM.CircuitBreaker),
 		},
-		Rules: riskRules(defaults.Risk.Rules),
+		Rules:            riskRules(defaults.Risk.Rules),
 		GeoCountryHeader: defaults.Risk.GeoCountryHeader,
+		SignalStore: risk.SignalStoreConfig{
+			Enabled:     defaults.Risk.SignalStore.Enabled,
+			ChannelSize: defaults.Risk.SignalStore.ChannelSize,
+			Debounce: risk.DebouncerConfig{
+				MinFrequency: defaults.Risk.SignalStore.Debounce.MinFrequency,
+				MaxBulkSize:  defaults.Risk.SignalStore.Debounce.MaxBulkSize,
+			},
+			Postgres: risk.SignalPGConfig{
+				PartitionInterval: defaults.Risk.SignalStore.Postgres.PartitionInterval,
+				Retention:         defaults.Risk.SignalStore.Postgres.Retention,
+			},
+		},
 	}
 	var riskLLM risk.LLMClient
 	if riskConfig.Enabled && riskConfig.LLM.Enabled() {
 		riskLLM = risk.NewOllamaClient(riskConfig.LLM, httpClient)
 	}
-	repo.riskEvaluator, err = risk.New(riskConfig, nil, riskLLM)
+	repo.riskEvaluator, err = risk.New(riskConfig, nil, riskLLM, signalDB)
 	if err != nil {
 		return nil, fmt.Errorf("risk evaluator: %w", err)
 	}
 	repo.riskGeoHeader = riskConfig.GeoCountryHeader
 	return repo, nil
+}
+
+// RiskService returns the concrete risk service if available. Used by the
+// startup code to register partition workers and by middleware to access the
+// signal emitter.
+func (c *Commands) RiskService() *risk.Service {
+	if c == nil {
+		return nil
+	}
+	svc, _ := c.riskEvaluator.(*risk.Service)
+	return svc
 }
 
 type AppendReducer interface {

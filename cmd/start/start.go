@@ -113,6 +113,7 @@ import (
 	"github.com/zitadel/zitadel/internal/notification"
 	"github.com/zitadel/zitadel/internal/query"
 	"github.com/zitadel/zitadel/internal/queue"
+	"github.com/zitadel/zitadel/internal/risk"
 	"github.com/zitadel/zitadel/internal/serviceping"
 	"github.com/zitadel/zitadel/internal/static"
 	es_v4 "github.com/zitadel/zitadel/internal/v2/eventstore"
@@ -290,6 +291,7 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 		config.DefaultInstance.SecretGenerators,
 		config.Login.DefaultPaths,
 		config.Executions.DenyList,
+		dbClient.DB,
 	)
 	if err != nil {
 		return fmt.Errorf("cannot start commands: %w", err)
@@ -352,6 +354,9 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 		return err
 	}
 
+	// register signal store partition worker if the risk signal store is enabled
+	risk.RegisterPartitionWorker(ctx, q, commands.RiskService())
+
 	if err = q.Start(ctx); err != nil {
 		return err
 	}
@@ -360,6 +365,9 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 	if err = serviceping.Start(ctx, config.ServicePing, q); err != nil {
 		return err
 	}
+
+	// start signal partition management periodic job
+	risk.StartPartitionSchedule(ctx, q, commands.RiskService())
 
 	router := mux.NewRouter()
 	tlsConfig, err := config.TLS.Config()
@@ -467,6 +475,13 @@ func startAPIs(
 	)
 	limitingAccessInterceptor := middleware.NewAccessInterceptor(accessSvc, exhaustedCookieHandler, &config.Quotas.Access.AccessConfig)
 	translator := i18n.NewZitadelTranslator(language.English)
+	// Resolve signal emitter for request-level signal capture.
+	var signalEmitter *risk.Emitter
+	if rs := commands.RiskService(); rs != nil {
+		signalEmitter = rs.Emitter()
+	}
+
+
 	apis, err := api.New(
 		ctx,
 		config.Port,
@@ -483,6 +498,7 @@ func startAPIs(
 		translator,
 		config.Instrumentation.Trace.TrustRemoteSpans,
 		config.Executions.DenyList,
+		signalEmitter,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating api %w", err)

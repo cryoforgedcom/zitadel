@@ -987,6 +987,15 @@ SystemDefaults:
     #   Cloudflare: CF-IPCountry   Vercel: X-Vercel-IP-Country   Custom: X-Country-Code
     # Leave empty to disable country-based risk signals.
     GeoCountryHeader: "" # ZITADEL_SYSTEMDEFAULTS_RISK_GEOCOUNTRYHEADER
+    SignalStore:
+      Enabled: false
+      ChannelSize: 4096
+      Debounce:
+        MinFrequency: 1s
+        MaxBulkSize: 100
+      Postgres:
+        PartitionInterval: 1h
+        Retention: 24h
     Rules: # ZITADEL_SYSTEMDEFAULTS_RISK_RULES
       - id: failure-burst
         description: "Block after 5+ failures from same user in history window"
@@ -1024,7 +1033,7 @@ SystemDefaults:
           block: false
       - id: high-velocity
         description: "Flag unusually high login velocity — possible brute force or automation"
-        expr: 'LoginVelocity > 20'
+        expr: 'LoginVelocity > 300'
         engine: block
         finding:
           name: high_velocity

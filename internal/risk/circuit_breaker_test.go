@@ -149,7 +149,7 @@ func TestCBLLMClient_failOpenSkipsLLM(t *testing.T) {
 	}
 
 	inner := &failingLLMClient{err: errLLMUnavailable}
-	svc, err := New(riskCfg, nil, inner)
+	svc, err := New(riskCfg, nil, inner, nil)
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -200,7 +200,7 @@ func TestCBLLMClient_failClosedPropagatesError(t *testing.T) {
 	}
 
 	inner := &failingLLMClient{err: errLLMUnavailable}
-	svc, err := New(riskCfg, nil, inner)
+	svc, err := New(riskCfg, nil, inner, nil)
 	require.NoError(t, err)
 
 	ctx := context.Background()
