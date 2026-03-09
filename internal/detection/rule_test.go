@@ -264,7 +264,7 @@ func TestRuleEngine_Evaluate_BlockEngine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	engine := NewRuleEngine(rules, ratelimit.NewMemoryRateLimiter(), nil, LLMConfig{})
+	engine := NewRuleEngine(rules, ratelimit.NewMemoryRateLimiter(), nil, LLMConfig{}, nil)
 	ctx := context.Background()
 
 	// Only burst matches.
@@ -314,7 +314,7 @@ func TestRuleEngine_RateLimitEngine(t *testing.T) {
 	}
 
 	limiter := ratelimit.NewMemoryRateLimiter()
-	engine := NewRuleEngine(rules, limiter, nil, LLMConfig{})
+	engine := NewRuleEngine(rules, limiter, nil, LLMConfig{}, nil)
 	ctx := context.Background()
 	now := time.Now()
 
@@ -368,7 +368,7 @@ func TestRuleEngine_RateLimitIsolatesInstances(t *testing.T) {
 	}
 
 	limiter := ratelimit.NewMemoryRateLimiter()
-	engine := NewRuleEngine(rules, limiter, nil, LLMConfig{})
+	engine := NewRuleEngine(rules, limiter, nil, LLMConfig{}, nil)
 	ctx := context.Background()
 
 	firstTenant := RiskContext{
@@ -425,7 +425,7 @@ func TestRuleEngine_RateLimitIsolatesRules(t *testing.T) {
 	}
 
 	limiter := ratelimit.NewMemoryRateLimiter()
-	engine := NewRuleEngine(rules, limiter, nil, LLMConfig{})
+	engine := NewRuleEngine(rules, limiter, nil, LLMConfig{}, nil)
 	ctx := context.Background()
 
 	findings := engine.Evaluate(ctx, RiskContext{
@@ -455,7 +455,7 @@ func TestRuleEngine_LogEngine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	engine := NewRuleEngine(rules, nil, nil, LLMConfig{})
+	engine := NewRuleEngine(rules, nil, nil, LLMConfig{}, nil)
 	ctx := context.Background()
 
 	findings := engine.Evaluate(ctx, RiskContext{FailureCount: 1}, nil)
@@ -634,7 +634,7 @@ func TestRuleEngine_CaptchaEngine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	engine := NewRuleEngine(rules, nil, nil, LLMConfig{})
+	engine := NewRuleEngine(rules, nil, nil, LLMConfig{}, nil)
 	findings := engine.Evaluate(context.Background(), RiskContext{}, nil)
 	if len(findings) != 1 {
 		t.Fatalf("len(findings) = %d, want 1", len(findings))
@@ -661,7 +661,7 @@ func TestRuleEngine_CaptchaEngine(t *testing.T) {
 }
 
 func TestRuleEngine_Evaluate_NoRules(t *testing.T) {
-	engine := NewRuleEngine(nil, nil, nil, LLMConfig{})
+	engine := NewRuleEngine(nil, nil, nil, LLMConfig{}, nil)
 	findings := engine.Evaluate(context.Background(), RiskContext{}, nil)
 	if len(findings) != 0 {
 		t.Fatalf("len(findings) = %d, want 0", len(findings))
@@ -683,7 +683,7 @@ func TestRuleEngine_UnknownEngine(t *testing.T) {
 	}
 	rules[0].Engine = EngineType("mystery")
 
-	engine := NewRuleEngine(rules, nil, nil, LLMConfig{})
+	engine := NewRuleEngine(rules, nil, nil, LLMConfig{}, nil)
 	findings := engine.Evaluate(context.Background(), RiskContext{}, nil)
 	if len(findings) != 0 {
 		t.Fatalf("len(findings) = %d, want 0 for unknown engine", len(findings))
@@ -730,7 +730,7 @@ func TestRuleEngine_MultipleRulesAllMatch(t *testing.T) {
 	}
 
 	limiter := ratelimit.NewMemoryRateLimiter()
-	engine := NewRuleEngine(rules, limiter, nil, LLMConfig{})
+	engine := NewRuleEngine(rules, limiter, nil, LLMConfig{}, nil)
 	ctx := context.Background()
 
 	// First evaluation: block and log fire immediately; rate_limit is within limit.

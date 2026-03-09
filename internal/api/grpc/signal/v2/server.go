@@ -9,8 +9,8 @@ import (
 	"github.com/zitadel/zitadel/internal/api/authz"
 	"github.com/zitadel/zitadel/internal/api/grpc/server"
 	sig "github.com/zitadel/zitadel/internal/signals"
-	signalpb "github.com/zitadel/zitadel/pkg/grpc/signal/v1"
-	"github.com/zitadel/zitadel/pkg/grpc/signal/v1/signalconnect"
+	signalpb "github.com/zitadel/zitadel/pkg/grpc/signal/v2"
+	"github.com/zitadel/zitadel/pkg/grpc/signal/v2/signalconnect"
 )
 
 var _ signalconnect.SignalServiceHandler = (*Server)(nil)
@@ -33,7 +33,7 @@ func (s *Server) RegisterConnectServer(interceptors ...connect.Interceptor) (str
 }
 
 func (s *Server) FileDescriptor() protoreflect.FileDescriptor {
-	return signalpb.File_zitadel_signal_v1_signal_service_proto
+	return signalpb.File_zitadel_signal_v2_signal_service_proto
 }
 
 func (s *Server) AppName() string {

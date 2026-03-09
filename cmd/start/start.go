@@ -69,6 +69,7 @@ import (
 	session_v2beta "github.com/zitadel/zitadel/internal/api/grpc/session/v2beta"
 	settings_v2 "github.com/zitadel/zitadel/internal/api/grpc/settings/v2"
 	settings_v2beta "github.com/zitadel/zitadel/internal/api/grpc/settings/v2beta"
+	signal_v2 "github.com/zitadel/zitadel/internal/api/grpc/signal/v2"
 	"github.com/zitadel/zitadel/internal/api/grpc/system"
 	user_v2 "github.com/zitadel/zitadel/internal/api/grpc/user/v2"
 	user_v2beta "github.com/zitadel/zitadel/internal/api/grpc/user/v2beta"
@@ -95,6 +96,7 @@ import (
 	"github.com/zitadel/zitadel/internal/crypto"
 	cryptoDB "github.com/zitadel/zitadel/internal/crypto/database"
 	"github.com/zitadel/zitadel/internal/database"
+	signalprojection "github.com/zitadel/zitadel/internal/detection/signalprojection"
 	"github.com/zitadel/zitadel/internal/domain"
 	"github.com/zitadel/zitadel/internal/domain/federatedlogout"
 	"github.com/zitadel/zitadel/internal/eventstore"
@@ -112,10 +114,10 @@ import (
 	"github.com/zitadel/zitadel/internal/net"
 	"github.com/zitadel/zitadel/internal/notification"
 	"github.com/zitadel/zitadel/internal/query"
+	"github.com/zitadel/zitadel/internal/query/projection"
 	"github.com/zitadel/zitadel/internal/queue"
 	"github.com/zitadel/zitadel/internal/serviceping"
 	"github.com/zitadel/zitadel/internal/signals"
-	signal_v1 "github.com/zitadel/zitadel/internal/api/grpc/signal/v1"
 	"github.com/zitadel/zitadel/internal/static"
 	es_v4 "github.com/zitadel/zitadel/internal/v2/eventstore"
 	es_v4_pg "github.com/zitadel/zitadel/internal/v2/eventstore/postgres"
@@ -358,6 +360,17 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 	if detectionService := commands.DetectionService(); detectionService != nil {
 		// register DuckLake compaction worker
 		signals.RegisterCompactionWorker(ctx, q, detectionService.CompactionWorker())
+
+		// Start the event-to-signal projection that feeds domain events
+		// (session, user, OIDC session) into the signal store.
+		if emitter := detectionService.Emitter(); emitter != nil {
+			signalProjectionHandler := signalprojection.NewHandler(
+				ctx,
+				projection.ApplyCustomConfig(config.Projections.Customizations["event_signals"]),
+				emitter,
+			)
+			signalProjectionHandler.Start(ctx)
+		}
 	}
 
 	if err = q.Start(ctx); err != nil {
@@ -480,10 +493,27 @@ func startAPIs(
 	)
 	limitingAccessInterceptor := middleware.NewAccessInterceptor(accessSvc, exhaustedCookieHandler, &config.Quotas.Access.AccessConfig)
 	translator := i18n.NewZitadelTranslator(language.English)
-	// Resolve signal emitter for request-level signal capture.
+	// Resolve signal emitter and stream config for request-level signal capture.
 	var signalEmitter *signals.Emitter
+	streamsConfig := config.SystemDefaults.Risk.SignalStore.Streams
 	if detectionService := commands.DetectionService(); detectionService != nil {
 		signalEmitter = detectionService.Emitter()
+	}
+	// Apply stream defaults: if neither stream is explicitly enabled, enable all.
+	effectiveStreams := signals.StreamsConfig{API: streamsConfig.API, HTTPAccess: streamsConfig.HTTPAccess}.WithDefaults()
+	// HTTP-level signal middleware covers OIDC, SAML, login UI and all non-gRPC paths.
+	var httpSignalMiddleware func(http.Handler) http.Handler
+	if signalEmitter != nil && effectiveStreams.HTTPAccess {
+		httpSignalMiddleware = signals.SignalHTTPMiddleware(signalEmitter, config.SystemDefaults.Risk.GeoCountryHeader)
+	}
+	// Wire HTTP signal middleware onto the router before API registration.
+	if httpSignalMiddleware != nil {
+		router.Use(mux.MiddlewareFunc(httpSignalMiddleware))
+	}
+	// Pass nil emitter to API when API stream is disabled.
+	apiSignalEmitter := signalEmitter
+	if !effectiveStreams.API {
+		apiSignalEmitter = nil
 	}
 
 	apis, err := api.New(
@@ -502,7 +532,7 @@ func startAPIs(
 		translator,
 		config.Instrumentation.Trace.TrustRemoteSpans,
 		config.Executions.DenyList,
-		signalEmitter,
+		apiSignalEmitter,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating api %w", err)
@@ -754,9 +784,9 @@ func startAPIs(
 	if err := apis.RegisterService(ctx, saml_v2.CreateServer(commands, queries, samlProvider, config.ExternalSecure)); err != nil {
 		return nil, err
 	}
-	// Register Signal Service when DuckLake store is available.
+	// Register Signal Service v2 when DuckLake store is available.
 	if detectionService := commands.DetectionService(); detectionService != nil {
-		if signalServer := signal_v1.CreateServer(detectionService.DuckLakeStore()); signalServer != nil {
+		if signalServer := signal_v2.CreateServer(detectionService.DuckLakeStore()); signalServer != nil {
 			if err := apis.RegisterService(ctx, signalServer); err != nil {
 				return nil, err
 			}

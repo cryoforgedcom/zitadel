@@ -993,7 +993,8 @@ SystemDefaults:
       Debounce:
         MinFrequency: 1s
         MaxBulkSize: 100
-      # DuckLake stores signals as Parquet files with catalog metadata in PG.
+      # DuckLake stores signals as Parquet files with a PostgreSQL catalog backend.
+      # The ZITADEL PostgreSQL instance is reused; the app user must have CREATE on public schema.
       DuckLake:
         Enabled: false # ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_DUCKLAKE_ENABLED
         DataPath: /var/lib/zitadel/signals # ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_DUCKLAKE_DATAPATH

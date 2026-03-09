@@ -110,6 +110,7 @@ func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClie
 	}
 	go svc.maintenanceLoop()
 	if emitter != nil {
+		emitter.SetEnrichFunc(svc.enrichBatch)
 		ctx, cancel := context.WithCancel(context.Background())
 		svc.emitterCancel = cancel
 		go emitter.Start(ctx)
@@ -175,6 +176,35 @@ func (s *Service) Emitter() *signals.Emitter {
 		return nil
 	}
 	return s.emitter
+}
+
+// findingRecorder returns the DuckLakeStore as a FindingRecorder for async
+// LLM result persistence. Returns nil when the store is not available.
+func (s *Service) findingRecorder() FindingRecorder {
+	if s.duckLakeStore == nil {
+		return nil
+	}
+	return s.duckLakeStore
+}
+
+// enrichBatch runs lightweight detection over a batch of fire-and-forget
+// signals, attaching any applicable findings before they are persisted.
+// Signals without a UserID are passed through unchanged (Evaluate is a
+// no-op for them).
+func (s *Service) enrichBatch(ctx context.Context, batch []signals.Signal) []signals.RecordedSignal {
+	recorded := make([]signals.RecordedSignal, len(batch))
+	for i, sig := range batch {
+		decision, err := s.Evaluate(ctx, sig)
+		if err != nil || len(decision.Findings) == 0 {
+			recorded[i] = signals.RecordedSignal{Signal: sig}
+			continue
+		}
+		recorded[i] = signals.RecordedSignal{
+			Signal:   sig,
+			Findings: recordedFindings(decision.Findings),
+		}
+	}
+	return recorded
 }
 
 // newRateLimiterStore creates a rate limiter store based on the configured mode,
@@ -277,7 +307,7 @@ func (s *Service) Evaluate(ctx context.Context, signal signals.Signal) (_ Decisi
 	if len(policy.Rules) > 0 {
 		// Expression-based rule evaluation.
 		rc := buildRiskContext(signal, snapshot)
-		ruleEngine := NewRuleEngine(policy.Rules, s.rateLimiter, s.llm, policy.Config.LLM)
+		ruleEngine := NewRuleEngine(policy.Rules, s.rateLimiter, s.llm, policy.Config.LLM, s.findingRecorder())
 		findings = ruleEngine.Evaluate(ctx, rc, snapshot.SessionSignals)
 	} else {
 		// Legacy hardcoded heuristics (backward-compatible fallback).
@@ -550,9 +580,9 @@ func cachedLLMFinding(sessionSignals []signals.RecordedSignal, ruleID ...string)
 type noopStore struct{}
 
 func (noopStore) Snapshot(_ context.Context, _ signals.Signal, _ signals.SnapshotConfig) (signals.Snapshot, error) {
-return signals.Snapshot{}, nil
+	return signals.Snapshot{}, nil
 }
 
 func (noopStore) Save(_ context.Context, _ signals.Signal, _ []signals.RecordedFinding, _ signals.SnapshotConfig) error {
-return nil
+	return nil
 }

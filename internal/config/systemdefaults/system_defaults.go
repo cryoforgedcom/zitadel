@@ -83,6 +83,12 @@ type RiskSignalStoreConfig struct {
 		MinFrequency time.Duration
 		MaxBulkSize  uint
 	}
+	// Streams controls which request pathways emit signals.
+	// Both API and HTTPAccess default to enabled when neither is explicitly set.
+	Streams struct {
+		API        bool
+		HTTPAccess bool
+	}
 	DuckLake struct {
 		Enabled            bool
 		DataPath           string

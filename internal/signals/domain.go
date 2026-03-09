@@ -11,6 +11,9 @@ const (
 	StreamAuth         SignalStream = "auth"
 	StreamAccount      SignalStream = "account"
 	StreamNotification SignalStream = "notification"
+	// StreamEvent is a virtual stream that matches both auth and account streams,
+	// covering all event-store-derived signals (session events + user lifecycle).
+	StreamEvent SignalStream = "event"
 )
 
 const (
@@ -48,13 +51,13 @@ type Signal struct {
 }
 
 type RecordedFinding struct {
-	Name          string `json:"name,omitempty"`
-	Source        string `json:"source,omitempty"`
-	Message       string `json:"message,omitempty"`
-	Block         bool   `json:"block,omitempty"`
+	Name          string  `json:"name,omitempty"`
+	Source        string  `json:"source,omitempty"`
+	Message       string  `json:"message,omitempty"`
+	Block         bool    `json:"block,omitempty"`
 	Confidence    float64 `json:"confidence,omitempty"`
-	Challenge     bool   `json:"challenge,omitempty"`
-	ChallengeType string `json:"challenge_type,omitempty"`
+	Challenge     bool    `json:"challenge,omitempty"`
+	ChallengeType string  `json:"challenge_type,omitempty"`
 }
 
 type RecordedSignal struct {

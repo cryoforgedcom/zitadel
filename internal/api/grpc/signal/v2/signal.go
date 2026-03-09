@@ -7,15 +7,16 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/zitadel/zitadel/internal/api/authz"
 	sig "github.com/zitadel/zitadel/internal/signals"
 	objectpb "github.com/zitadel/zitadel/pkg/grpc/object/v2"
-	signalpb "github.com/zitadel/zitadel/pkg/grpc/signal/v1"
+	signalpb "github.com/zitadel/zitadel/pkg/grpc/signal/v2"
 )
 
-func (s *Server) SearchSignals(
+func (s *Server) ListSignals(
 	ctx context.Context,
-	req *connect.Request[signalpb.SearchSignalsRequest],
-) (*connect.Response[signalpb.SearchSignalsResponse], error) {
+	req *connect.Request[signalpb.ListSignalsRequest],
+) (*connect.Response[signalpb.ListSignalsResponse], error) {
 	offset := 0
 	limit := 100
 	if q := req.Msg.GetQuery(); q != nil {
@@ -25,13 +26,13 @@ func (s *Server) SearchSignals(
 		}
 	}
 
-	filters := toSignalFilters(req.Msg.GetFilters())
+	filters := toSignalFilters(ctx, req.Msg.GetFilters())
 	signals, total, err := s.store.SearchSignals(ctx, filters, offset, limit)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &signalpb.SearchSignalsResponse{
+	resp := &signalpb.ListSignalsResponse{
 		Details: &objectpb.ListDetails{
 			TotalResult: uint64(total),
 		},
@@ -47,7 +48,7 @@ func (s *Server) AggregateSignals(
 	ctx context.Context,
 	req *connect.Request[signalpb.AggregateSignalsRequest],
 ) (*connect.Response[signalpb.AggregateSignalsResponse], error) {
-	filters := toSignalFilters(req.Msg.GetFilters())
+	filters := toSignalFilters(ctx, req.Msg.GetFilters())
 
 	groupBy := sig.AggGroupByField
 	if req.Msg.GetGroupBy() == "time_bucket" {
@@ -82,20 +83,22 @@ func (s *Server) AggregateSignals(
 	return connect.NewResponse(resp), nil
 }
 
-func toSignalFilters(f *signalpb.SignalFilters) sig.SignalFilters {
-	if f == nil {
-		return sig.SignalFilters{}
-	}
+// toSignalFilters converts the proto filters to internal filters.
+// The instance ID is always taken from the auth context — never from the request.
+func toSignalFilters(ctx context.Context, f *signalpb.SignalFilters) sig.SignalFilters {
 	sf := sig.SignalFilters{
-		InstanceID: f.GetInstanceId(),
-		UserID:     f.GetUserId(),
-		SessionID:  f.GetSessionId(),
-		IP:         f.GetIp(),
-		Stream:     f.GetStream(),
-		Outcome:    f.GetOutcome(),
-		Operation:  f.GetOperation(),
-		Country:    f.GetCountry(),
+		InstanceID: authz.GetInstance(ctx).InstanceID(),
 	}
+	if f == nil {
+		return sf
+	}
+	sf.UserID = f.GetUserId()
+	sf.SessionID = f.GetSessionId()
+	sf.IP = f.GetIp()
+	sf.Stream = f.GetStream()
+	sf.Outcome = f.GetOutcome()
+	sf.Operation = f.GetOperation()
+	sf.Country = f.GetCountry()
 	if ts := f.GetAfter(); ts != nil {
 		t := ts.AsTime()
 		sf.After = &t
@@ -108,9 +111,17 @@ func toSignalFilters(f *signalpb.SignalFilters) sig.SignalFilters {
 }
 
 func recordedSignalToProto(rs sig.RecordedSignal) *signalpb.Signal {
-	findings := make([]string, 0, len(rs.Findings))
+	findings := make([]*signalpb.Finding, 0, len(rs.Findings))
 	for _, f := range rs.Findings {
-		findings = append(findings, f.Name)
+		findings = append(findings, &signalpb.Finding{
+			Name:          f.Name,
+			Source:        f.Source,
+			Message:       f.Message,
+			Confidence:    f.Confidence,
+			Block:         f.Block,
+			Challenge:     f.Challenge,
+			ChallengeType: f.ChallengeType,
+		})
 	}
 	return &signalpb.Signal{
 		InstanceId:     rs.InstanceID,
@@ -134,4 +145,3 @@ func recordedSignalToProto(rs sig.RecordedSignal) *signalpb.Signal {
 		Findings:       findings,
 	}
 }
-

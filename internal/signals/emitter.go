@@ -13,8 +13,14 @@ import (
 
 // SignalSink is the interface for batch-writing signals to persistent storage.
 type SignalSink interface {
-	WriteBatch(ctx context.Context, signals []Signal) error
+	WriteBatch(ctx context.Context, signals []RecordedSignal) error
 }
+
+// EnrichFunc is an optional callback that enriches raw signals with detection
+// findings before they are persisted. When set on the [Emitter], the debouncer
+// calls it during flush to attach any applicable findings. Signals for which
+// enrichment is not relevant (e.g. no UserID) should be returned unchanged.
+type EnrichFunc func(ctx context.Context, signals []Signal) []RecordedSignal
 
 // Emitter provides fire-and-forget signal emission with bounded buffering.
 // Signals are batched via a debouncer and flushed to a [SignalSink].
@@ -23,12 +29,16 @@ type Emitter struct {
 	ch      chan Signal
 	sink    SignalSink
 	cfg     SignalStoreConfig
+	enrich  EnrichFunc
 	dropped atomic.Int64
 	done    chan struct{}
 }
 
 // NewEmitter creates a new signal emitter. Call [Emitter.Start] to begin
 // draining signals from the channel.
+// NewEmitter creates a new signal emitter. Call [Emitter.Start] to begin
+// draining signals from the channel. An optional [EnrichFunc] can be set
+// via [Emitter.SetEnrichFunc] to attach detection findings before persistence.
 func NewEmitter(cfg SignalStoreConfig, sink SignalSink) *Emitter {
 	size := cfg.ChannelSize
 	if size <= 0 {
@@ -40,6 +50,11 @@ func NewEmitter(cfg SignalStoreConfig, sink SignalSink) *Emitter {
 		cfg:  cfg,
 		done: make(chan struct{}),
 	}
+}
+
+// SetEnrichFunc sets the enrichment callback. Must be called before [Emitter.Start].
+func (e *Emitter) SetEnrichFunc(fn EnrichFunc) {
+	e.enrich = fn
 }
 
 // Emit enqueues a signal for asynchronous persistence. It never blocks;
@@ -65,10 +80,11 @@ func (e *Emitter) Start(ctx context.Context) {
 	defer close(e.done)
 
 	d := &signalDebouncer{
-		ctx:   ctx,
-		sink:  e.sink,
-		cfg:   e.cfg.Debounce,
-		cache: make([]Signal, 0, e.cfg.Debounce.MaxBulkSize),
+		ctx:    ctx,
+		sink:   e.sink,
+		enrich: e.enrich,
+		cfg:    e.cfg.Debounce,
+		cache:  make([]Signal, 0, e.cfg.Debounce.MaxBulkSize),
 	}
 
 	var ticker *time.Ticker
@@ -118,11 +134,12 @@ func (e *Emitter) Done() <-chan struct{} {
 
 // signalDebouncer accumulates signals and flushes them in batches.
 type signalDebouncer struct {
-	ctx   context.Context
-	sink  SignalSink
-	cfg   DebouncerConfig
-	mu    sync.Mutex
-	cache []Signal
+	ctx    context.Context
+	sink   SignalSink
+	enrich EnrichFunc
+	cfg    DebouncerConfig
+	mu     sync.Mutex
+	cache  []Signal
 }
 
 func (d *signalDebouncer) add(sig Signal) {
@@ -155,11 +172,26 @@ func (d *signalDebouncer) flush() {
 		defer cancel()
 	}
 
-	if err := d.sink.WriteBatch(ctx, batch); err != nil {
+	recorded := d.toRecorded(ctx, batch)
+	if err := d.sink.WriteBatch(ctx, recorded); err != nil {
 		if instrumentation.IsStreamEnabled(instrumentation.StreamRisk) {
 			logging.WithError(ctx, err).Error("signal_store.batch_write_failed",
 				slog.Int("batch_size", len(batch)),
 			)
 		}
 	}
+}
+
+// toRecorded converts a batch of raw signals to RecordedSignals. When an
+// EnrichFunc is configured, it is called to attach detection findings.
+// Otherwise signals are wrapped with empty findings.
+func (d *signalDebouncer) toRecorded(ctx context.Context, batch []Signal) []RecordedSignal {
+	if d.enrich != nil {
+		return d.enrich(ctx, batch)
+	}
+	recorded := make([]RecordedSignal, len(batch))
+	for i, sig := range batch {
+		recorded[i] = RecordedSignal{Signal: sig}
+	}
+	return recorded
 }

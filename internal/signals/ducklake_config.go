@@ -24,7 +24,7 @@ type ArchiveS3Config struct {
 
 // DuckLakeConfig configures the DuckLake-based signal store.
 // When enabled, signals are stored as Parquet files with catalog metadata
-// in PostgreSQL via DuckDB's DuckLake extension.
+// managed by DuckLake (PostgreSQL catalog backend).
 type DuckLakeConfig struct {
 	// Enabled activates the DuckLake signal store.
 	// When true, this replaces the PG signal store pipeline.

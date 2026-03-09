@@ -1,21 +1,21 @@
 syntax = "proto3";
 
-package zitadel.signal.v1;
+package zitadel.signal.v2;
 
 import "zitadel/object/v2/object.proto";
 import "zitadel/protoc_gen_zitadel/v2/options.proto";
-import "zitadel/signal/v1/signal.proto";
+import "zitadel/signal/v2/signal.proto";
 import "google/api/annotations.proto";
 import "google/api/field_behavior.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
 import "validate/validate.proto";
 
-option go_package = "github.com/zitadel/zitadel/pkg/grpc/signal/v1;signal";
+option go_package = "github.com/zitadel/zitadel/pkg/grpc/signal/v2;signal";
 
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
   info: {
     title: "Signal Service";
-    version: "1.0";
+    version: "2.0";
     description: "This API exposes behavioral signals collected during authentication operations. It is part of the ZITADEL Risk POC and requires an authenticated session to access.";
     contact: {
       name: "ZITADEL"
@@ -76,8 +76,8 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 // SignalService provides read access to behavioral signals for risk analysis.
 service SignalService {
 
-  // Search signals with optional filters and pagination.
-  rpc SearchSignals (SearchSignalsRequest) returns (SearchSignalsResponse) {
+  // List signals with optional filters and pagination.
+  rpc ListSignals (ListSignalsRequest) returns (ListSignalsResponse) {
     option (google.api.http) = {
       post: "/v2/signals/search"
       body: "*"
@@ -88,8 +88,8 @@ service SignalService {
       }
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
-      summary: "Search Signals"
-      description: "Search behavioral signals with optional filters. Returns a paginated list of signals recorded during authentication operations."
+      summary: "List Signals"
+      description: "List behavioral signals with optional filters. Returns a paginated list of signals recorded during authentication operations."
       tags: ["Signal Service"]
     };
   }
@@ -113,16 +113,16 @@ service SignalService {
   }
 }
 
-// SearchSignalsRequest is the request message for SearchSignals.
-message SearchSignalsRequest {
+// ListSignalsRequest is the request message for ListSignals.
+message ListSignalsRequest {
   // Pagination: offset and limit.
   zitadel.object.v2.ListQuery query = 1;
   // Optional filters applied before returning results.
   SignalFilters filters = 2;
 }
 
-// SearchSignalsResponse contains the matching signals and pagination details.
-message SearchSignalsResponse {
+// ListSignalsResponse contains the matching signals and pagination details.
+message ListSignalsResponse {
   zitadel.object.v2.ListDetails details = 1;
   repeated Signal signals = 2;
 }

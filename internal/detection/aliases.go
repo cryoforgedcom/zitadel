@@ -16,6 +16,7 @@ type HTTPContext = signals.HTTPContext
 type Emitter = signals.Emitter
 type SignalStoreConfig = signals.SignalStoreConfig
 type DebouncerConfig = signals.DebouncerConfig
+type StreamsConfig = signals.StreamsConfig
 type DuckLakeConfig = signals.DuckLakeConfig
 type ArchiveBackend = signals.ArchiveBackend
 type ArchiveS3Config = signals.ArchiveS3Config
@@ -37,6 +38,7 @@ const (
 	StreamAuth         = signals.StreamAuth
 	StreamAccount      = signals.StreamAccount
 	StreamNotification = signals.StreamNotification
+	StreamEvent        = signals.StreamEvent
 
 	OutcomeSuccess    = signals.OutcomeSuccess
 	OutcomeFailure    = signals.OutcomeFailure

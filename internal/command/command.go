@@ -107,10 +107,10 @@ type Commands struct {
 	// so the query and cache overhead can be completely eliminated.
 	milestonesCompleted sync.Map
 
-	loginPaths        LoginPaths
-	ActionsV2DenyList []denylist.AddressChecker
-	IPLookupFunction  internal_net.IPLookupFunc
-	defaultDetectionConfig detection.Config
+	loginPaths              LoginPaths
+	ActionsV2DenyList       []denylist.AddressChecker
+	IPLookupFunction        internal_net.IPLookupFunc
+	defaultDetectionConfig  detection.Config
 	detectionPolicyProvider *instanceDetectionPolicyProvider
 	riskEvaluator           detection.Evaluator
 	riskGeoHeader           string // proxy header name for geo-country (e.g. "CF-IPCountry")
@@ -272,6 +272,10 @@ func StartCommands(
 			Debounce: detection.DebouncerConfig{
 				MinFrequency: defaults.Risk.SignalStore.Debounce.MinFrequency,
 				MaxBulkSize:  defaults.Risk.SignalStore.Debounce.MaxBulkSize,
+			},
+			Streams: detection.StreamsConfig{
+				API:        defaults.Risk.SignalStore.Streams.API,
+				HTTPAccess: defaults.Risk.SignalStore.Streams.HTTPAccess,
 			},
 			DuckLake: detection.DuckLakeConfig{
 				Enabled:            defaults.Risk.SignalStore.DuckLake.Enabled,

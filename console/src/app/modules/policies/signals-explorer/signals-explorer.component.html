@@ -1,172 +1,242 @@
-<cnsl-card title="{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.TITLE' | translate }}"
-  description="{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.DESCRIPTION' | translate }}">
-
-  <!-- Filters -->
-  <div class="filters" [formGroup]="filterForm">
-    <mat-form-field appearance="outline" class="filter-field">
-      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.STREAM' | translate }}</mat-label>
-      <mat-select formControlName="stream">
-        <mat-option value="">{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.ALL' | translate }}</mat-option>
-        <mat-option *ngFor="let s of streams" [value]="s">{{ s }}</mat-option>
-      </mat-select>
-    </mat-form-field>
-
-    <mat-form-field appearance="outline" class="filter-field">
-      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.OUTCOME' | translate }}</mat-label>
-      <mat-select formControlName="outcome">
-        <mat-option value="">{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.ALL' | translate }}</mat-option>
-        <mat-option *ngFor="let o of outcomes" [value]="o">{{ o }}</mat-option>
-      </mat-select>
-    </mat-form-field>
-
-    <mat-form-field appearance="outline" class="filter-field">
-      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.OPERATION' | translate }}</mat-label>
-      <input matInput formControlName="operation" />
-    </mat-form-field>
-
-    <mat-form-field appearance="outline" class="filter-field">
-      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.IP' | translate }}</mat-label>
-      <input matInput formControlName="ip" />
-    </mat-form-field>
-
-    <mat-form-field appearance="outline" class="filter-field">
-      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.COUNTRY' | translate }}</mat-label>
-      <input matInput formControlName="country" />
-    </mat-form-field>
-
-    <mat-form-field appearance="outline" class="filter-field">
-      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.USER_ID' | translate }}</mat-label>
-      <input matInput formControlName="user_id" />
-    </mat-form-field>
-
-    <div class="filter-actions">
-      <button mat-raised-button color="primary" (click)="search()">
-        <mat-icon>search</mat-icon>
-        {{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.SEARCH' | translate }}
-      </button>
-      <button mat-stroked-button (click)="resetFilters()">
-        {{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.RESET' | translate }}
-      </button>
+<div class="explorer">
+  <!-- Header -->
+  <div class="explorer-header">
+    <div class="header-left">
+      <h2>{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.TITLE' | translate }}</h2>
+      <p class="subtitle">{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.DESCRIPTION' | translate }}</p>
     </div>
-  </div>
-
-  <!-- Results -->
-  <div class="results-header">
-    <span class="result-count">{{ totalCount }} {{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.RESULTS' | translate }}</span>
-    <span class="pagination-info" *ngIf="totalCount > 0">
-      {{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.PAGE' | translate }} {{ currentPage }} / {{ totalPages }}
-    </span>
-  </div>
-
-  <mat-spinner *ngIf="loading" diameter="30"></mat-spinner>
-
-  <table mat-table [dataSource]="signals" *ngIf="!loading && signals.length > 0" class="signals-table">
-    <ng-container matColumnDef="createdAt">
-      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.TIME' | translate }}</th>
-      <td mat-cell *matCellDef="let s">{{ s.createdAt?.seconds * 1000 | date:'short' }}</td>
-    </ng-container>
-
-    <ng-container matColumnDef="stream">
-      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.STREAM' | translate }}</th>
-      <td mat-cell *matCellDef="let s">
-        <span class="badge badge-stream">{{ s.stream }}</span>
-      </td>
-    </ng-container>
-
-    <ng-container matColumnDef="operation">
-      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.OPERATION' | translate }}</th>
-      <td mat-cell *matCellDef="let s">{{ s.operation }}</td>
-    </ng-container>
-
-    <ng-container matColumnDef="outcome">
-      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.OUTCOME' | translate }}</th>
-      <td mat-cell *matCellDef="let s">
-        <span class="badge" [ngClass]="{
-          'badge-success': s.outcome === 'success',
-          'badge-failure': s.outcome === 'failure',
-          'badge-blocked': s.outcome === 'blocked',
-          'badge-challenged': s.outcome === 'challenged'
-        }">{{ s.outcome }}</span>
-      </td>
-    </ng-container>
-
-    <ng-container matColumnDef="ip">
-      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.IP' | translate }}</th>
-      <td mat-cell *matCellDef="let s">{{ s.ip }}</td>
-    </ng-container>
-
-    <ng-container matColumnDef="country">
-      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.COUNTRY' | translate }}</th>
-      <td mat-cell *matCellDef="let s">{{ s.country }}</td>
-    </ng-container>
-
-    <ng-container matColumnDef="userId">
-      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.USER_ID' | translate }}</th>
-      <td mat-cell *matCellDef="let s">
-        <span class="user-id" *ngIf="s.userId">{{ s.userId | slice:0:12 }}…</span>
-      </td>
-    </ng-container>
-
-    <ng-container matColumnDef="findingsList">
-      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.FINDINGS' | translate }}</th>
-      <td mat-cell *matCellDef="let s">
-        <span class="badge badge-finding" *ngFor="let f of s.findingsList">{{ f }}</span>
-      </td>
-    </ng-container>
-
-    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-  </table>
-
-  <div *ngIf="!loading && signals.length === 0" class="empty-state">
-    {{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.NO_SIGNALS' | translate }}
-  </div>
-
-  <!-- Pagination -->
-  <div class="pagination" *ngIf="totalCount > limit">
-    <button mat-icon-button (click)="prevPage()" [disabled]="!hasPrevPage">
-      <mat-icon>chevron_left</mat-icon>
-    </button>
-    <button mat-icon-button (click)="nextPage()" [disabled]="!hasNextPage">
-      <mat-icon>chevron_right</mat-icon>
-    </button>
-  </div>
-</cnsl-card>
-
-<!-- Aggregation Card -->
-<cnsl-card title="{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.AGG_TITLE' | translate }}"
-  description="{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.AGG_DESCRIPTION' | translate }}">
-
-  <div class="agg-controls" [formGroup]="aggForm">
-    <mat-form-field appearance="outline" class="filter-field">
-      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.GROUP_BY' | translate }}</mat-label>
-      <mat-select formControlName="group_by">
-        <mat-option *ngFor="let g of groupByOptions" [value]="g">{{ g }}</mat-option>
-      </mat-select>
-    </mat-form-field>
-
-    <mat-form-field appearance="outline" class="filter-field">
-      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.METRIC' | translate }}</mat-label>
-      <mat-select formControlName="metric">
-        <mat-option *ngFor="let m of metrics" [value]="m">{{ m }}</mat-option>
-      </mat-select>
-    </mat-form-field>
-
-    <button mat-raised-button color="primary" (click)="aggregate()">
-      <mat-icon>bar_chart</mat-icon>
-      {{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.AGGREGATE' | translate }}
-    </button>
-  </div>
-
-  <mat-spinner *ngIf="aggLoading" diameter="30"></mat-spinner>
-
-  <div class="agg-results" *ngIf="!aggLoading && aggBuckets.length > 0">
-    <div class="agg-bucket" *ngFor="let b of aggBuckets">
-      <span class="bucket-key">{{ b.key }}</span>
-      <div class="bucket-bar-container">
-        <div class="bucket-bar" [style.width.%]="(b.count / aggBuckets[0].count) * 100"></div>
+    <div class="header-right">
+      <div class="time-range-selector">
+        <button *ngFor="let range of timeRanges"
+          class="time-btn"
+          [class.active]="selectedTimeRange === range"
+          (click)="selectTimeRange(range)">
+          {{ range.label }}
+        </button>
       </div>
-      <span class="bucket-count">{{ b.count }}</span>
     </div>
   </div>
-</cnsl-card>
+
+  <!-- Chart Area -->
+  <div class="chart-section">
+    <div class="chart-header">
+      <span class="chart-label">{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.SIGNAL_VOLUME' | translate }}</span>
+      <span class="chart-total">{{ totalCount }} {{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.RESULTS' | translate }}</span>
+    </div>
+    <div class="chart-container">
+      <mat-spinner *ngIf="chartLoading" diameter="24"></mat-spinner>
+      <svg *ngIf="!chartLoading && chartBuckets.length > 0"
+        [attr.viewBox]="'0 0 ' + chartWidth + ' ' + chartHeight"
+        class="sparkline"
+        preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--chart-color)" stop-opacity="0.3" />
+            <stop offset="100%" stop-color="var(--chart-color)" stop-opacity="0.02" />
+          </linearGradient>
+        </defs>
+        <path [attr.d]="getChartFillPath()" fill="url(#chartGradient)" />
+        <path [attr.d]="chartPath" fill="none" stroke="var(--chart-color)" stroke-width="2" vector-effect="non-scaling-stroke" />
+      </svg>
+      <div *ngIf="!chartLoading && chartBuckets.length === 0" class="chart-empty">
+        {{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.NO_SIGNALS' | translate }}
+      </div>
+    </div>
+  </div>
+
+  <!-- Dimension Filters -->
+  <div class="dimension-filters">
+    <div class="dimension-group">
+      <span class="dimension-label">{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.STREAM' | translate }}</span>
+      <div class="chip-row">
+        <button *ngFor="let s of streams"
+          class="filter-chip"
+          [class.active]="filterForm.get('stream')?.value === s"
+          (click)="toggleStream(s)">
+          {{ s }}
+          <span class="chip-count" *ngIf="getDimensionCount(streamCounts, s) > 0">
+            {{ getDimensionCount(streamCounts, s) }}
+          </span>
+        </button>
+      </div>
+    </div>
+
+    <div class="dimension-group">
+      <span class="dimension-label">{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.OUTCOME' | translate }}</span>
+      <div class="chip-row">
+        <button *ngFor="let o of outcomes"
+          class="filter-chip"
+          [class.active]="filterForm.get('outcome')?.value === o"
+          [class.outcome-success]="o === 'success'"
+          [class.outcome-failure]="o === 'failure'"
+          [class.outcome-blocked]="o === 'blocked'"
+          [class.outcome-challenged]="o === 'challenged'"
+          (click)="toggleOutcome(o)">
+          {{ o }}
+          <span class="chip-count" *ngIf="getDimensionCount(outcomeCounts, o) > 0">
+            {{ getDimensionCount(outcomeCounts, o) }}
+          </span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Inline text filters -->
+    <div class="inline-filters" [formGroup]="filterForm">
+      <mat-form-field appearance="outline" class="compact-field">
+        <mat-label>{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.OPERATION' | translate }}</mat-label>
+        <input matInput formControlName="operation" (keyup.enter)="refresh()" />
+      </mat-form-field>
+      <mat-form-field appearance="outline" class="compact-field">
+        <mat-label>{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.IP' | translate }}</mat-label>
+        <input matInput formControlName="ip" (keyup.enter)="refresh()" />
+      </mat-form-field>
+      <mat-form-field appearance="outline" class="compact-field">
+        <mat-label>{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.USER_ID' | translate }}</mat-label>
+        <input matInput formControlName="user_id" (keyup.enter)="refresh()" />
+      </mat-form-field>
+      <button mat-icon-button matTooltip="{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.RESET' | translate }}" (click)="resetFilters()">
+        <mat-icon>filter_list_off</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <!-- Signals Table -->
+  <div class="table-section">
+    <mat-spinner *ngIf="loading" diameter="30"></mat-spinner>
+
+    <table mat-table [dataSource]="signals" *ngIf="!loading && signals.length > 0" class="signals-table" multiTemplateDataRows>
+
+      <ng-container matColumnDef="createdAt">
+        <th mat-header-cell *matHeaderCellDef>{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.TIME' | translate }}</th>
+        <td mat-cell *matCellDef="let s">
+          <span class="mono">{{ s.createdAt?.seconds * 1000 | date:'medium' }}</span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="stream">
+        <th mat-header-cell *matHeaderCellDef>{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.STREAM' | translate }}</th>
+        <td mat-cell *matCellDef="let s">
+          <span class="tag tag-stream">{{ s.stream }}</span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="operation">
+        <th mat-header-cell *matHeaderCellDef>{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.OPERATION' | translate }}</th>
+        <td mat-cell *matCellDef="let s">
+          <span class="mono operation-text">{{ s.operation }}</span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="outcome">
+        <th mat-header-cell *matHeaderCellDef>{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.OUTCOME' | translate }}</th>
+        <td mat-cell *matCellDef="let s">
+          <span class="tag" [ngClass]="{
+            'tag-success': s.outcome === 'success',
+            'tag-failure': s.outcome === 'failure',
+            'tag-blocked': s.outcome === 'blocked',
+            'tag-challenged': s.outcome === 'challenged'
+          }">{{ s.outcome }}</span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="ip">
+        <th mat-header-cell *matHeaderCellDef>{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.IP' | translate }}</th>
+        <td mat-cell *matCellDef="let s">
+          <span class="mono">{{ s.ip }}</span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="userId">
+        <th mat-header-cell *matHeaderCellDef>{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.USER_ID' | translate }}</th>
+        <td mat-cell *matCellDef="let s">
+          <span class="mono truncated" *ngIf="s.userId" [matTooltip]="s.userId">{{ s.userId | slice:0:12 }}…</span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="findings">
+        <th mat-header-cell *matHeaderCellDef>{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.FINDINGS' | translate }}</th>
+        <td mat-cell *matCellDef="let s">
+          <span class="finding-count" *ngIf="findingsCount(s) > 0"
+            [class.has-block]="hasBlockFindings(s)">
+            {{ findingsCount(s) }}
+          </span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="expand">
+        <th mat-header-cell *matHeaderCellDef></th>
+        <td mat-cell *matCellDef="let s">
+          <button mat-icon-button (click)="toggleRow(s, $event)">
+            <mat-icon>{{ expandedSignal === s ? 'expand_less' : 'expand_more' }}</mat-icon>
+          </button>
+        </td>
+      </ng-container>
+
+      <!-- Expanded detail row -->
+      <ng-container matColumnDef="expandedDetail">
+        <td mat-cell *matCellDef="let s" [attr.colspan]="displayedColumns.length">
+          <div class="detail-panel" *ngIf="expandedSignal === s" @detailExpand>
+            <div class="detail-grid">
+              <!-- Signal metadata -->
+              <div class="detail-meta">
+                <div class="meta-item" *ngIf="s.country">
+                  <span class="meta-label">{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.COUNTRY' | translate }}</span>
+                  <span class="meta-value">{{ s.country }}</span>
+                </div>
+                <div class="meta-item" *ngIf="s.userAgent">
+                  <span class="meta-label">{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.USER_AGENT' | translate }}</span>
+                  <span class="meta-value mono">{{ s.userAgent }}</span>
+                </div>
+              </div>
+
+              <!-- Findings -->
+              <div class="findings-section" *ngIf="s.findingsList?.length > 0">
+                <h4>{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.FINDINGS' | translate }}</h4>
+                <div class="finding-card" *ngFor="let f of s.findingsList"
+                  [class.finding-block]="f.block"
+                  [class.finding-challenge]="f.challenge && !f.block">
+                  <div class="finding-header">
+                    <span class="finding-name">{{ f.name }}</span>
+                    <span class="finding-source">{{ f.source }}</span>
+                    <span class="finding-confidence">{{ f.confidence * 100 | number:'1.0-0' }}%</span>
+                    <span class="finding-action tag-blocked" *ngIf="f.block">
+                      {{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.BLOCKED' | translate }}
+                    </span>
+                    <span class="finding-action tag-challenged" *ngIf="f.challenge && !f.block">
+                      {{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.CHALLENGED' | translate }}
+                    </span>
+                  </div>
+                  <p class="finding-message" *ngIf="f.message">{{ f.message }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"
+        class="signal-row"
+        [class.expanded-row]="expandedSignal === row"></tr>
+      <tr mat-row *matRowDef="let row; columns: ['expandedDetail'];" class="detail-row"></tr>
+    </table>
+
+    <div *ngIf="!loading && signals.length === 0" class="empty-state">
+      <mat-icon>search_off</mat-icon>
+      <p>{{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.NO_SIGNALS' | translate }}</p>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" *ngIf="totalCount > limit">
+      <span class="page-info">
+        {{ 'DESCRIPTIONS.SETTINGS.SIGNALS_EXPLORER.PAGE' | translate }} {{ currentPage }} / {{ totalPages }}
+      </span>
+      <button mat-icon-button (click)="prevPage()" [disabled]="!hasPrevPage">
+        <mat-icon>chevron_left</mat-icon>
+      </button>
+      <button mat-icon-button (click)="nextPage()" [disabled]="!hasNextPage">
+        <mat-icon>chevron_right</mat-icon>
+      </button>
+    </div>
+  </div>
+</div>

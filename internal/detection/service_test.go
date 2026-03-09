@@ -3,11 +3,45 @@ package detection
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/zitadel/zitadel/internal/ratelimit"
+	"github.com/zitadel/zitadel/internal/signals"
 )
+
+// memoryStore is a minimal in-memory Store for unit tests.
+type memoryStore struct {
+	mu      sync.Mutex
+	signals []signals.RecordedSignal
+}
+
+func (m *memoryStore) Save(_ context.Context, sig signals.Signal, findings []signals.RecordedFinding, _ signals.SnapshotConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.signals = append(m.signals, signals.RecordedSignal{Signal: sig, Findings: findings})
+	return nil
+}
+
+func (m *memoryStore) Snapshot(_ context.Context, sig signals.Signal, cfg signals.SnapshotConfig) (signals.Snapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cutoff := sig.Timestamp.Add(-cfg.HistoryWindow)
+	var user, session []signals.RecordedSignal
+	for _, s := range m.signals {
+		if s.Timestamp.Before(cutoff) {
+			continue
+		}
+		if s.UserID == sig.UserID {
+			user = append(user, s)
+		}
+		if s.SessionID != "" && s.SessionID == sig.SessionID {
+			session = append(session, s)
+		}
+	}
+	return signals.Snapshot{UserSignals: user, SessionSignals: session}, nil
+}
 
 type stubLLMClient struct {
 	classification Classification
@@ -35,7 +69,7 @@ func TestServiceEvaluateFailureBurst(t *testing.T) {
 		MaxSignalsPerUser:     20,
 		MaxSignalsPerSession:  20,
 	}
-	svc, err := New(cfg, nil, nil, nil, nil, nil, nil)
+	svc, err := New(cfg, nil, &memoryStore{}, nil, "", nil)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -67,7 +101,7 @@ func TestServiceEvaluateContextDrift(t *testing.T) {
 		MaxSignalsPerUser:     20,
 		MaxSignalsPerSession:  20,
 	}
-	svc, err := New(cfg, nil, nil, nil, nil, nil, nil)
+	svc, err := New(cfg, nil, &memoryStore{}, nil, "", nil)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -112,7 +146,7 @@ func TestServiceEvaluateLLMObserve(t *testing.T) {
 			HighRiskConfidence: 0.85,
 		},
 	}
-	svc, err := New(cfg, nil, nil, llm, nil, nil, nil)
+	svc, err := New(cfg, nil, &memoryStore{}, llm, "", nil)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -166,7 +200,7 @@ func TestServiceEvaluateLLMEnforce(t *testing.T) {
 			HighRiskConfidence: 0.85,
 		},
 	}
-	svc, err := New(cfg, nil, nil, llm, nil, nil, nil)
+	svc, err := New(cfg, nil, &memoryStore{}, llm, "", nil)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -208,7 +242,7 @@ func TestServiceEvaluateLLMCachedSession(t *testing.T) {
 			HighRiskConfidence: 0.85,
 		},
 	}
-	svc, err := New(cfg, nil, nil, countingLLM, nil, nil, nil)
+	svc, err := New(cfg, nil, &memoryStore{}, countingLLM, "", nil)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}

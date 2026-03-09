@@ -19,7 +19,7 @@ import (
 // (local filesystem or S3).
 type DuckLakeStore struct {
 	mu     sync.RWMutex
-	db     *sql.DB // DuckDB in-process connection
+	db     *sql.DB // DuckDB in-process connection (single-writer)
 	cfg    SnapshotConfig
 	pgDSN  string
 	dlCfg  DuckLakeConfig
@@ -27,19 +27,28 @@ type DuckLakeStore struct {
 }
 
 // NewDuckLakeStore creates a DuckLake-backed signal store.
-// pgDSN is the PostgreSQL connection string used for DuckLake catalog metadata.
-// The ducklake extension is installed/loaded and the catalog is attached.
+// pgDSN is the PostgreSQL libpq key-value connection string used for the
+// DuckLake catalog. The postgres+ducklake extensions are installed/loaded
+// and the catalog is attached.
 func NewDuckLakeStore(pgDSN string, cfg SnapshotConfig, dlCfg DuckLakeConfig) (*DuckLakeStore, error) {
+	if pgDSN == "" {
+		return nil, fmt.Errorf("ducklake: pgDSN must not be empty")
+	}
+
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
 		return nil, fmt.Errorf("ducklake: open duckdb: %w", err)
 	}
+	// DuckDB is single-writer; limit the pool to one connection to avoid
+	// "database is locked" errors from concurrent writes.
+	db.SetMaxOpenConns(1)
 
-	// Install and load the ducklake extension.
-	for _, stmt := range []string{
-		"INSTALL ducklake",
-		"LOAD ducklake",
-	} {
+	// Install ducklake + postgres extensions.
+	installStmts := []string{
+		"INSTALL ducklake", "LOAD ducklake",
+		"INSTALL postgres", "LOAD postgres",
+	}
+	for _, stmt := range installStmts {
 		if _, err := db.Exec(stmt); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("ducklake: %s: %w", stmt, err)
@@ -54,13 +63,18 @@ func NewDuckLakeStore(pgDSN string, cfg SnapshotConfig, dlCfg DuckLakeConfig) (*
 		}
 	}
 
-	// Attach the DuckLake catalog using the PG DSN for metadata.
+	// Attach the DuckLake catalog via PostgreSQL.
 	attachSQL := fmt.Sprintf(
-		"ATTACH 'ducklake:%s' AS signals (DATA_PATH '%s')",
+		"ATTACH 'ducklake:postgres:%s' AS signals (DATA_PATH '%s')",
 		pgDSN, dlCfg.DataPath,
 	)
 	if _, err := db.Exec(attachSQL); err != nil {
 		db.Close()
+		if strings.Contains(err.Error(), "permission denied for schema") {
+			return nil, fmt.Errorf("ducklake: attach catalog: %w\n\nThe DuckLake postgres extension needs CREATE ON SCHEMA public.\n"+
+				"Run as a superuser on the ZITADEL database:\n"+
+				"  GRANT CREATE ON SCHEMA public TO <your_zitadel_user>;", err)
+		}
 		return nil, fmt.Errorf("ducklake: attach catalog: %w", err)
 	}
 
@@ -182,7 +196,7 @@ INSERT INTO signals.signals (
 `
 
 // WriteBatch inserts a batch of signals. Called by the [Emitter] debouncer.
-func (s *DuckLakeStore) WriteBatch(ctx context.Context, signals []Signal) error {
+func (s *DuckLakeStore) WriteBatch(ctx context.Context, signals []RecordedSignal) error {
 	if len(signals) == 0 {
 		return nil
 	}
@@ -209,7 +223,13 @@ func (s *DuckLakeStore) WriteBatch(ctx context.Context, signals []Signal) error 
 	defer stmt.Close()
 
 	for _, sig := range signals {
-		findingsJSON := []byte("[]")
+		findingsJSON, err := json.Marshal(sig.Findings)
+		if err != nil {
+			findingsJSON = []byte("[]")
+		}
+		if findingsJSON == nil {
+			findingsJSON = []byte("[]")
+		}
 		_, err = stmt.ExecContext(ctx,
 			sig.InstanceID,
 			sig.UserID,
@@ -466,6 +486,42 @@ func (s *DuckLakeStore) AggregateSignals(ctx context.Context, filters SignalFilt
 	return buckets, rows.Err()
 }
 
+// AppendFindings merges additional findings into a signal row identified by
+// instance_id + session_id + created_at. This is used by the async LLM path
+// in observe mode: the signal is persisted before the model responds, and
+// findings are appended after classification completes.
+func (s *DuckLakeStore) AppendFindings(ctx context.Context, instanceID, sessionID string, createdAt time.Time, findings []RecordedFinding) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.closed {
+		return fmt.Errorf("ducklake: store closed")
+	}
+
+	findingsJSON, err := json.Marshal(findings)
+	if err != nil {
+		return fmt.Errorf("ducklake: marshal findings: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, appendFindingsSQL,
+		string(findingsJSON),
+		instanceID,
+		sessionID,
+		createdAt.UTC(),
+	)
+	if err != nil {
+		return fmt.Errorf("ducklake: append findings: %w", err)
+	}
+	return nil
+}
+
+const appendFindingsSQL = `
+UPDATE signals.signals
+SET findings = ?
+WHERE instance_id = ? AND session_id = ? AND created_at = ?
+  AND findings = '[]'
+LIMIT 1
+`
+
 // DB returns the underlying DuckDB connection for advanced queries.
 func (s *DuckLakeStore) DB() *sql.DB {
 	return s.db
@@ -522,8 +578,14 @@ func (f SignalFilters) toSQL() (string, []any) {
 		args = append(args, f.Operation)
 	}
 	if f.Stream != "" {
-		clauses = append(clauses, "stream = ?")
-		args = append(args, f.Stream)
+		if f.Stream == string(StreamEvent) {
+			// "event" is a virtual stream covering auth + account (event-store signals).
+			clauses = append(clauses, "stream IN (?, ?)")
+			args = append(args, string(StreamAuth), string(StreamAccount))
+		} else {
+			clauses = append(clauses, "stream = ?")
+			args = append(args, f.Stream)
+		}
 	}
 	if f.Outcome != "" {
 		clauses = append(clauses, "outcome = ?")

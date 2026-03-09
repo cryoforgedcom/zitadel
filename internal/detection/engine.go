@@ -13,25 +13,33 @@ import (
 	"github.com/zitadel/zitadel/internal/signals"
 )
 
+// FindingRecorder persists findings produced asynchronously (e.g. LLM
+// observe-mode results that arrive after the signal has already been written).
+type FindingRecorder interface {
+	AppendFindings(ctx context.Context, instanceID, sessionID string, createdAt time.Time, findings []signals.RecordedFinding) error
+}
+
 // RuleEngine evaluates compiled rules against a RiskContext and dispatches
 // matching rules to their configured engine (block, rate_limit, llm, log).
 type RuleEngine struct {
-	rules   []CompiledRule
-	limiter ratelimit.RateLimiterStore
-	llm     llm.LLMClient
-	llmCfg  llm.Config
+	rules           []CompiledRule
+	limiter         ratelimit.RateLimiterStore
+	llm             llm.LLMClient
+	llmCfg          llm.Config
+	findingRecorder FindingRecorder
 }
 
 // NewRuleEngine creates a rule engine with compiled rules and engine backends.
-func NewRuleEngine(rules []CompiledRule, limiter ratelimit.RateLimiterStore, llmClient llm.LLMClient, llmCfg llm.Config) *RuleEngine {
+func NewRuleEngine(rules []CompiledRule, limiter ratelimit.RateLimiterStore, llmClient llm.LLMClient, llmCfg llm.Config, findingRecorder FindingRecorder) *RuleEngine {
 	if limiter == nil {
 		limiter = ratelimit.NewMemoryRateLimiter()
 	}
 	return &RuleEngine{
-		rules:   rules,
-		limiter: limiter,
-		llm:     llmClient,
-		llmCfg:  llmCfg,
+		rules:           rules,
+		limiter:         limiter,
+		llm:             llmClient,
+		llmCfg:          llmCfg,
+		findingRecorder: findingRecorder,
 	}
 }
 
@@ -227,8 +235,9 @@ func (e *RuleEngine) dispatchLLM(ctx context.Context, rule *CompiledRule, rc Ris
 	return e.runLLM(ctx, rule, rc, prompt)
 }
 
-// runLLMAsync calls the LLM in the background for observe-mode rules and logs
-// the result. Any findings are discarded because observe mode never blocks.
+// runLLMAsync calls the LLM in the background for observe-mode rules, logs
+// the result, and persists the finding back to the signal store so it appears
+// in the Signal Explorer.
 func (e *RuleEngine) runLLMAsync(ctx context.Context, rule *CompiledRule, rc RiskContext, prompt llm.Prompt) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -244,7 +253,16 @@ func (e *RuleEngine) runLLMAsync(ctx context.Context, rule *CompiledRule, rc Ris
 		ctx, cancel = context.WithTimeout(ctx, e.llmCfg.Timeout)
 		defer cancel()
 	}
-	e.runLLM(ctx, rule, rc, prompt)
+	finding := e.runLLM(ctx, rule, rc, prompt)
+	if finding != nil && e.findingRecorder != nil {
+		recorded := recordedFindings([]Finding{*finding})
+		if err := e.findingRecorder.AppendFindings(ctx, rc.Current.InstanceID, rc.Current.SessionID, rc.Current.Timestamp, recorded); err != nil {
+			logging.WithError(ctx, err).Warn("risk.llm.async_persist_failed",
+				slog.String("rule_id", rule.ID),
+				slog.String("risk_session_id", rc.Current.SessionID),
+			)
+		}
+	}
 }
 
 // runLLM calls the LLM synchronously and returns a Finding (or nil on error).

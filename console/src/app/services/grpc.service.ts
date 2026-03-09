@@ -7,7 +7,7 @@ import { catchError, firstValueFrom, switchMap, tap } from 'rxjs';
 import { AdminServiceClient } from '../proto/generated/zitadel/AdminServiceClientPb';
 import { AuthServiceClient } from '../proto/generated/zitadel/AuthServiceClientPb';
 import { ManagementServiceClient } from '../proto/generated/zitadel/ManagementServiceClientPb';
-import { SignalServiceClient } from '../proto/generated/zitadel/signal/v1/Signal_serviceServiceClientPb';
+import { SignalServiceClient } from '../proto/generated/zitadel/signal/v2/Signal_serviceServiceClientPb';
 import { fallbackLanguage, supportedLanguagesRegexp } from '../utils/language';
 import { AuthenticationService } from './authentication.service';
 import { EnvironmentService } from './environment.service';
