@@ -108,24 +108,24 @@ func configureS3(db *sql.DB, s3 ArchiveS3Config) error {
 const createSignalsTableSQL = `
 CREATE TABLE IF NOT EXISTS signals.signals (
 	instance_id      VARCHAR NOT NULL,
-	user_id          VARCHAR NOT NULL DEFAULT '',
-	caller_id        VARCHAR NOT NULL DEFAULT '',
-	session_id       VARCHAR NOT NULL DEFAULT '',
-	fingerprint_id   VARCHAR NOT NULL DEFAULT '',
-	operation        VARCHAR NOT NULL DEFAULT '',
-	stream           VARCHAR NOT NULL DEFAULT '',
-	resource         VARCHAR NOT NULL DEFAULT '',
-	outcome          VARCHAR NOT NULL DEFAULT '',
+	user_id          VARCHAR NOT NULL,
+	caller_id        VARCHAR NOT NULL,
+	session_id       VARCHAR NOT NULL,
+	fingerprint_id   VARCHAR NOT NULL,
+	operation        VARCHAR NOT NULL,
+	stream           VARCHAR NOT NULL,
+	resource         VARCHAR NOT NULL,
+	outcome          VARCHAR NOT NULL,
 	created_at       TIMESTAMP NOT NULL,
-	ip               VARCHAR NOT NULL DEFAULT '',
-	user_agent       VARCHAR NOT NULL DEFAULT '',
-	accept_language  VARCHAR NOT NULL DEFAULT '',
-	country          VARCHAR NOT NULL DEFAULT '',
-	forwarded_chain  VARCHAR NOT NULL DEFAULT '',
-	referer          VARCHAR NOT NULL DEFAULT '',
-	sec_fetch_site   VARCHAR NOT NULL DEFAULT '',
-	is_https         BOOLEAN NOT NULL DEFAULT false,
-	findings         VARCHAR NOT NULL DEFAULT '[]'
+	ip               VARCHAR NOT NULL,
+	user_agent       VARCHAR NOT NULL,
+	accept_language  VARCHAR NOT NULL,
+	country          VARCHAR NOT NULL,
+	forwarded_chain  VARCHAR NOT NULL,
+	referer          VARCHAR NOT NULL,
+	sec_fetch_site   VARCHAR NOT NULL,
+	is_https         BOOLEAN NOT NULL,
+	findings         VARCHAR NOT NULL
 )
 `
 
