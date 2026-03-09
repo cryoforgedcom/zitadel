@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+package zitadel.signal.v1;
+
+import "zitadel/object/v2/object.proto";
+import "zitadel/protoc_gen_zitadel/v2/options.proto";
+import "zitadel/signal/v1/signal.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/zitadel/zitadel/pkg/grpc/signal/v1;signal";
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "Signal Service";
+    version: "1.0";
+    description: "This API exposes behavioral signals collected during authentication operations. It is part of the ZITADEL Risk POC and requires an authenticated session to access.";
+    contact: {
+      name: "ZITADEL"
+      url: "https://zitadel.com"
+      email: "hi@zitadel.com"
+    }
+    license: {
+      name: "Apache 2.0",
+      url: "https://github.com/zitadel/zitadel/blob/main/LICENSING.md";
+    };
+  };
+  schemes: HTTPS;
+  schemes: HTTP;
+  consumes: "application/json";
+  consumes: "application/grpc";
+  produces: "application/json";
+  produces: "application/grpc";
+  consumes: "application/grpc-web+proto";
+  produces: "application/grpc-web+proto";
+  host: "$CUSTOM_DOMAIN";
+  base_path: "/";
+  external_docs: {
+    description: "Detailed information about ZITADEL",
+    url: "https://zitadel.com/docs"
+  }
+  security_definitions: {
+    security: {
+      key: "OAuth2";
+      value: {
+        type: TYPE_OAUTH2;
+        flow: FLOW_ACCESS_CODE;
+        authorization_url: "$CUSTOM_DOMAIN/oauth/v2/authorize";
+        token_url: "$CUSTOM_DOMAIN/oauth/v2/token";
+        scopes: {
+          scope: {
+            key: "openid";
+            value: "openid";
+          }
+          scope: {
+            key: "urn:zitadel:iam:org:project:id:zitadel:aud";
+            value: "urn:zitadel:iam:org:project:id:zitadel:aud";
+          }
+        }
+      }
+    }
+  }
+  security: {
+    security_requirement: {
+      key: "OAuth2";
+      value: {
+        scope: "openid";
+        scope: "urn:zitadel:iam:org:project:id:zitadel:aud";
+      }
+    }
+  }
+};
+
+// SignalService provides read access to behavioral signals for risk analysis.
+service SignalService {
+
+  // Search signals with optional filters and pagination.
+  rpc SearchSignals (SearchSignalsRequest) returns (SearchSignalsResponse) {
+    option (google.api.http) = {
+      post: "/v2/signals/search"
+      body: "*"
+    };
+    option (zitadel.protoc_gen_zitadel.v2.options) = {
+      auth_option: {
+        permission: "authenticated"
+      }
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Search Signals"
+      description: "Search behavioral signals with optional filters. Returns a paginated list of signals recorded during authentication operations."
+      tags: ["Signal Service"]
+    };
+  }
+
+  // Aggregate signals by a field or time bucket.
+  rpc AggregateSignals (AggregateSignalsRequest) returns (AggregateSignalsResponse) {
+    option (google.api.http) = {
+      post: "/v2/signals/aggregate"
+      body: "*"
+    };
+    option (zitadel.protoc_gen_zitadel.v2.options) = {
+      auth_option: {
+        permission: "authenticated"
+      }
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Aggregate Signals"
+      description: "Aggregate behavioral signals by a field (e.g. stream, country) or time bucket. Returns counts per group."
+      tags: ["Signal Service"]
+    };
+  }
+}
+
+// SearchSignalsRequest is the request message for SearchSignals.
+message SearchSignalsRequest {
+  // Pagination: offset and limit.
+  zitadel.object.v2.ListQuery query = 1;
+  // Optional filters applied before returning results.
+  SignalFilters filters = 2;
+}
+
+// SearchSignalsResponse contains the matching signals and pagination details.
+message SearchSignalsResponse {
+  zitadel.object.v2.ListDetails details = 1;
+  repeated Signal signals = 2;
+}
+
+// AggregateSignalsRequest is the request message for AggregateSignals.
+message AggregateSignalsRequest {
+  // Optional filters applied before aggregation.
+  SignalFilters filters = 1;
+
+  // The field to group by. Use "time_bucket" for time-based aggregation.
+  // Valid field values: stream, outcome, operation, country, user_id, ip.
+  string group_by = 2 [(google.api.field_behavior) = REQUIRED, (validate.rules).string = {min_len: 1}];
+
+  // When group_by is "time_bucket", this sets the bucket width (e.g. "1 hour", "1 day").
+  string time_bucket = 3;
+
+  // Aggregation metric: "count" (default) or "distinct_count".
+  string metric = 4;
+}
+
+// AggregateSignalsResponse contains the aggregation buckets.
+message AggregateSignalsResponse {
+  repeated AggregationBucket buckets = 1;
+}

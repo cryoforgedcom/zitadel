@@ -7,6 +7,7 @@ import { catchError, firstValueFrom, switchMap, tap } from 'rxjs';
 import { AdminServiceClient } from '../proto/generated/zitadel/AdminServiceClientPb';
 import { AuthServiceClient } from '../proto/generated/zitadel/AuthServiceClientPb';
 import { ManagementServiceClient } from '../proto/generated/zitadel/ManagementServiceClientPb';
+import { SignalServiceClient } from '../proto/generated/zitadel/signal/v1/Signal_serviceServiceClientPb';
 import { fallbackLanguage, supportedLanguagesRegexp } from '../utils/language';
 import { AuthenticationService } from './authentication.service';
 import { EnvironmentService } from './environment.service';
@@ -42,6 +43,7 @@ export class GrpcService {
   public mgmt!: ManagementServiceClient;
   public admin!: AdminServiceClient;
   public user!: UserServiceClient;
+  public signal!: SignalServiceClient;
   public userNew!: ReturnType<typeof createUserServiceClient>;
   public session!: ReturnType<typeof createSessionServiceClient>;
   public mgmtNew!: ReturnType<typeof createManagementServiceClient>;
@@ -90,6 +92,7 @@ export class GrpcService {
         this.mgmt = new ManagementServiceClient(env.api, null, interceptors);
         this.admin = new AdminServiceClient(env.api, null, interceptors);
         this.user = new UserServiceClient(env.api, null, interceptors);
+        this.signal = new SignalServiceClient(env.api, null, interceptors);
 
         const transport = createGrpcWebTransport({
           baseUrl: env.api,

@@ -61,9 +61,9 @@
   <mat-spinner *ngIf="loading" diameter="30"></mat-spinner>
 
   <table mat-table [dataSource]="signals" *ngIf="!loading && signals.length > 0" class="signals-table">
-    <ng-container matColumnDef="created_at">
+    <ng-container matColumnDef="createdAt">
       <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.TIME' | translate }}</th>
-      <td mat-cell *matCellDef="let s">{{ s.created_at | date:'short' }}</td>
+      <td mat-cell *matCellDef="let s">{{ s.createdAt?.seconds * 1000 | date:'short' }}</td>
     </ng-container>
 
     <ng-container matColumnDef="stream">
@@ -100,17 +100,17 @@
       <td mat-cell *matCellDef="let s">{{ s.country }}</td>
     </ng-container>
 
-    <ng-container matColumnDef="user_id">
+    <ng-container matColumnDef="userId">
       <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.USER_ID' | translate }}</th>
       <td mat-cell *matCellDef="let s">
-        <span class="user-id" *ngIf="s.user_id">{{ s.user_id | slice:0:12 }}…</span>
+        <span class="user-id" *ngIf="s.userId">{{ s.userId | slice:0:12 }}…</span>
       </td>
     </ng-container>
 
-    <ng-container matColumnDef="findings">
+    <ng-container matColumnDef="findingsList">
       <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.FINDINGS' | translate }}</th>
       <td mat-cell *matCellDef="let s">
-        <span class="badge badge-finding" *ngFor="let f of s.findings">{{ f }}</span>
+        <span class="badge badge-finding" *ngFor="let f of s.findingsList">{{ f }}</span>
       </td>
     </ng-container>
 

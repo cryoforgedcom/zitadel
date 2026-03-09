@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, DestroyRef, inject, OnInit } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -10,39 +10,15 @@ import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { TranslateModule } from '@ngx-translate/core';
 import { CardModule } from '../../card/card.module';
-import { HttpClient } from '@angular/common/http';
-import { GrpcAuthService } from 'src/app/services/grpc-auth.service';
+import { GrpcService } from 'src/app/services/grpc.service';
 import { ToastService } from 'src/app/services/toast.service';
 
-interface SignalRecord {
-  instance_id: string;
-  user_id: string;
-  session_id: string;
-  operation: string;
-  stream: string;
-  outcome: string;
-  created_at: string;
-  ip: string;
-  user_agent: string;
-  country: string;
-  findings: string[];
-}
-
-interface SearchResponse {
-  signals: SignalRecord[];
-  total_count: number;
-  offset: number;
-  limit: number;
-}
-
-interface AggBucket {
-  key: string;
-  count: number;
-}
-
-interface AggregateResponse {
-  buckets: AggBucket[];
-}
+import { Signal, SignalFilters, AggregationBucket } from 'src/app/proto/generated/zitadel/signal/v1/signal_pb';
+import {
+  SearchSignalsRequest,
+  AggregateSignalsRequest,
+} from 'src/app/proto/generated/zitadel/signal/v1/signal_service_pb';
+import { ListQuery } from 'src/app/proto/generated/zitadel/object/v2/object_pb';
 
 @Component({
   selector: 'cnsl-signals-explorer',
@@ -64,18 +40,17 @@ interface AggregateResponse {
   styleUrls: ['./signals-explorer.component.scss'],
 })
 export class SignalsExplorerComponent implements OnInit {
-  private readonly http = inject(HttpClient);
+  private readonly grpc = inject(GrpcService);
   private readonly fb = inject(FormBuilder);
   private readonly toast = inject(ToastService);
 
   loading = false;
-  signals: SignalRecord[] = [];
+  signals: Signal.AsObject[] = [];
   totalCount = 0;
   offset = 0;
   limit = 50;
 
-  // Aggregation
-  aggBuckets: AggBucket[] = [];
+  aggBuckets: AggregationBucket.AsObject[] = [];
   aggLoading = false;
 
   filterForm: FormGroup = this.fb.group({
@@ -93,7 +68,7 @@ export class SignalsExplorerComponent implements OnInit {
     time_bucket: ['1 hour'],
   });
 
-  displayedColumns = ['created_at', 'stream', 'operation', 'outcome', 'ip', 'country', 'user_id', 'findings'];
+  displayedColumns = ['createdAt', 'stream', 'operation', 'outcome', 'ip', 'country', 'userId', 'findingsList'];
 
   streams = ['request', 'auth', 'account', 'notification'];
   outcomes = ['success', 'failure', 'blocked', 'challenged'];
@@ -105,56 +80,67 @@ export class SignalsExplorerComponent implements OnInit {
   }
 
   search(): void {
+    if (!this.grpc.signal) return;
     this.loading = true;
-    const filters = this.filterForm.value;
-    const body: any = {
-      offset: this.offset,
-      limit: this.limit,
-    };
-    if (filters.stream) body.stream = filters.stream;
-    if (filters.outcome) body.outcome = filters.outcome;
-    if (filters.operation) body.operation = filters.operation;
-    if (filters.ip) body.ip = filters.ip;
-    if (filters.country) body.country = filters.country;
-    if (filters.user_id) body.user_id = filters.user_id;
+    const f = this.filterForm.value;
 
-    this.http.post<SearchResponse>('/v2/signals/search', body).subscribe({
-      next: (resp) => {
-        this.signals = resp.signals || [];
-        this.totalCount = resp.total_count;
+    const filters = new SignalFilters();
+    if (f.stream) filters.setStream(f.stream);
+    if (f.outcome) filters.setOutcome(f.outcome);
+    if (f.operation) filters.setOperation(f.operation);
+    if (f.ip) filters.setIp(f.ip);
+    if (f.country) filters.setCountry(f.country);
+    if (f.user_id) filters.setUserId(f.user_id);
+
+    const query = new ListQuery();
+    query.setOffset(this.offset);
+    query.setLimit(this.limit);
+
+    const req = new SearchSignalsRequest();
+    req.setQuery(query);
+    req.setFilters(filters);
+
+    this.grpc.signal.searchSignals(req, null).then(
+      (resp) => {
+        this.signals = resp.getSignalsList().map((s) => s.toObject());
+        this.totalCount = resp.getDetails()?.getTotalResult() ?? 0;
         this.loading = false;
       },
-      error: (err) => {
+      (err) => {
         this.toast.showError(err);
         this.loading = false;
       },
-    });
+    );
   }
 
   aggregate(): void {
+    if (!this.grpc.signal) return;
     this.aggLoading = true;
-    const filters = this.filterForm.value;
+    const f = this.filterForm.value;
     const agg = this.aggForm.value;
-    const body: any = {
-      group_by: agg.group_by,
-      metric: agg.metric,
-    };
-    if (agg.group_by === 'time_bucket') {
-      body.time_bucket = agg.time_bucket || '1 hour';
-    }
-    if (filters.stream) body.stream = filters.stream;
-    if (filters.outcome) body.outcome = filters.outcome;
 
-    this.http.post<AggregateResponse>('/v2/signals/aggregate', body).subscribe({
-      next: (resp) => {
-        this.aggBuckets = resp.buckets || [];
+    const filters = new SignalFilters();
+    if (f.stream) filters.setStream(f.stream);
+    if (f.outcome) filters.setOutcome(f.outcome);
+
+    const req = new AggregateSignalsRequest();
+    req.setFilters(filters);
+    req.setGroupBy(agg.group_by);
+    req.setMetric(agg.metric);
+    if (agg.group_by === 'time_bucket') {
+      req.setTimeBucket(agg.time_bucket || '1 hour');
+    }
+
+    this.grpc.signal.aggregateSignals(req, null).then(
+      (resp) => {
+        this.aggBuckets = resp.getBucketsList().map((b) => b.toObject());
         this.aggLoading = false;
       },
-      error: (err) => {
+      (err) => {
         this.toast.showError(err);
         this.aggLoading = false;
       },
-    });
+    );
   }
 
   nextPage(): void {

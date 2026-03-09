@@ -115,7 +115,7 @@ import (
 	"github.com/zitadel/zitadel/internal/queue"
 	"github.com/zitadel/zitadel/internal/serviceping"
 	"github.com/zitadel/zitadel/internal/signals"
-	signals_api "github.com/zitadel/zitadel/internal/api/signals"
+	signal_v1 "github.com/zitadel/zitadel/internal/api/grpc/signal/v1"
 	"github.com/zitadel/zitadel/internal/static"
 	es_v4 "github.com/zitadel/zitadel/internal/v2/eventstore"
 	es_v4_pg "github.com/zitadel/zitadel/internal/v2/eventstore/postgres"
@@ -399,13 +399,6 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 	}
 	commands.GrpcMethodExisting = checkExisting(api.ListGrpcMethods())
 	commands.GrpcServiceExisting = checkExisting(api.ListGrpcServices())
-
-	// Register Signals HTTP/JSON API when DuckLake store is available.
-	if detectionService := commands.DetectionService(); detectionService != nil {
-		if signalsHandler := signals_api.NewHandler(detectionService.DuckLakeStore()); signalsHandler != nil {
-			signalsHandler.RegisterRoutes(router)
-		}
-	}
 
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
@@ -761,6 +754,15 @@ func startAPIs(
 	if err := apis.RegisterService(ctx, saml_v2.CreateServer(commands, queries, samlProvider, config.ExternalSecure)); err != nil {
 		return nil, err
 	}
+	// Register Signal Service when DuckLake store is available.
+	if detectionService := commands.DetectionService(); detectionService != nil {
+		if signalServer := signal_v1.CreateServer(detectionService.DuckLakeStore()); signalServer != nil {
+			if err := apis.RegisterService(ctx, signalServer); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	// handle grpc at last to be able to handle the root, because grpc and gateway require a lot of different prefixes
 	apis.RouteGRPC()
 	return apis, nil

@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package zitadel.signal.v1;
+
+import "google/protobuf/timestamp.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option go_package = "github.com/zitadel/zitadel/pkg/grpc/signal/v1;signal";
+
+// Signal is a single behavioral observation recorded during an auth operation.
+message Signal {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {title: "Signal" description: "A behavioral observation recorded during an auth operation."}
+  };
+
+  string instance_id = 1;
+  string user_id = 2;
+  string caller_id = 3;
+  string session_id = 4;
+  string fingerprint_id = 5;
+  string operation = 6;
+  string stream = 7;
+  string resource = 8;
+  string outcome = 9;
+  google.protobuf.Timestamp created_at = 10;
+  string ip = 11;
+  string user_agent = 12;
+  string accept_language = 13;
+  string country = 14;
+  string forwarded_chain = 15;
+  string referer = 16;
+  string sec_fetch_site = 17;
+  bool is_https = 18;
+  repeated string findings = 19;
+}
+
+// SignalFilters narrows the signals returned by Search or Aggregate.
+message SignalFilters {
+  string instance_id = 1;
+  string user_id = 2;
+  string session_id = 3;
+  string ip = 4;
+  string stream = 5;
+  string outcome = 6;
+  string operation = 7;
+  string country = 8;
+  // ISO 8601 / RFC 3339 timestamp — only signals after this time are returned.
+  optional google.protobuf.Timestamp after = 9;
+  // ISO 8601 / RFC 3339 timestamp — only signals before this time are returned.
+  optional google.protobuf.Timestamp before = 10;
+}
+
+// AggregationBucket is one bucket returned by AggregateSignals.
+message AggregationBucket {
+  string key = 1;
+  int64 count = 2;
+}
