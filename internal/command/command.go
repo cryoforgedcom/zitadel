@@ -28,12 +28,14 @@ import (
 	sd "github.com/zitadel/zitadel/internal/config/systemdefaults"
 	"github.com/zitadel/zitadel/internal/crypto"
 	"github.com/zitadel/zitadel/internal/denylist"
+	"github.com/zitadel/zitadel/internal/detection"
 	"github.com/zitadel/zitadel/internal/domain"
 	"github.com/zitadel/zitadel/internal/eventstore"
 	"github.com/zitadel/zitadel/internal/id"
+	"github.com/zitadel/zitadel/internal/llm"
 	internal_net "github.com/zitadel/zitadel/internal/net"
 	"github.com/zitadel/zitadel/internal/notification/senders"
-	"github.com/zitadel/zitadel/internal/risk"
+	"github.com/zitadel/zitadel/internal/signals"
 	"github.com/zitadel/zitadel/internal/static"
 	"github.com/zitadel/zitadel/internal/telemetry/tracing"
 	webauthn_helper "github.com/zitadel/zitadel/internal/webauthn"
@@ -110,8 +112,10 @@ type Commands struct {
 	loginPaths        LoginPaths
 	ActionsV2DenyList []denylist.AddressChecker
 	IPLookupFunction  internal_net.IPLookupFunc
-	riskEvaluator     risk.Evaluator
-	riskGeoHeader     string // proxy header name for geo-country (e.g. "CF-IPCountry")
+	defaultDetectionConfig detection.Config
+	detectionPolicyProvider *instanceDetectionPolicyProvider
+	riskEvaluator           detection.Evaluator
+	riskGeoHeader           string // proxy header name for geo-country (e.g. "CF-IPCountry")
 }
 
 //go:generate mockgen -package command -destination ./mock_login_paths.go . LoginPaths
@@ -239,7 +243,7 @@ func StartCommands(
 	}
 	repo.phoneCodeVerifier = repo.phoneCodeVerifierFromConfig
 	repo.tarpit = defaults.Tarpit.Tarpit()
-	riskConfig := risk.Config{
+	riskConfig := detection.Config{
 		Enabled:               defaults.Risk.Enabled,
 		FailOpen:              defaults.Risk.FailOpen,
 		FailureBurstThreshold: defaults.Risk.FailureBurstThreshold,
@@ -247,8 +251,8 @@ func StartCommands(
 		ContextChangeWindow:   defaults.Risk.ContextChangeWindow,
 		MaxSignalsPerUser:     defaults.Risk.MaxSignalsPerUser,
 		MaxSignalsPerSession:  defaults.Risk.MaxSignalsPerSession,
-		LLM: risk.LLMConfig{
-			Mode:               risk.LLMMode(defaults.Risk.LLM.Mode),
+		LLM: detection.LLMConfig{
+			Mode:               detection.LLMMode(defaults.Risk.LLM.Mode),
 			Endpoint:           defaults.Risk.LLM.Endpoint,
 			Model:              defaults.Risk.LLM.Model,
 			Timeout:            defaults.Risk.LLM.Timeout,
@@ -260,34 +264,34 @@ func StartCommands(
 			KeepAlive:          defaults.Risk.LLM.KeepAlive,
 			HighRiskConfidence: defaults.Risk.LLM.HighRiskConfidence,
 			LogPrompts:         defaults.Risk.LLM.LogPrompts,
-			CircuitBreaker:     riskCBConfig(defaults.Risk.LLM.CircuitBreaker),
+			CircuitBreaker:     llmCBConfig(defaults.Risk.LLM.CircuitBreaker),
 		},
 		Rules:            riskRules(defaults.Risk.Rules),
 		GeoCountryHeader: defaults.Risk.GeoCountryHeader,
-		SignalStore: risk.SignalStoreConfig{
+		SignalStore: detection.SignalStoreConfig{
 			Enabled:     defaults.Risk.SignalStore.Enabled,
-			Mode:        risk.SignalStoreMode(defaults.Risk.SignalStore.Mode),
+			Mode:        detection.SignalStoreMode(defaults.Risk.SignalStore.Mode),
 			ChannelSize: defaults.Risk.SignalStore.ChannelSize,
-			Debounce: risk.DebouncerConfig{
+			Debounce: detection.DebouncerConfig{
 				MinFrequency: defaults.Risk.SignalStore.Debounce.MinFrequency,
 				MaxBulkSize:  defaults.Risk.SignalStore.Debounce.MaxBulkSize,
 			},
-			Postgres: risk.SignalPGConfig{
+			Postgres: detection.SignalPGConfig{
 				PartitionInterval: defaults.Risk.SignalStore.Postgres.PartitionInterval,
 				Retention:         defaults.Risk.SignalStore.Postgres.Retention,
 			},
-			Redis: risk.SignalRedisConfig{
+			Redis: detection.SignalRedisConfig{
 				MaxLen:         defaults.Risk.SignalStore.Redis.MaxLen,
 				DrainInterval:  defaults.Risk.SignalStore.Redis.DrainInterval,
 				DrainBatchSize: defaults.Risk.SignalStore.Redis.DrainBatchSize,
-				CircuitBreaker: riskCBConfig(defaults.Risk.SignalStore.Redis.CircuitBreaker),
+				CircuitBreaker: signalCBConfig(defaults.Risk.SignalStore.Redis.CircuitBreaker),
 			},
-			Archive: risk.ArchiveConfig{
+			Archive: detection.ArchiveConfig{
 				Enabled:  defaults.Risk.SignalStore.Archive.Enabled,
-				Backend:  risk.ArchiveBackend(defaults.Risk.SignalStore.Archive.Backend),
+				Backend:  detection.ArchiveBackend(defaults.Risk.SignalStore.Archive.Backend),
 				FSPath:   defaults.Risk.SignalStore.Archive.FSPath,
 				Interval: defaults.Risk.SignalStore.Archive.Interval,
-				S3: risk.ArchiveS3Config{
+				S3: detection.ArchiveS3Config{
 					Endpoint:  defaults.Risk.SignalStore.Archive.S3.Endpoint,
 					Bucket:    defaults.Risk.SignalStore.Archive.S3.Bucket,
 					AccessKey: defaults.Risk.SignalStore.Archive.S3.AccessKey,
@@ -297,7 +301,7 @@ func StartCommands(
 				StreamRetention: riskStreamRetention(defaults.Risk.SignalStore.Archive.StreamRetention),
 			},
 		},
-		Captcha: risk.CaptchaConfig{
+		Captcha: detection.CaptchaConfig{
 			Enabled:   defaults.Risk.Captcha.Enabled,
 			Provider:  defaults.Risk.Captcha.Provider,
 			SiteKey:   defaults.Risk.Captcha.SiteKey,
@@ -305,13 +309,13 @@ func StartCommands(
 			VerifyURL: defaults.Risk.Captcha.VerifyURL,
 			Timeout:   defaults.Risk.Captcha.Timeout,
 		},
-		RateLimit: risk.RateLimitConfig{
-			Mode: risk.RateLimitMode(defaults.Risk.RateLimit.Mode),
+		RateLimit: detection.RateLimitConfig{
+			Mode: detection.RateLimitMode(defaults.Risk.RateLimit.Mode),
 		},
 	}
-	var riskLLM risk.LLMClient
-	if riskConfig.Enabled && riskConfig.LLM.Enabled() {
-		riskLLM = risk.NewOllamaClient(riskConfig.LLM, httpClient)
+	var riskLLM detection.LLMClient
+	if riskConfig.LLM.Enabled() {
+		riskLLM = llm.NewOllamaClient(riskConfig.LLM, httpClient)
 	}
 
 	// Extract Redis client from cache connectors if available.
@@ -321,20 +325,22 @@ func StartCommands(
 	}
 
 	// Create archive storage when archival is enabled.
-	var archiveStore risk.ArchiveStorage
+	var archiveStore detection.ArchiveStorage
 	if riskConfig.SignalStore.Archive.Enabled {
 		switch riskConfig.SignalStore.Archive.EffectiveBackend() {
-		case risk.ArchiveBackendS3:
-			// TODO(risk): Wire S3 archive backend via minio client from static
+		case detection.ArchiveBackendS3:
+			// TODO(signals): Wire S3 archive backend via minio client from static
 			// storage. Currently falls back to FS — the S3 config is parsed but
 			// the minio.Client is not injected into StartCommands yet.
-			archiveStore = risk.NewFSArchiveStorage(riskConfig.SignalStore.Archive.FSPath)
+			archiveStore = signals.NewFSArchiveStorage(riskConfig.SignalStore.Archive.FSPath)
 		default:
-			archiveStore = risk.NewFSArchiveStorage(riskConfig.SignalStore.Archive.FSPath)
+			archiveStore = signals.NewFSArchiveStorage(riskConfig.SignalStore.Archive.FSPath)
 		}
 	}
 
-	repo.riskEvaluator, err = risk.New(riskConfig, nil, riskLLM, signalDB, redisClient, archiveStore)
+	repo.defaultDetectionConfig = riskConfig
+	repo.detectionPolicyProvider = newInstanceDetectionPolicyProvider(es, riskConfig)
+	repo.riskEvaluator, err = detection.New(riskConfig, repo.detectionPolicyProvider, nil, riskLLM, signalDB, redisClient, archiveStore)
 	if err != nil {
 		return nil, fmt.Errorf("risk evaluator: %w", err)
 	}
@@ -342,14 +348,14 @@ func StartCommands(
 	return repo, nil
 }
 
-// RiskService returns the concrete risk service if available. Used by the
-// startup code to register partition workers and by middleware to access the
-// signal emitter.
-func (c *Commands) RiskService() *risk.Service {
+// DetectionService returns the concrete detection service if available. Used
+// by the startup code to register signal workers and by middleware to access
+// the signal emitter.
+func (c *Commands) DetectionService() *detection.Service {
 	if c == nil {
 		return nil
 	}
-	svc, _ := c.riskEvaluator.(*risk.Service)
+	svc, _ := c.riskEvaluator.(*detection.Service)
 	return svc
 }
 
@@ -506,11 +512,11 @@ func (c *Commands) asyncPush(ctx context.Context, cmds ...eventstore.Command) {
 	}()
 }
 
-func riskCBConfig(c *sd.RiskCBConfig) *risk.CBConfig {
+func llmCBConfig(c *sd.RiskCBConfig) *llm.CBConfig {
 	if c == nil {
 		return nil
 	}
-	return &risk.CBConfig{
+	return &llm.CBConfig{
 		Interval:               c.Interval,
 		MaxConsecutiveFailures: c.MaxConsecutiveFailures,
 		MaxFailureRatio:        c.MaxFailureRatio,
@@ -520,24 +526,38 @@ func riskCBConfig(c *sd.RiskCBConfig) *risk.CBConfig {
 	}
 }
 
-func riskRules(rules []sd.RiskRuleConfig) []risk.Rule {
+func signalCBConfig(c *sd.RiskCBConfig) *signals.CBConfig {
+	if c == nil {
+		return nil
+	}
+	return &signals.CBConfig{
+		Interval:               c.Interval,
+		MaxConsecutiveFailures: c.MaxConsecutiveFailures,
+		MaxFailureRatio:        c.MaxFailureRatio,
+		Timeout:                c.Timeout,
+		MaxRetryRequests:       c.MaxRetryRequests,
+		FailOpen:               c.FailOpen,
+	}
+}
+
+func riskRules(rules []sd.RiskRuleConfig) []detection.Rule {
 	if len(rules) == 0 {
 		return nil
 	}
-	out := make([]risk.Rule, len(rules))
+	out := make([]detection.Rule, len(rules))
 	for i, r := range rules {
-		out[i] = risk.Rule{
+		out[i] = detection.Rule{
 			ID:          r.ID,
 			Description: r.Description,
 			Expr:        r.Expr,
-			Engine:      risk.EngineType(r.Engine),
-			FindingCfg: risk.RuleFinding{
+			Engine:      detection.EngineType(r.Engine),
+			FindingCfg: detection.RuleFinding{
 				Name:    r.Finding.Name,
 				Message: r.Finding.Message,
 				Block:   r.Finding.Block,
 			},
 			ContextTemplate: r.ContextTemplate,
-			RateLimitCfg: risk.RuleRateLimit{
+			RateLimitCfg: detection.RuleRateLimit{
 				KeyTemplate: r.RateLimit.Key,
 				Window:      r.RateLimit.Window,
 				Max:         r.RateLimit.Max,
@@ -547,13 +567,13 @@ func riskRules(rules []sd.RiskRuleConfig) []risk.Rule {
 	return out
 }
 
-func riskStreamRetention(m map[string]time.Duration) map[risk.SignalStream]time.Duration {
+func riskStreamRetention(m map[string]time.Duration) map[detection.SignalStream]time.Duration {
 	if len(m) == 0 {
 		return nil
 	}
-	out := make(map[risk.SignalStream]time.Duration, len(m))
+	out := make(map[detection.SignalStream]time.Duration, len(m))
 	for k, v := range m {
-		out[risk.SignalStream(k)] = v
+		out[detection.SignalStream(k)] = v
 	}
 	return out
 }

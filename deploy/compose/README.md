@@ -100,6 +100,8 @@ Or use the single Nx command that builds everything and starts the stack:
 pnpm nx run @zitadel/compose:start-ai
 ```
 
+`start-ai` recreates the `zitadel-dev` volumes before startup because the dev stack boots ZITADEL with `start-from-init`; rerunning against an old PostgreSQL volume can otherwise leave the API in a restart loop during bootstrap.
+
 This keeps the base stack unchanged while letting the embedded API risk evaluator call Ollama directly. The default model (`qwen2.5:7b`) is Apache 2.0 and has no restrictions on automated decisions, so you can switch to `enforce` mode once you've validated its output quality.
 
 ### Verifying Risk Signals
@@ -133,6 +135,7 @@ Signal store configuration (all optional, shown with defaults):
 |---------|---------|-------------|
 | `ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_ENABLED` | `false` | Enable persistent signal storage |
 | `ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_MODE` | `pg` | Write target: `pg` (direct) or `redis` (hot tier) |
+| `ZITADEL_SYSTEMDEFAULTS_RISK_RATELIMIT_MODE` | `memory` | Rate-limit backend: `memory`, `redis`, or `pg` (`redis`/`pg` downgrade to memory with warning if unavailable at startup) |
 | `ZITADEL_SYSTEMDEFAULTS_RISK_CAPTCHA_ENABLED` | `false` | Enable risk-based captcha challenges |
 | `ZITADEL_SYSTEMDEFAULTS_RISK_CAPTCHA_PROVIDER` | `turnstile` | Captcha provider: `turnstile`, `hcaptcha`, `recaptcha` |
 

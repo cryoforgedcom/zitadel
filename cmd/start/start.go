@@ -113,8 +113,8 @@ import (
 	"github.com/zitadel/zitadel/internal/notification"
 	"github.com/zitadel/zitadel/internal/query"
 	"github.com/zitadel/zitadel/internal/queue"
-	"github.com/zitadel/zitadel/internal/risk"
 	"github.com/zitadel/zitadel/internal/serviceping"
+	"github.com/zitadel/zitadel/internal/signals"
 	"github.com/zitadel/zitadel/internal/static"
 	es_v4 "github.com/zitadel/zitadel/internal/v2/eventstore"
 	es_v4_pg "github.com/zitadel/zitadel/internal/v2/eventstore/postgres"
@@ -354,12 +354,14 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 		return err
 	}
 
-	// register signal store partition worker if the risk signal store is enabled
-	risk.RegisterPartitionWorker(ctx, q, commands.RiskService())
-	// register Redis drain worker if the signal store uses Redis mode
-	risk.RegisterDrainWorker(ctx, q, commands.RiskService())
-	// register archive worker if Parquet archival is enabled
-	risk.RegisterArchiveWorker(ctx, q, commands.RiskService())
+	if detectionService := commands.DetectionService(); detectionService != nil {
+		// register signal store partition worker if the risk signal store is enabled
+		signals.RegisterPartitionWorker(ctx, q, detectionService.PartitionWorker())
+		// register Redis drain worker if the signal store uses Redis mode
+		signals.RegisterDrainWorker(ctx, q, detectionService.DrainWorker())
+		// register archive worker if Parquet archival is enabled
+		signals.RegisterArchiveWorker(ctx, q, detectionService.ArchiveWorker())
+	}
 
 	if err = q.Start(ctx); err != nil {
 		return err
@@ -370,12 +372,14 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 		return err
 	}
 
-	// start signal partition management periodic job
-	risk.StartPartitionSchedule(ctx, q, commands.RiskService())
-	// start Redis drain periodic job
-	risk.StartDrainSchedule(ctx, q, commands.RiskService())
-	// start archive periodic job
-	risk.StartArchiveSchedule(ctx, q, commands.RiskService())
+	if detectionService := commands.DetectionService(); detectionService != nil {
+		// start signal partition management periodic job
+		signals.StartPartitionSchedule(ctx, q, detectionService.PartitionWorker())
+		// start Redis drain periodic job
+		signals.StartDrainSchedule(ctx, q, detectionService.DrainWorker())
+		// start archive periodic job
+		signals.StartArchiveSchedule(ctx, q, detectionService.ArchiveWorker())
+	}
 
 	router := mux.NewRouter()
 	tlsConfig, err := config.TLS.Config()
@@ -484,11 +488,10 @@ func startAPIs(
 	limitingAccessInterceptor := middleware.NewAccessInterceptor(accessSvc, exhaustedCookieHandler, &config.Quotas.Access.AccessConfig)
 	translator := i18n.NewZitadelTranslator(language.English)
 	// Resolve signal emitter for request-level signal capture.
-	var signalEmitter *risk.Emitter
-	if rs := commands.RiskService(); rs != nil {
-		signalEmitter = rs.Emitter()
+	var signalEmitter *signals.Emitter
+	if detectionService := commands.DetectionService(); detectionService != nil {
+		signalEmitter = detectionService.Emitter()
 	}
-
 
 	apis, err := api.New(
 		ctx,

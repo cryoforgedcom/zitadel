@@ -94,7 +94,7 @@
             }
         },
         "start-ai": {
-            "description": "Builds ZITADEL and login images locally, then starts the full Compose stack with the Ollama AI profile. Ollama pulls and preloads the risk model before ZITADEL receives traffic. Waits until all services are healthy.",
+            "description": "Builds ZITADEL and login images locally, then starts the full Compose stack with the Ollama AI profile. Because the dev stack uses start-from-init, the target recreates volumes first to guarantee a clean bootstrap. Ollama pulls and preloads the risk model before ZITADEL receives traffic. Waits until all services are healthy.",
             "dependsOn": [
                 "@zitadel/api:pack",
                 "@zitadel/login:pack"
@@ -104,7 +104,7 @@
                 "cwd": "{projectRoot}",
                 "parallel": false,
                 "commands": [
-                    "docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml --profile ai -p zitadel-dev down --remove-orphans",
+                    "docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml --profile ai -p zitadel-dev down --volumes --remove-orphans",
                     "docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml --profile ai -p zitadel-dev up --force-recreate --wait"
                 ]
             }

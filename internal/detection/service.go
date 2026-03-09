@@ -1,0 +1,585 @@
+package detection
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"log/slog"
+	"strings"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/zitadel/zitadel/backend/v3/instrumentation"
+	"github.com/zitadel/zitadel/backend/v3/instrumentation/logging"
+	"github.com/zitadel/zitadel/internal/captcha"
+	"github.com/zitadel/zitadel/internal/llm"
+	"github.com/zitadel/zitadel/internal/ratelimit"
+	"github.com/zitadel/zitadel/internal/signals"
+)
+
+type Evaluator interface {
+	Evaluate(ctx context.Context, signal signals.Signal) (Decision, error)
+	Record(ctx context.Context, signal signals.Signal, findings []Finding) error
+	// VerifyCaptcha verifies a captcha token. Returns true when captcha is
+	// not configured or verification succeeds.
+	VerifyCaptcha(ctx context.Context, token string, remoteIP string) (bool, error)
+	// CaptchaVerifier returns the configured verifier, or nil.
+	CaptchaVerifier() captcha.CaptchaVerifier
+}
+
+var tracer = instrumentation.NewTracer("risk")
+
+type Service struct {
+	basePolicy     Policy
+	policyProvider PolicyProvider
+	store          signals.Store
+	llm            llm.LLMClient
+	rateLimiter    ratelimit.RateLimiterStore
+	now            func() time.Time
+	stopMaint      chan struct{} // closed to stop the maintenance goroutine
+
+	// Signal store components (nil when SignalStore is not enabled).
+	db              *sql.DB
+	emitter         *signals.Emitter
+	emitterCancel   context.CancelFunc
+	partitionWorker *signals.PartitionWorker
+	drainWorker     *signals.DrainWorker
+	archiveWorker   *signals.ArchiveWorker
+
+	// Captcha challenge verification.
+	captchaVerifier captcha.CaptchaVerifier
+}
+
+// New creates a risk evaluation service. When db is non-nil and
+// cfg.SignalStore.Enabled is true, it creates a signal store with a
+// fire-and-forget emitter. The emitter sink depends on the configured mode:
+//   - "pg" (default): writes directly to PostgreSQL
+//   - "redis": writes to a Redis Stream, with a drain worker flushing to PG
+//
+// When redisClient is nil and mode is "redis", it falls back to PG mode.
+// When archiveStore is non-nil and Archive.Enabled, an archival worker is created.
+func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClient llm.LLMClient, db *sql.DB, redisClient *redis.Client, archiveStore signals.ArchiveStorage) (*Service, error) {
+	basePolicy, err := NewPolicy(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	var emitter *signals.Emitter
+	var partitionWorker *signals.PartitionWorker
+	var drainWorker *signals.DrainWorker
+	var archiveWorker *signals.ArchiveWorker
+
+	if cfg.SignalStore.Enabled && db != nil {
+		pgStore := signals.NewPGStore(db, cfg.SnapshotConfig())
+		if store == nil {
+			store = pgStore
+		}
+
+		var sink signals.SignalSink = pgStore
+		mode := cfg.SignalStore.EffectiveMode()
+
+		if mode == signals.SignalStoreModeRedis && redisClient != nil {
+			redisSink := signals.NewRedisStreamSink(redisClient, cfg.SignalStore.Redis)
+
+			// Ensure consumer group exists for the drain worker.
+			if err := redisSink.EnsureConsumerGroup(context.Background()); err != nil {
+				logging.WithError(context.Background(), err).Warn(
+					"risk.signal_store.redis_group_create_failed",
+				)
+				// Fall back to PG if we can't set up Redis.
+			} else {
+				sink = signals.NewGuardedSink(redisSink, cfg.SignalStore.Redis.CircuitBreaker)
+				drainWorker = signals.NewDrainWorker(redisClient, pgStore, cfg.SignalStore.Redis)
+			}
+		}
+
+		emitter = signals.NewEmitter(cfg.SignalStore, sink)
+		partitionWorker = signals.NewPartitionWorker(db, cfg.SignalStore.Postgres)
+
+		// Create archive worker when archival is enabled and storage is provided.
+		if cfg.SignalStore.Archive.Enabled && archiveStore != nil {
+			archiveWorker = signals.NewArchiveWorker(db, archiveStore, cfg.SignalStore.Archive, cfg.SignalStore.Postgres)
+		}
+	}
+
+	if store == nil {
+		store = signals.NewMemoryStore(cfg.SnapshotConfig())
+	}
+	if cfg.LLM.Enabled() && llmClient == nil {
+		return nil, fmt.Errorf("risk llm client required when mode is %q", cfg.LLM.Mode.Normalized())
+	}
+	if llmClient != nil {
+		llmClient = llm.NewCircuitBreaker(cfg.LLM.CircuitBreaker, llmClient)
+	}
+
+	var (
+		configuredRateLimit = cfg.RateLimit.EffectiveMode()
+		effectiveRateLimit  = ratelimit.ModeMemory
+		rateLimiter         ratelimit.RateLimiterStore
+	)
+	rateLimiter, effectiveRateLimit = newRateLimiterStore(cfg.RateLimit, db, redisClient)
+
+	svc := &Service{
+		basePolicy:      basePolicy,
+		policyProvider:  policyProvider,
+		store:           store,
+		llm:             llmClient,
+		rateLimiter:     rateLimiter,
+		now:             time.Now,
+		stopMaint:       make(chan struct{}),
+		db:              db,
+		emitter:         emitter,
+		partitionWorker: partitionWorker,
+		drainWorker:     drainWorker,
+		archiveWorker:   archiveWorker,
+		captchaVerifier: captcha.NewCaptchaVerifier(cfg.Captcha, nil),
+	}
+	go svc.maintenanceLoop()
+	// Start the signal emitter independently of the full risk engine — signal
+	// collection is useful on its own for auditing and future risk analysis.
+	if emitter != nil {
+		ctx, cancel := context.WithCancel(context.Background())
+		svc.emitterCancel = cancel
+		go emitter.Start(ctx)
+		mode := cfg.SignalStore.EffectiveMode()
+		if instrumentation.IsStreamEnabled(instrumentation.StreamRisk) {
+			logging.Info(ctx, "risk.signal_store.started",
+				slog.Int("channel_size", cfg.SignalStore.ChannelSize),
+				slog.String("mode", string(mode)),
+			)
+		}
+	}
+	if len(basePolicy.Rules) > 0 || policyProvider != nil {
+		logging.Info(context.Background(), "risk.ratelimit.backend_selected",
+			slog.String("configured_mode", string(configuredRateLimit)),
+			slog.String("effective_mode", string(effectiveRateLimit)),
+		)
+	}
+	return svc, nil
+}
+
+// maintenanceLoop runs periodic cleanup for the in-memory store and rate limiter.
+// It prunes expired sessions and rate limit counters every maintenance interval
+// to prevent unbounded memory growth.
+func (s *Service) maintenanceLoop() {
+	const interval = 5 * time.Minute
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.stopMaint:
+			return
+		case <-ticker.C:
+			now := s.now()
+			// Prune expired session entries from the in-memory store.
+			if ms, ok := s.store.(*signals.MemoryStore); ok {
+				ms.PruneSessions(now)
+			}
+			// Prune expired rate limit counters.
+			if s.rateLimiter != nil {
+				s.rateLimiter.Prune(context.Background())
+			}
+		}
+	}
+}
+
+// Close stops the maintenance goroutine and signal emitter. Safe to call
+// multiple times.
+func (s *Service) Close() {
+	if s == nil {
+		return
+	}
+	select {
+	case <-s.stopMaint:
+		// already closed
+	default:
+		close(s.stopMaint)
+	}
+	if s.emitterCancel != nil {
+		s.emitterCancel()
+		<-s.emitter.Done()
+	}
+}
+
+// Emitter returns the signal emitter, or nil when the signal store is not
+// enabled. Middleware uses this to emit fire-and-forget signals.
+func (s *Service) Emitter() *signals.Emitter {
+	if s == nil {
+		return nil
+	}
+	return s.emitter
+}
+
+// newRateLimiterStore creates a rate limiter store based on the configured mode,
+// degrading to memory when the required backend is not available.
+func newRateLimiterStore(cfg ratelimit.Config, db *sql.DB, redisClient *redis.Client) (ratelimit.RateLimiterStore, ratelimit.Mode) {
+	switch cfg.EffectiveMode() {
+	case ratelimit.ModeRedis:
+		if redisClient != nil {
+			return ratelimit.NewRedisRateLimiter(redisClient), ratelimit.ModeRedis
+		}
+		logging.Warn(context.Background(), "risk.ratelimit.redis_unavailable_fallback_memory",
+			slog.String("configured_mode", string(ratelimit.ModeRedis)),
+			slog.String("effective_mode", string(ratelimit.ModeMemory)),
+		)
+		return ratelimit.NewMemoryRateLimiter(), ratelimit.ModeMemory
+	case ratelimit.ModePG:
+		if db != nil {
+			return ratelimit.NewPGRateLimiter(db), ratelimit.ModePG
+		}
+		logging.Warn(context.Background(), "risk.ratelimit.pg_unavailable_fallback_memory",
+			slog.String("configured_mode", string(ratelimit.ModePG)),
+			slog.String("effective_mode", string(ratelimit.ModeMemory)),
+		)
+		return ratelimit.NewMemoryRateLimiter(), ratelimit.ModeMemory
+	default:
+		return ratelimit.NewMemoryRateLimiter(), ratelimit.ModeMemory
+	}
+}
+
+// PartitionWorker returns the partition management worker for registration
+// with the River queue, or nil when the signal store is not enabled.
+func (s *Service) PartitionWorker() *signals.PartitionWorker {
+	if s == nil {
+		return nil
+	}
+	return s.partitionWorker
+}
+
+// DrainWorker returns the Redis drain worker for registration with the River
+// queue, or nil when not using Redis mode.
+func (s *Service) DrainWorker() *signals.DrainWorker {
+	if s == nil {
+		return nil
+	}
+	return s.drainWorker
+}
+
+// ArchiveWorker returns the Parquet archive worker for registration with the
+// River queue, or nil when archival is not enabled.
+func (s *Service) ArchiveWorker() *signals.ArchiveWorker {
+	if s == nil {
+		return nil
+	}
+	return s.archiveWorker
+}
+
+// CaptchaVerifier returns the captcha verifier, or nil when not configured.
+func (s *Service) CaptchaVerifier() captcha.CaptchaVerifier {
+	if s == nil {
+		return nil
+	}
+	return s.captchaVerifier
+}
+
+// VerifyCaptcha verifies a captcha token. Returns true if the captcha is
+// not configured or verification succeeds.
+func (s *Service) VerifyCaptcha(ctx context.Context, token string, remoteIP string) (bool, error) {
+	if s == nil || s.captchaVerifier == nil {
+		return true, nil
+	}
+	return s.captchaVerifier.Verify(ctx, token, remoteIP)
+}
+
+func (s *Service) Evaluate(ctx context.Context, signal signals.Signal) (_ Decision, err error) {
+	if s == nil {
+		return Decision{Allow: true}, nil
+	}
+
+	if signal.Timestamp.IsZero() {
+		signal.Timestamp = s.now().UTC()
+	}
+	if signal.UserID == "" {
+		return Decision{Allow: true}, nil
+	}
+
+	policy, err := s.policy(ctx, signal.InstanceID)
+	if err != nil {
+		return s.failOpenDecision(ctx, signal, s.basePolicy.Config.FailOpen, err)
+	}
+	if !policy.Config.Enabled {
+		return Decision{Allow: true}, nil
+	}
+
+	ctx, span := tracer.NewSpan(ctx, "risk.Evaluate")
+	defer span.EndWithError(err)
+	trace.SpanFromContext(ctx).SetAttributes(
+		attribute.String("risk.user_id", signal.UserID),
+		attribute.String("risk.session_id", signal.SessionID),
+		attribute.String("risk.operation", signal.Operation),
+	)
+
+	start := s.now()
+	snapshot, err := s.store.Snapshot(ctx, signal, policy.Config.SnapshotConfig())
+	if err != nil {
+		return s.failOpenDecision(ctx, signal, policy.Config.FailOpen, err)
+	}
+
+	var findings []Finding
+	if len(policy.Rules) > 0 {
+		// Expression-based rule evaluation.
+		rc := buildRiskContext(signal, snapshot)
+		ruleEngine := NewRuleEngine(policy.Rules, s.rateLimiter, s.llm, policy.Config.LLM)
+		findings = ruleEngine.Evaluate(ctx, rc, snapshot.SessionSignals)
+	} else {
+		// Legacy hardcoded heuristics (backward-compatible fallback).
+		findings = make([]Finding, 0, 2)
+		if s.failureBurst(policy.Config, signal, snapshot) {
+			findings = append(findings, Finding{
+				Name:    "failure_burst",
+				Message: fmt.Sprintf("user reached %d recent failed session checks", policy.Config.FailureBurstThreshold),
+				Block:   true,
+			})
+		}
+		if finding, ok := s.contextDrift(policy.Config, signal, snapshot); ok {
+			findings = append(findings, finding)
+		}
+	}
+
+	// LLM evaluation runs regardless of rule engine — rules with engine=llm
+	// use focused prompts, while this provides the full-context classification.
+	if len(policy.Rules) == 0 {
+		llmFinding, err := s.evaluateLLM(ctx, signal, snapshot, policy.Config)
+		if err != nil {
+			return s.failOpenDecision(ctx, signal, policy.Config.FailOpen, err)
+		}
+		if llmFinding != nil {
+			findings = append(findings, *llmFinding)
+		}
+	}
+
+	decision := Decision{Allow: true, Findings: findings}
+	for _, finding := range findings {
+		if finding.Block || finding.Challenge {
+			decision.Allow = false
+			break
+		}
+	}
+
+	elapsed := s.now().Sub(start)
+	names := make([]string, len(findings))
+	for i, f := range findings {
+		names[i] = f.Name
+	}
+
+	trace.SpanFromContext(ctx).SetAttributes(
+		attribute.Bool("risk.allow", decision.Allow),
+		attribute.String("risk.findings", strings.Join(names, ",")),
+		attribute.Int64("risk.latency_ms", elapsed.Milliseconds()),
+	)
+
+	logging.Info(ctx, "risk.eval.complete",
+		slog.String("risk_user_id", signal.UserID),
+		slog.String("risk_session_id", signal.SessionID),
+		slog.String("risk_operation", signal.Operation),
+		slog.Bool("risk_allow", decision.Allow),
+		slog.String("risk_findings", strings.Join(names, ",")),
+		slog.Int("risk_finding_count", len(findings)),
+		slog.Int64("risk_latency_ms", elapsed.Milliseconds()),
+	)
+
+	return decision, nil
+}
+
+func (s *Service) Record(ctx context.Context, signal signals.Signal, findings []Finding) error {
+	if s == nil {
+		return nil
+	}
+	if signal.Timestamp.IsZero() {
+		signal.Timestamp = s.now().UTC()
+	}
+	policy, err := s.policy(ctx, signal.InstanceID)
+	if err != nil {
+		return err
+	}
+	if !policy.Config.Enabled {
+		return nil
+	}
+	return s.store.Save(ctx, signal, recordedFindings(findings), policy.Config.SnapshotConfig())
+}
+
+func (s *Service) failureBurst(cfg Config, signal signals.Signal, snapshot signals.Snapshot) bool {
+	if signal.Outcome != signals.OutcomeFailure {
+		return false
+	}
+	failures := 0
+	for _, previous := range snapshot.UserSignals {
+		if previous.Outcome == signals.OutcomeFailure {
+			failures++
+		}
+	}
+	return failures+1 >= cfg.FailureBurstThreshold
+}
+
+func (s *Service) contextDrift(cfg Config, signal signals.Signal, snapshot signals.Snapshot) (Finding, bool) {
+	if signal.Outcome != signals.OutcomeSuccess || signal.IP == "" || signal.UserAgent == "" {
+		return Finding{}, false
+	}
+	for i := len(snapshot.UserSignals) - 1; i >= 0; i-- {
+		previous := snapshot.UserSignals[i]
+		if previous.Outcome != signals.OutcomeSuccess {
+			continue
+		}
+		if signal.Timestamp.Sub(previous.Timestamp) > cfg.ContextChangeWindow {
+			break
+		}
+		ipChanged := previous.IP != "" && previous.IP != signal.IP
+		userAgentChanged := previous.UserAgent != "" && !strings.EqualFold(previous.UserAgent, signal.UserAgent)
+		if ipChanged && userAgentChanged {
+			return Finding{
+				Name:    "context_drift",
+				Message: "recent login context changed across IP and user agent",
+				Block:   true,
+			}, true
+		}
+		return Finding{}, false
+	}
+	return Finding{}, false
+}
+
+func (s *Service) evaluateLLM(ctx context.Context, signal signals.Signal, snapshot signals.Snapshot, cfg Config) (_ *Finding, err error) {
+	if s.llm == nil || !cfg.LLM.Enabled() {
+		return nil, nil
+	}
+
+	// If the LLM already evaluated this session (e.g. during create_session) and
+	// we are now processing the follow-up set_session, reuse the cached finding.
+	// This halves round-trips for the normal create→set login pair while keeping
+	// fresh evaluations for every new session.
+	if cached := cachedLLMFinding(snapshot.SessionSignals); cached != nil {
+		level := slog.LevelDebug
+		if cfg.LLM.LogPrompts {
+			level = slog.LevelInfo
+		}
+		logging.Log(ctx, level, "risk.llm.classification_cached",
+			slog.String("risk_user_id", signal.UserID),
+			slog.String("risk_session_id", signal.SessionID),
+			slog.String("llm_classification", cached.Name),
+			slog.String("llm_mode", string(cfg.LLM.Mode.Normalized())),
+		)
+		return cached, nil
+	}
+
+	prompt, err := buildPrompt(signal, snapshot, cfg.LLM.MaxEvents)
+	if err != nil {
+		return nil, err
+	}
+
+	promptLevel := slog.LevelDebug
+	if cfg.LLM.LogPrompts {
+		promptLevel = slog.LevelInfo
+	}
+	logging.Log(ctx, promptLevel, "risk.llm.prompt",
+		slog.String("risk_user_id", signal.UserID),
+		slog.String("risk_session_id", signal.SessionID),
+		slog.String("llm_context", prompt.User),
+	)
+
+	ctx, llmSpan := tracer.NewClientSpan(ctx, "risk.LLM.Classify")
+	defer llmSpan.EndWithError(err)
+
+	llmStart := s.now()
+	classification, err := s.llm.Classify(ctx, prompt)
+	llmElapsed := s.now().Sub(llmStart)
+
+	trace.SpanFromContext(ctx).SetAttributes(
+		attribute.String("risk.llm.model", cfg.LLM.Model),
+		attribute.Int64("risk.llm.latency_ms", llmElapsed.Milliseconds()),
+	)
+
+	if err != nil {
+		if errors.Is(err, llm.ErrCircuitOpen) {
+			logging.Warn(ctx, "risk.llm.circuit_open",
+				slog.String("risk_user_id", signal.UserID),
+				slog.String("risk_session_id", signal.SessionID),
+			)
+			if cfg.LLM.CircuitBreaker != nil && !cfg.LLM.CircuitBreaker.FailOpen {
+				return nil, err
+			}
+			return nil, nil
+		}
+		logging.WithError(ctx, err).Warn("risk.llm.classify_failed",
+			slog.String("risk_user_id", signal.UserID),
+			slog.Int64("llm_latency_ms", llmElapsed.Milliseconds()),
+		)
+		return nil, err
+	}
+
+	level := classification.Normalized()
+	if level == "" {
+		level = "unknown"
+	}
+
+	trace.SpanFromContext(ctx).SetAttributes(
+		attribute.String("risk.llm.classification", level),
+		attribute.Float64("risk.llm.confidence", classification.Confidence),
+	)
+
+	classLevel := slog.LevelDebug
+	if cfg.LLM.LogPrompts {
+		classLevel = slog.LevelInfo
+	}
+	logging.Log(ctx, classLevel, "risk.llm.classified",
+		slog.String("risk_user_id", signal.UserID),
+		slog.String("risk_session_id", signal.SessionID),
+		slog.String("llm_classification", level),
+		slog.Float64("llm_confidence", classification.Confidence),
+		slog.String("llm_reason", classification.Reason),
+		slog.Int64("llm_latency_ms", llmElapsed.Milliseconds()),
+		slog.String("llm_mode", string(cfg.LLM.Mode.Normalized())),
+	)
+
+	finding := &Finding{
+		Name:       fmt.Sprintf("llm_%s_risk", level),
+		Source:     "llm",
+		Message:    classification.Reason,
+		Confidence: classification.Confidence,
+	}
+	if finding.Message == "" {
+		finding.Message = fmt.Sprintf("llm classified the session as %s risk", level)
+	}
+	if cfg.LLM.Mode.Normalized() == llm.LLMModeEnforce && classification.HighRisk() && classification.Confidence >= cfg.LLM.HighRiskConfidence {
+		finding.Block = true
+	}
+	return finding, nil
+}
+
+func (s *Service) policy(ctx context.Context, instanceID string) (Policy, error) {
+	if s == nil || s.policyProvider == nil || instanceID == "" {
+		return s.basePolicy, nil
+	}
+	return s.policyProvider.Policy(ctx, instanceID)
+}
+
+func (s *Service) failOpenDecision(ctx context.Context, signal signals.Signal, failOpen bool, err error) (Decision, error) {
+	if !failOpen {
+		return Decision{}, err
+	}
+	logging.WithError(ctx, err).Warn("risk.eval.failed_fail_open",
+		slog.String("risk_user_id", signal.UserID),
+		slog.String("risk_session_id", signal.SessionID),
+		slog.String("risk_operation", signal.Operation),
+	)
+	return Decision{Allow: true}, nil
+}
+
+// cachedLLMFinding returns a copy of the most recent LLM finding recorded for
+// this session, or nil if no LLM evaluation has been stored yet. This lets the
+// set_session call reuse the result from create_session without a second model
+// round-trip.
+func cachedLLMFinding(sessionSignals []signals.RecordedSignal) *Finding {
+	for i := len(sessionSignals) - 1; i >= 0; i-- {
+		for _, f := range sessionSignals[i].Findings {
+			if f.Source == "llm" {
+				finding := findingFromRecorded(f)
+				return &finding
+			}
+		}
+	}
+	return nil
+}

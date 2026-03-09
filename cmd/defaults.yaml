@@ -1025,9 +1025,11 @@ SystemDefaults:
       VerifyURL: "" # ZITADEL_SYSTEMDEFAULTS_RISK_CAPTCHA_VERIFYURL (defaults to provider-specific URL)
       Timeout: 5s
     # RateLimit configures the backend for rate_limit rules.
-    # "memory" (default) — fast in-process sharded counters, not shared across instances.
+    # "memory" (default) — fast in-process fixed-window counters, not shared across instances.
     # "redis"            — shared via Redis INCR+EXPIRE, requires a Redis connection.
     # "pg"               — shared via UNLOGGED PG table, works without Redis.
+    # If "redis" or "pg" is selected but unavailable at startup, ZITADEL
+    # degrades to "memory" and logs a warning with configured/effective mode.
     RateLimit:
       Mode: memory # ZITADEL_SYSTEMDEFAULTS_RISK_RATELIMIT_MODE
     Rules: # ZITADEL_SYSTEMDEFAULTS_RISK_RULES
@@ -1078,6 +1080,8 @@ SystemDefaults:
         expr: 'DistinctFingerprints >= 3'
         engine: rate_limit
         rate_limit:
+          # The rendered key is treated as the operator-controlled suffix.
+          # ZITADEL prefixes instance, rule ID, and window automatically.
           key: "fp-flood:{{.Current.UserID}}"
           window: 5m
           max: 10
@@ -1085,15 +1089,6 @@ SystemDefaults:
           name: fingerprint_flood
           message: "too many distinct device fingerprints in window"
           block: true
-      - id: always-llm-test
-        description: "Send every session signal to the SLM for classification (testing only)"
-        expr: 'true'
-        engine: llm
-        context_template: "User {{.Current.UserID}} from IP {{.Current.IP}} country={{.Current.Country}} (UA: {{.Current.UserAgent}}, lang: {{.Current.AcceptLanguage}}) performed {{.Current.Operation}} with outcome {{.Current.Outcome}}. Failures: {{.FailureCount}}, distinct IPs: {{.DistinctIPs}}, distinct countries: {{.DistinctCountries}}, IP changed: {{.IPChanged}}, UA changed: {{.UAChanged}}, country changed: {{.CountryChanged}}, language changed: {{.LanguageChanged}}, login velocity: {{printf \"%.1f\" .LoginVelocity}}/hr, proxy hops: {{.ProxyHopCount}}."
-        finding:
-          name: llm_test
-          message: "SLM test classification"
-          block: false
   DomainVerification:
     VerificationGenerator:
       Length: 32 # ZITADEL_SYSTEMDEFAULTS_DOMAINVERIFICATION_VERIFICATIONGENERATOR_LENGTH

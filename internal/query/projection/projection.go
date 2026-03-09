@@ -67,6 +67,8 @@ var (
 	DebugNotificationProviderProjection *handler.Handler
 	KeyProjection                       *handler.Handler
 	SecurityPolicyProjection            *handler.Handler
+	DetectionSettingsProjection         *handler.Handler
+	DetectionRulesProjection            *handler.Handler
 	NotificationPolicyProjection        *handler.Handler
 	NotificationsProjection             interface{}
 	NotificationsQuotaProjection        interface{}
@@ -191,6 +193,8 @@ func Create(ctx context.Context, sqlClient *database.DB, es handler.EventStore, 
 	DebugNotificationProviderProjection = newDebugNotificationProviderProjection(ctx, applyCustomConfig(projectionConfig, config.Customizations["debug_notification_provider"]))
 	KeyProjection = newKeyProjection(ctx, applyCustomConfig(projectionConfig, config.Customizations["keys"]), keyEncryptionAlgorithm, certEncryptionAlgorithm)
 	SecurityPolicyProjection = newSecurityPolicyProjection(ctx, applyCustomConfig(projectionConfig, config.Customizations["security_policies"]))
+	DetectionSettingsProjection = newDetectionSettingsProjection(ctx, applyCustomConfig(projectionConfig, config.Customizations["detection_settings"]))
+	DetectionRulesProjection = newDetectionRulesProjection(ctx, applyCustomConfig(projectionConfig, config.Customizations["detection_rules"]))
 	NotificationPolicyProjection = newNotificationPolicyProjection(ctx, applyCustomConfig(projectionConfig, config.Customizations["notification_policies"]))
 	DeviceAuthProjection = newDeviceAuthProjection(ctx, applyCustomConfig(projectionConfig, config.Customizations["device_auth"]))
 	SessionProjection = newSessionProjection(ctx, applyCustomConfig(projectionConfig, config.Customizations["sessions"]))
@@ -398,6 +402,8 @@ func newProjectionsList() {
 		DebugNotificationProviderProjection,
 		KeyProjection,
 		SecurityPolicyProjection,
+		DetectionSettingsProjection,
+		DetectionRulesProjection,
 		NotificationPolicyProjection,
 		DeviceAuthProjection,
 		SessionProjection,

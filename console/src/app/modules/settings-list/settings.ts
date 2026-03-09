@@ -45,6 +45,25 @@ export const SECRETS: SidenavSetting = {
 export const SECURITY: SidenavSetting = {
   id: 'security',
   i18nKey: 'SETTINGS.LIST.SECURITY',
+  groupI18nKey: 'SETTINGS.GROUPS.SECURITY',
+  requiredRoles: {
+    [PolicyComponentServiceType.ADMIN]: ['iam.policy.read'],
+  },
+};
+
+export const DETECTION: SidenavSetting = {
+  id: 'detection',
+  i18nKey: 'SETTINGS.LIST.DETECTION',
+  groupI18nKey: 'SETTINGS.GROUPS.SECURITY',
+  requiredRoles: {
+    [PolicyComponentServiceType.ADMIN]: ['iam.policy.read'],
+  },
+};
+
+export const DETECTION_RULES: SidenavSetting = {
+  id: 'detection_rules',
+  i18nKey: 'SETTINGS.LIST.DETECTION_RULES',
+  groupI18nKey: 'SETTINGS.GROUPS.SECURITY',
   requiredRoles: {
     [PolicyComponentServiceType.ADMIN]: ['iam.policy.read'],
   },

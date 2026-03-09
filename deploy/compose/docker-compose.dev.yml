@@ -4,7 +4,13 @@
 # Usage (single command via Nx):
 #   pnpm nx run @zitadel/compose:start-ai
 #
+# The base stack uses `start-from-init`, so reruns must start from a clean volume
+# set. The Nx target handles the reset automatically before bringing the stack up.
+#
 # Or manually:
+#   docker compose --env-file .env.dev \
+#     -f docker-compose.yml -f docker-compose.dev.yml \
+#     --profile ai -p zitadel-dev down --volumes --remove-orphans
 #   docker compose --env-file .env.dev \
 #     -f docker-compose.yml -f docker-compose.dev.yml \
 #     --profile ai -p zitadel-dev up --force-recreate --wait

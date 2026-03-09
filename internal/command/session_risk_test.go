@@ -12,16 +12,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/zitadel/zitadel/internal/api/authz"
+	"github.com/zitadel/zitadel/internal/detection"
 	"github.com/zitadel/zitadel/internal/domain"
 	"github.com/zitadel/zitadel/internal/repository/session"
-	"github.com/zitadel/zitadel/internal/risk"
 	"github.com/zitadel/zitadel/internal/zerrors"
 )
 
-// newTestRiskService creates a real risk.Service with deterministic rules only (no LLM).
-func newTestRiskService(t *testing.T) *risk.Service {
+// newTestDetectionService creates a real detection.Service with deterministic rules only (no LLM).
+func newTestDetectionService(t *testing.T) *detection.Service {
 	t.Helper()
-	svc, err := risk.New(risk.Config{
+	svc, err := detection.New(detection.Config{
 		Enabled:               true,
 		FailOpen:              false,
 		FailureBurstThreshold: 5,
@@ -29,7 +29,7 @@ func newTestRiskService(t *testing.T) *risk.Service {
 		ContextChangeWindow:   15 * time.Minute,
 		MaxSignalsPerUser:     50,
 		MaxSignalsPerSession:  20,
-	}, nil, nil, nil, nil, nil)
+	}, nil, nil, nil, nil, nil, nil)
 	require.NoError(t, err)
 	return svc
 }
@@ -58,28 +58,26 @@ func makeSessionChecks(c *Commands, sessionID, fp, ip, ua string, now time.Time)
 }
 
 type fakeRiskEvaluator struct {
-	enabled     bool
 	failOpen    bool
-	decision    risk.Decision
+	decision    detection.Decision
 	evaluateErr error
-	recorded    []risk.Signal
-	findings    [][]risk.Finding
+	recorded    []detection.Signal
+	findings    [][]detection.Finding
 }
 
-func (f *fakeRiskEvaluator) Enabled() bool { return f.enabled }
-
-func (f *fakeRiskEvaluator) FailOpen() bool { return f.failOpen }
-
-func (f *fakeRiskEvaluator) Evaluate(context.Context, risk.Signal) (risk.Decision, error) {
+func (f *fakeRiskEvaluator) Evaluate(context.Context, detection.Signal) (detection.Decision, error) {
 	if f.evaluateErr != nil {
-		return risk.Decision{}, f.evaluateErr
+		if f.failOpen {
+			return detection.Decision{Allow: true}, nil
+		}
+		return detection.Decision{}, f.evaluateErr
 	}
 	return f.decision, nil
 }
 
-func (f *fakeRiskEvaluator) Record(_ context.Context, signal risk.Signal, findings []risk.Finding) error {
+func (f *fakeRiskEvaluator) Record(_ context.Context, signal detection.Signal, findings []detection.Finding) error {
 	f.recorded = append(f.recorded, signal)
-	f.findings = append(f.findings, append([]risk.Finding(nil), findings...))
+	f.findings = append(f.findings, append([]detection.Finding(nil), findings...))
 	return nil
 }
 
@@ -87,7 +85,7 @@ func (f *fakeRiskEvaluator) VerifyCaptcha(context.Context, string, string) (bool
 	return true, nil
 }
 
-func (f *fakeRiskEvaluator) CaptchaVerifier() risk.CaptchaVerifier {
+func (f *fakeRiskEvaluator) CaptchaVerifier() detection.CaptchaVerifier {
 	return nil
 }
 
@@ -95,10 +93,9 @@ func TestCommands_updateSession_blockedByRisk(t *testing.T) {
 	t.Parallel()
 
 	evaluator := &fakeRiskEvaluator{
-		enabled: true,
-		decision: risk.Decision{
+		decision: detection.Decision{
 			Allow:    false,
-			Findings: []risk.Finding{{Name: "context_drift", Block: true}},
+			Findings: []detection.Finding{{Name: "context_drift", Block: true}},
 		},
 	}
 	c := &Commands{eventstore: expectEventstore()(t), riskEvaluator: evaluator}
@@ -122,17 +119,16 @@ func TestCommands_updateSession_blockedByRisk(t *testing.T) {
 	require.ErrorIs(t, err, zerrors.ThrowPermissionDenied(nil, "COMMAND-RISK0", "Errors.PermissionDenied"))
 	assert.Nil(t, got)
 	require.Len(t, evaluator.recorded, 1)
-	assert.Equal(t, risk.OutcomeBlocked, evaluator.recorded[0].Outcome)
+	assert.Equal(t, detection.OutcomeBlocked, evaluator.recorded[0].Outcome)
 }
 
 func TestCommands_updateSession_challengedByRisk(t *testing.T) {
 	t.Parallel()
 
 	evaluator := &fakeRiskEvaluator{
-		enabled: true,
-		decision: risk.Decision{
+		decision: detection.Decision{
 			Allow:    false,
-			Findings: []risk.Finding{{Name: "captcha_required", Challenge: true, ChallengeType: "captcha"}},
+			Findings: []detection.Finding{{Name: "captcha_required", Challenge: true, ChallengeType: "captcha"}},
 		},
 	}
 	c := &Commands{eventstore: expectEventstore()(t), riskEvaluator: evaluator}
@@ -157,13 +153,13 @@ func TestCommands_updateSession_challengedByRisk(t *testing.T) {
 	assert.True(t, zerrors.IsPreconditionFailed(err), "challenge should return PreconditionFailed, got: %v", err)
 	assert.Nil(t, got)
 	require.Len(t, evaluator.recorded, 1)
-	assert.Equal(t, risk.OutcomeChallenged, evaluator.recorded[0].Outcome)
+	assert.Equal(t, detection.OutcomeChallenged, evaluator.recorded[0].Outcome)
 }
 
 func TestCommands_updateSession_riskFailOpen(t *testing.T) {
 	t.Parallel()
 
-	evaluator := &fakeRiskEvaluator{enabled: true, failOpen: true, evaluateErr: errors.New("boom")}
+	evaluator := &fakeRiskEvaluator{failOpen: true, evaluateErr: errors.New("boom")}
 	testNow := time.Now().UTC()
 	c := &Commands{
 		eventstore: expectEventstore(
@@ -203,17 +199,16 @@ func TestCommands_updateSession_riskFailOpen(t *testing.T) {
 	require.NotNil(t, got)
 	assert.Equal(t, "token", got.NewToken)
 	require.Len(t, evaluator.recorded, 1)
-	assert.Equal(t, risk.OutcomeSuccess, evaluator.recorded[0].Outcome)
+	assert.Equal(t, detection.OutcomeSuccess, evaluator.recorded[0].Outcome)
 }
 
 func TestCommands_updateSession_recordsRiskFindingsOnSuccess(t *testing.T) {
 	t.Parallel()
 
 	evaluator := &fakeRiskEvaluator{
-		enabled: true,
-		decision: risk.Decision{
+		decision: detection.Decision{
 			Allow:    true,
-			Findings: []risk.Finding{{Name: "llm_high_risk", Source: "llm", Message: "model observed a risky pattern"}},
+			Findings: []detection.Finding{{Name: "llm_high_risk", Source: "llm", Message: "model observed a risky pattern"}},
 		},
 	}
 	testNow := time.Now().UTC()
@@ -261,12 +256,12 @@ func TestCommands_updateSession_recordsRiskFindingsOnSuccess(t *testing.T) {
 
 // TestCommands_updateSession_threeSessionsSameContextAllowed verifies that three
 // consecutive create_session calls from the same user with identical IP and
-// user-agent are all allowed. The real risk.Service is injected to exercise the
+// user-agent are all allowed. The real detection.Service is injected to exercise the
 // deterministic rules (contextDrift, failureBurst) end-to-end.
 func TestCommands_updateSession_threeSessionsSameContextAllowed(t *testing.T) {
 	t.Parallel()
 
-	riskSvc := newTestRiskService(t)
+	detectionSvc := newTestDetectionService(t)
 	base := time.Now().UTC()
 	ua := &domain.UserAgent{FingerprintID: gu.Ptr("fp1"), IP: net.ParseIP("1.2.3.4"), Description: gu.Ptr("chrome")}
 
@@ -289,7 +284,7 @@ func TestCommands_updateSession_threeSessionsSameContextAllowed(t *testing.T) {
 
 	c := &Commands{
 		eventstore:    expectEventstore(expects...)(t),
-		riskEvaluator: riskSvc,
+		riskEvaluator: detectionSvc,
 	}
 	ctx := authz.NewMockContext("instance1", "", "")
 
@@ -304,7 +299,7 @@ func TestCommands_updateSession_threeSessionsSameContextAllowed(t *testing.T) {
 		assert.Equalf(t, "token-"+s.id, got.NewToken, "session %d should have a token", i+1)
 
 		// Record the successful signal so subsequent sessions see the history.
-		require.NoError(t, riskSvc.Record(ctx, checks.riskSignal(ctx, "", risk.OutcomeSuccess), nil))
+		require.NoError(t, detectionSvc.Record(ctx, checks.riskSignal(ctx, "", detection.OutcomeSuccess), nil))
 	}
 }
 
@@ -318,7 +313,7 @@ func TestCommands_updateSession_threeSessionsSameContextAllowed(t *testing.T) {
 func TestCommands_updateSession_contextDriftBlocksThirdSession(t *testing.T) {
 	t.Parallel()
 
-	riskSvc := newTestRiskService(t)
+	detectionSvc := newTestDetectionService(t)
 	base := time.Now().UTC()
 	uaChrome := &domain.UserAgent{FingerprintID: gu.Ptr("fp1"), IP: net.ParseIP("1.2.3.4"), Description: gu.Ptr("chrome")}
 
@@ -334,7 +329,7 @@ func TestCommands_updateSession_contextDriftBlocksThirdSession(t *testing.T) {
 	// Session 3 is blocked before any Push — no extra expectation needed.
 	c := &Commands{
 		eventstore:    expectEventstore(expects...)(t),
-		riskEvaluator: riskSvc,
+		riskEvaluator: detectionSvc,
 	}
 	ctx := authz.NewMockContext("instance1", "", "")
 
@@ -347,7 +342,7 @@ func TestCommands_updateSession_contextDriftBlocksThirdSession(t *testing.T) {
 		require.NoErrorf(t, err, "session %d should be allowed", i+1)
 		require.NotNil(t, got)
 
-		require.NoError(t, riskSvc.Record(ctx, checks.riskSignal(ctx, "", risk.OutcomeSuccess), nil))
+		require.NoError(t, detectionSvc.Record(ctx, checks.riskSignal(ctx, "", detection.OutcomeSuccess), nil))
 	}
 
 	// Session 3: different IP and user-agent → contextDrift must block.

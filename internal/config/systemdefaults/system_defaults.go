@@ -70,12 +70,12 @@ type RiskConfig struct {
 	RateLimit             RiskRateLimitConfig
 }
 
-// RiskRateLimitConfig mirrors risk.RateLimitConfig for YAML configuration.
+// RiskRateLimitConfig mirrors internal/detection + internal/ratelimit config for YAML configuration.
 type RiskRateLimitConfig struct {
 	Mode string
 }
 
-// RiskSignalStoreConfig mirrors risk.SignalStoreConfig for YAML configuration.
+// RiskSignalStoreConfig mirrors internal/signals signal-store config for YAML configuration.
 type RiskSignalStoreConfig struct {
 	Enabled     bool
 	Mode        string
@@ -110,27 +110,27 @@ type RiskSignalStoreConfig struct {
 	}
 }
 
-// RiskRuleConfig mirrors risk.Rule for YAML configuration.
+// RiskRuleConfig mirrors internal/detection rule config for YAML configuration.
 type RiskRuleConfig struct {
-	ID              string              `yaml:"id"`
-	Description     string              `yaml:"description"`
-	Expr            string              `yaml:"expr"`
-	Engine          string              `yaml:"engine"`
-	Finding         RiskRuleFindingConfig `yaml:"finding"`
-	ContextTemplate string              `yaml:"context_template"`
-	RateLimit       RiskRuleRateLimitConfig `yaml:"rate_limit"`
+	ID              string                  `yaml:"id" mapstructure:"id"`
+	Description     string                  `yaml:"description" mapstructure:"description"`
+	Expr            string                  `yaml:"expr" mapstructure:"expr"`
+	Engine          string                  `yaml:"engine" mapstructure:"engine"`
+	Finding         RiskRuleFindingConfig   `yaml:"finding" mapstructure:"finding"`
+	ContextTemplate string                  `yaml:"context_template" mapstructure:"context_template"`
+	RateLimit       RiskRuleRateLimitConfig `yaml:"rate_limit" mapstructure:"rate_limit"`
 }
 
 type RiskRuleFindingConfig struct {
-	Name    string `yaml:"name"`
-	Message string `yaml:"message"`
-	Block   bool   `yaml:"block"`
+	Name    string `yaml:"name" mapstructure:"name"`
+	Message string `yaml:"message" mapstructure:"message"`
+	Block   bool   `yaml:"block" mapstructure:"block"`
 }
 
 type RiskRuleRateLimitConfig struct {
-	Key    string        `yaml:"key"`
-	Window time.Duration `yaml:"window"`
-	Max    int           `yaml:"max"`
+	Key    string        `yaml:"key" mapstructure:"key"`
+	Window time.Duration `yaml:"window" mapstructure:"window"`
+	Max    int           `yaml:"max" mapstructure:"max"`
 }
 
 type RiskLLMConfig struct {
@@ -158,7 +158,7 @@ type RiskCBConfig struct {
 	FailOpen               bool
 }
 
-// RiskCaptchaConfig mirrors risk.CaptchaConfig for YAML configuration.
+// RiskCaptchaConfig mirrors internal/captcha provider config for YAML configuration.
 type RiskCaptchaConfig struct {
 	Enabled   bool
 	Provider  string

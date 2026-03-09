@@ -11,11 +11,12 @@ import (
 	"github.com/zitadel/logging"
 	"golang.org/x/text/language"
 
+	risklog "github.com/zitadel/zitadel/backend/v3/instrumentation/logging"
 	"github.com/zitadel/zitadel/internal/activity"
 	"github.com/zitadel/zitadel/internal/api/authz"
 	http_util "github.com/zitadel/zitadel/internal/api/http"
-	risklog "github.com/zitadel/zitadel/backend/v3/instrumentation/logging"
 	"github.com/zitadel/zitadel/internal/crypto"
+	"github.com/zitadel/zitadel/internal/detection"
 	"github.com/zitadel/zitadel/internal/domain"
 	"github.com/zitadel/zitadel/internal/eventstore"
 	"github.com/zitadel/zitadel/internal/id"
@@ -23,7 +24,7 @@ import (
 	"github.com/zitadel/zitadel/internal/repository/idpintent"
 	"github.com/zitadel/zitadel/internal/repository/session"
 	"github.com/zitadel/zitadel/internal/repository/user"
-	"github.com/zitadel/zitadel/internal/risk"
+	"github.com/zitadel/zitadel/internal/signals"
 	"github.com/zitadel/zitadel/internal/zerrors"
 )
 
@@ -55,8 +56,8 @@ type SessionCommands struct {
 	tarpit               func(failedAttempts uint64)
 	currentUserAgent     *domain.UserAgent
 	operation            string
-	riskFindings         []risk.Finding
-	cachedRiskSignal     *risk.Signal // lazily built, reused across enforce + record
+	riskFindings         []detection.Finding
+	cachedRiskSignal     *detection.Signal // lazily built, reused across enforce + record
 }
 
 func (c *Commands) NewSessionCommands(cmds []SessionCommand, session *SessionWriteModel, userAgent *domain.UserAgent, operation string) *SessionCommands {
@@ -395,7 +396,7 @@ func (c *Commands) updateSession(ctx context.Context, checks *SessionCommands, m
 			_, pushErr := c.eventstore.Push(ctx, cmds...)
 			logging.OnError(pushErr).Error("unable to store check failures")
 		}
-		c.recordSessionRisk(ctx, checks, risk.OutcomeFailure, nil)
+		c.recordSessionRisk(ctx, checks, detection.OutcomeFailure, nil)
 		return nil, err
 	}
 	checks.ChangeMetadata(ctx, metadata)
@@ -421,32 +422,24 @@ func (c *Commands) updateSession(ctx context.Context, checks *SessionCommands, m
 	if err != nil {
 		return nil, err
 	}
-	c.recordSessionRisk(ctx, checks, risk.OutcomeSuccess, checks.riskFindings)
+	c.recordSessionRisk(ctx, checks, detection.OutcomeSuccess, checks.riskFindings)
 	changed := sessionWriteModelToSessionChanged(checks.sessionWriteModel)
 	changed.NewToken = sessionToken
 	return changed, nil
 }
 
 func (c *Commands) enforceSessionRisk(ctx context.Context, checks *SessionCommands) error {
-	if c.riskEvaluator == nil || !c.riskEvaluator.Enabled() {
+	if c.riskEvaluator == nil {
 		return nil
 	}
 	ctx = risklog.NewCtx(ctx, risklog.StreamRisk)
-	signal := checks.riskSignal(ctx, c.riskGeoHeader, risk.OutcomeSuccess)
+	signal := checks.riskSignal(ctx, c.riskGeoHeader, detection.OutcomeSuccess)
 	decision, err := c.riskEvaluator.Evaluate(ctx, signal)
 	if err != nil {
 		checks.riskFindings = nil
-		if c.riskEvaluator.FailOpen() {
-			risklog.WithError(ctx, err).Warn("risk.eval.failed_fail_open",
-				slog.String("risk_user_id", signal.UserID),
-				slog.String("risk_session_id", signal.SessionID),
-				slog.String("risk_operation", signal.Operation),
-			)
-			return nil
-		}
 		return err
 	}
-	checks.riskFindings = append([]risk.Finding(nil), decision.Findings...)
+	checks.riskFindings = append([]detection.Finding(nil), decision.Findings...)
 	if decision.Allow {
 		return nil
 	}
@@ -454,7 +447,7 @@ func (c *Commands) enforceSessionRisk(ctx context.Context, checks *SessionComman
 	// Challenge findings require a captcha response — return a specific
 	// error code so the client can present the challenge widget.
 	if decision.HasChallenge() && !decision.HasBlockingFindings() {
-		c.recordSessionRisk(ctx, checks, risk.OutcomeChallenged, decision.Findings)
+		c.recordSessionRisk(ctx, checks, detection.OutcomeChallenged, decision.Findings)
 		risklog.Info(ctx, "risk.eval.challenge_required",
 			slog.String("risk_user_id", signal.UserID),
 			slog.String("risk_session_id", signal.SessionID),
@@ -465,7 +458,7 @@ func (c *Commands) enforceSessionRisk(ctx context.Context, checks *SessionComman
 		return zerrors.ThrowPreconditionFailed(nil, "COMMAND-RISK1", "Errors.Risk.ChallengeRequired")
 	}
 
-	c.recordSessionRisk(ctx, checks, risk.OutcomeBlocked, decision.Findings)
+	c.recordSessionRisk(ctx, checks, detection.OutcomeBlocked, decision.Findings)
 	risklog.Warn(ctx, "risk.eval.blocked",
 		slog.String("risk_user_id", signal.UserID),
 		slog.String("risk_session_id", signal.SessionID),
@@ -475,13 +468,13 @@ func (c *Commands) enforceSessionRisk(ctx context.Context, checks *SessionComman
 	return zerrors.ThrowPermissionDenied(nil, "COMMAND-RISK0", "Errors.PermissionDenied")
 }
 
-func (c *Commands) recordSessionRisk(ctx context.Context, checks *SessionCommands, outcome risk.Outcome, findings []risk.Finding) {
-	if c.riskEvaluator == nil || !c.riskEvaluator.Enabled() {
+func (c *Commands) recordSessionRisk(ctx context.Context, checks *SessionCommands, outcome detection.Outcome, findings []detection.Finding) {
+	if c.riskEvaluator == nil {
 		return
 	}
 	ctx = risklog.NewCtx(ctx, risklog.StreamRisk)
 	signal := checks.riskSignal(ctx, c.riskGeoHeader, outcome)
-	signal.Stream = risk.StreamAuth
+	signal.Stream = detection.StreamAuth
 	signal.CallerID = authz.GetCtxData(ctx).UserID
 	if err := c.riskEvaluator.Record(ctx, signal, findings); err != nil {
 		risklog.WithError(ctx, err).Warn("risk.record.failed",
@@ -496,7 +489,7 @@ func (c *Commands) recordSessionRisk(ctx context.Context, checks *SessionCommand
 // outcome. The base signal (everything except outcome) is built once and cached
 // so that enforceSessionRisk + recordSessionRisk don't duplicate HTTP header
 // extraction and UserAgent parsing.
-func (s *SessionCommands) riskSignal(ctx context.Context, geoCountryHeader string, outcome risk.Outcome) risk.Signal {
+func (s *SessionCommands) riskSignal(ctx context.Context, geoCountryHeader string, outcome detection.Outcome) detection.Signal {
 	if s.cachedRiskSignal == nil {
 		sig := s.buildRiskSignal(ctx, geoCountryHeader)
 		s.cachedRiskSignal = &sig
@@ -514,8 +507,8 @@ func (s *SessionCommands) riskSignal(ctx context.Context, geoCountryHeader strin
 
 // buildRiskSignal constructs the base signal (without outcome/timestamp) from
 // session state and HTTP context. Called once per session check.
-func (s *SessionCommands) buildRiskSignal(ctx context.Context, geoCountryHeader string) risk.Signal {
-	signal := risk.Signal{
+func (s *SessionCommands) buildRiskSignal(ctx context.Context, geoCountryHeader string) detection.Signal {
+	signal := detection.Signal{
 		InstanceID: s.sessionWriteModel.aggregate.InstanceID,
 		UserID:     s.sessionWriteModel.UserID,
 		SessionID:  s.sessionWriteModel.AggregateID,
@@ -533,13 +526,13 @@ func (s *SessionCommands) buildRiskSignal(ctx context.Context, geoCountryHeader 
 		}
 		// Extract HTTP-derived context from UserAgent.Header (set by the client).
 		if userAgent.Header != nil {
-			httpCtx := risk.ExtractHTTPContext(userAgent.Header, geoCountryHeader)
+			httpCtx := signals.ExtractHTTPContext(userAgent.Header, geoCountryHeader)
 			httpCtx.ApplyTo(&signal)
 		}
 	}
 	// Fallback: extract from gRPC gateway headers if not set by the client.
 	if ctxHeaders, ok := http_util.HeadersFromCtx(ctx); ok {
-		httpCtx := risk.ExtractHTTPContext(ctxHeaders, geoCountryHeader)
+		httpCtx := signals.ExtractHTTPContext(ctxHeaders, geoCountryHeader)
 		httpCtx.ApplyTo(&signal)
 	}
 	// IP fallback from context if not set by UserAgent.
@@ -556,7 +549,7 @@ func (s *SessionCommands) effectiveUserAgent() *domain.UserAgent {
 	return s.sessionWriteModel.UserAgent
 }
 
-func riskFindingNames(findings []risk.Finding) []string {
+func riskFindingNames(findings []detection.Finding) []string {
 	names := make([]string, 0, len(findings))
 	for _, finding := range findings {
 		names = append(names, finding.Name)

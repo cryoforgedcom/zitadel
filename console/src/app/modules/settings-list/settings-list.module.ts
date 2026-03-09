@@ -34,6 +34,8 @@ import ActionsTwoModule from '../actions-two/actions-two.module';
 import { provideRouter } from '@angular/router';
 import { OidcWebkeysModule } from '../policies/oidc-webkeys/oidc-webkeys.module';
 import { NotificationSMTPProviderComponent } from '../policies/notification-smtp-provider/notification-smtp-provider.component';
+import { DetectionSettingsComponent } from '../policies/detection-settings/detection-settings.component';
+import { DetectionRulesComponent } from '../policies/detection-rules/detection-rules.component';
 
 @NgModule({
   declarations: [SettingsListComponent],
@@ -52,6 +54,8 @@ import { NotificationSMTPProviderComponent } from '../policies/notification-smtp
     NotificationPolicyModule,
     IdpSettingsModule,
     NotificationSMTPProviderComponent,
+    DetectionSettingsComponent,
+    DetectionRulesComponent,
     PrivacyPolicyModule,
     MessageTextsPolicyModule,
     SecurityPolicyModule,
