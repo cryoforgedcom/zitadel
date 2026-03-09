@@ -19,7 +19,7 @@ func (p *relationalTablesProjection) reduceSessionAdded(event eventstore.Event) 
 		return nil, err
 	}
 
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-iZGH3", "reduce.wrong.db.pool %T", ex)
@@ -53,7 +53,7 @@ func (p *relationalTablesProjection) reduceSessionUserChecked(event eventstore.E
 	if err != nil {
 		return nil, err
 	}
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-UHE92", "reduce.wrong.db.pool %T", ex)
@@ -78,7 +78,7 @@ func (p *relationalTablesProjection) reduceSessionPasswordChecked(event eventsto
 	if err != nil {
 		return nil, err
 	}
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-3krfa", "reduce.wrong.db.pool %T", ex)
@@ -103,7 +103,7 @@ func (p *relationalTablesProjection) reduceSessionIntentChecked(event eventstore
 		return nil, err
 	}
 
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-ajkd2", "reduce.wrong.db.pool %T", ex)
@@ -127,7 +127,7 @@ func (p *relationalTablesProjection) reduceSessionWebAuthNChallenged(event event
 	if err != nil {
 		return nil, err
 	}
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-do35d", "reduce.wrong.db.pool %T", ex)
@@ -154,7 +154,7 @@ func (p *relationalTablesProjection) reduceSessionWebAuthNChecked(event eventsto
 	if err != nil {
 		return nil, err
 	}
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-djk22", "reduce.wrong.db.pool %T", ex)
@@ -180,7 +180,7 @@ func (p *relationalTablesProjection) reduceSessionTOTPChecked(event eventstore.E
 		return nil, err
 	}
 
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-cklr9", "reduce.wrong.db.pool %T", ex)
@@ -205,7 +205,7 @@ func (p *relationalTablesProjection) reduceSessionOTPSMSChallenged(event eventst
 		return nil, err
 	}
 
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-fk4f9", "reduce.wrong.db.pool %T", ex)
@@ -235,7 +235,7 @@ func (p *relationalTablesProjection) reduceSessionOTPSMSChecked(event eventstore
 		return nil, err
 	}
 
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-dk39f", "reduce.wrong.db.pool %T", ex)
@@ -260,7 +260,7 @@ func (p *relationalTablesProjection) reduceSessionOTPEmailChallenged(event event
 		return nil, err
 	}
 
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-fkf93", "reduce.wrong.db.pool %T", ex)
@@ -290,7 +290,7 @@ func (p *relationalTablesProjection) reduceSessionOTPEmailChecked(event eventsto
 		return nil, err
 	}
 
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-3kll0", "reduce.wrong.db.pool %T", ex)
@@ -315,7 +315,7 @@ func (p *relationalTablesProjection) reduceSessionRecoveryCodeChecked(event even
 		return nil, err
 	}
 
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-fk45a", "reduce.wrong.db.pool %T", ex)
@@ -340,7 +340,7 @@ func (p *relationalTablesProjection) reduceSessionTokenSet(event eventstore.Even
 		return nil, err
 	}
 
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-asddt", "reduce.wrong.db.pool %T", ex)
@@ -373,7 +373,7 @@ func (p *relationalTablesProjection) reduceSessionMetadataSet(event eventstore.E
 		})
 	}
 
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-iZGH3", "reduce.wrong.db.pool %T", ex)
@@ -396,7 +396,7 @@ func (p *relationalTablesProjection) reduceSessionLifetimeSet(event eventstore.E
 		return nil, err
 	}
 
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-iZGH3", "reduce.wrong.db.pool %T", ex)
@@ -419,7 +419,7 @@ func (p *relationalTablesProjection) reduceSessionTerminated(event eventstore.Ev
 		return nil, err
 	}
 
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-iZGH3", "reduce.wrong.db.pool %T", ex)
