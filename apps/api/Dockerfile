@@ -23,11 +23,12 @@ ENV PATH="/app:${PATH}"
 USER zitadel
 ENTRYPOINT ["/app/entrypoint.sh"]
 
-# Final stage: Creates a minimal container image with just the Zitadel binary and necessary files
-FROM scratch AS final
+# Final stage: minimal debian image to support CGO-linked binary (DuckDB requires libc)
+FROM debian:stable-slim AS final
+
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /etc/passwd /etc/passwd
-COPY --from=builder /etc/ssl/certs /etc/ssl/certs
 COPY --from=builder /app/zitadel /app/zitadel
 
 HEALTHCHECK NONE
