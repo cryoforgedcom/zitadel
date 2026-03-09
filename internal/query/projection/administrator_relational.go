@@ -16,55 +16,7 @@ import (
 	"github.com/zitadel/zitadel/internal/zerrors"
 )
 
-const AdministratorRelationalProjectionTable = "zitadel.administrators"
-
-type administratorRelationalProjection struct{}
-
-func newAdministratorRelationalProjection(ctx context.Context, config handler.Config) *handler.Handler {
-	return handler.NewHandler(ctx, &config, new(administratorRelationalProjection))
-}
-
-func (*administratorRelationalProjection) Name() string {
-	return AdministratorRelationalProjectionTable
-}
-
-func (p *administratorRelationalProjection) Reducers() []handler.AggregateReducer {
-	return []handler.AggregateReducer{
-		{
-			Aggregate: instance.AggregateType,
-			EventReducers: []handler.EventReducer{
-				{Event: instance.MemberAddedEventType, Reduce: p.reduceInstanceAdminAdded},
-				{Event: instance.MemberChangedEventType, Reduce: p.reduceInstanceAdminChanged},
-				{Event: instance.MemberRemovedEventType, Reduce: p.reduceInstanceAdminRemoved},
-				{Event: instance.MemberCascadeRemovedEventType, Reduce: p.reduceInstanceAdminRemoved},
-			},
-		},
-		{
-			Aggregate: org.AggregateType,
-			EventReducers: []handler.EventReducer{
-				{Event: org.MemberAddedEventType, Reduce: p.reduceOrganizationAdminAdded},
-				{Event: org.MemberChangedEventType, Reduce: p.reduceOrganizationAdminChanged},
-				{Event: org.MemberRemovedEventType, Reduce: p.reduceOrganizationAdminRemoved},
-				{Event: org.MemberCascadeRemovedEventType, Reduce: p.reduceOrganizationAdminRemoved},
-			},
-		},
-		{
-			Aggregate: project.AggregateType,
-			EventReducers: []handler.EventReducer{
-				{Event: project.MemberAddedEventType, Reduce: p.reduceProjectAdminAdded},
-				{Event: project.MemberChangedEventType, Reduce: p.reduceProjectAdminChanged},
-				{Event: project.MemberRemovedEventType, Reduce: p.reduceProjectAdminRemoved},
-				{Event: project.MemberCascadeRemovedEventType, Reduce: p.reduceProjectAdminRemoved},
-				{Event: project.GrantMemberAddedType, Reduce: p.reduceProjectGrantAdminAdded},
-				{Event: project.GrantMemberChangedType, Reduce: p.reduceProjectGrantAdminChanged},
-				{Event: project.GrantMemberRemovedType, Reduce: p.reduceProjectGrantAdminRemoved},
-				{Event: project.GrantMemberCascadeRemovedType, Reduce: p.reduceProjectGrantAdminRemoved},
-			},
-		},
-	}
-}
-
-func (p *administratorRelationalProjection) reduceInstanceAdminAdded(event eventstore.Event) (*handler.Statement, error) {
+func (p *relationalTablesProjection) reduceInstanceAdminAdded(event eventstore.Event) (*handler.Statement, error) {
 	e, err := assertEvent[*instance.MemberAddedEvent](event)
 	if err != nil {
 		return nil, err
@@ -79,7 +31,7 @@ func (p *administratorRelationalProjection) reduceInstanceAdminAdded(event event
 	})
 }
 
-func (p *administratorRelationalProjection) reduceInstanceAdminChanged(event eventstore.Event) (*handler.Statement, error) {
+func (p *relationalTablesProjection) reduceInstanceAdminChanged(event eventstore.Event) (*handler.Statement, error) {
 	e, err := assertEvent[*instance.MemberChangedEvent](event)
 	if err != nil {
 		return nil, err
@@ -94,7 +46,7 @@ func (p *administratorRelationalProjection) reduceInstanceAdminChanged(event eve
 	)
 }
 
-func (p *administratorRelationalProjection) reduceInstanceAdminRemoved(event eventstore.Event) (*handler.Statement, error) {
+func (p *relationalTablesProjection) reduceInstanceAdminRemoved(event eventstore.Event) (*handler.Statement, error) {
 	switch e := event.(type) {
 	case *instance.MemberRemovedEvent:
 		return p.removeAdministratorStatement(e,
@@ -115,7 +67,7 @@ func (p *administratorRelationalProjection) reduceInstanceAdminRemoved(event eve
 	}
 }
 
-func (p *administratorRelationalProjection) reduceOrganizationAdminAdded(event eventstore.Event) (*handler.Statement, error) {
+func (p *relationalTablesProjection) reduceOrganizationAdminAdded(event eventstore.Event) (*handler.Statement, error) {
 	e, err := assertEvent[*org.MemberAddedEvent](event)
 	if err != nil {
 		return nil, err
@@ -131,7 +83,7 @@ func (p *administratorRelationalProjection) reduceOrganizationAdminAdded(event e
 	})
 }
 
-func (p *administratorRelationalProjection) reduceOrganizationAdminChanged(event eventstore.Event) (*handler.Statement, error) {
+func (p *relationalTablesProjection) reduceOrganizationAdminChanged(event eventstore.Event) (*handler.Statement, error) {
 	e, err := assertEvent[*org.MemberChangedEvent](event)
 	if err != nil {
 		return nil, err
@@ -146,7 +98,7 @@ func (p *administratorRelationalProjection) reduceOrganizationAdminChanged(event
 	)
 }
 
-func (p *administratorRelationalProjection) reduceOrganizationAdminRemoved(event eventstore.Event) (*handler.Statement, error) {
+func (p *relationalTablesProjection) reduceOrganizationAdminRemoved(event eventstore.Event) (*handler.Statement, error) {
 	switch e := event.(type) {
 	case *org.MemberRemovedEvent:
 		return p.removeAdministratorStatement(e,
@@ -167,7 +119,7 @@ func (p *administratorRelationalProjection) reduceOrganizationAdminRemoved(event
 	}
 }
 
-func (p *administratorRelationalProjection) reduceProjectAdminAdded(event eventstore.Event) (*handler.Statement, error) {
+func (p *relationalTablesProjection) reduceProjectAdminAdded(event eventstore.Event) (*handler.Statement, error) {
 	e, err := assertEvent[*project.MemberAddedEvent](event)
 	if err != nil {
 		return nil, err
@@ -183,7 +135,7 @@ func (p *administratorRelationalProjection) reduceProjectAdminAdded(event events
 	})
 }
 
-func (p *administratorRelationalProjection) reduceProjectAdminChanged(event eventstore.Event) (*handler.Statement, error) {
+func (p *relationalTablesProjection) reduceProjectAdminChanged(event eventstore.Event) (*handler.Statement, error) {
 	e, err := assertEvent[*project.MemberChangedEvent](event)
 	if err != nil {
 		return nil, err
@@ -198,7 +150,7 @@ func (p *administratorRelationalProjection) reduceProjectAdminChanged(event even
 	)
 }
 
-func (p *administratorRelationalProjection) reduceProjectAdminRemoved(event eventstore.Event) (*handler.Statement, error) {
+func (p *relationalTablesProjection) reduceProjectAdminRemoved(event eventstore.Event) (*handler.Statement, error) {
 	switch e := event.(type) {
 	case *project.MemberRemovedEvent:
 		return p.removeAdministratorStatement(e,
@@ -219,7 +171,7 @@ func (p *administratorRelationalProjection) reduceProjectAdminRemoved(event even
 	}
 }
 
-func (p *administratorRelationalProjection) reduceProjectGrantAdminAdded(event eventstore.Event) (*handler.Statement, error) {
+func (p *relationalTablesProjection) reduceProjectGrantAdminAdded(event eventstore.Event) (*handler.Statement, error) {
 	e, err := assertEvent[*project.GrantMemberAddedEvent](event)
 	if err != nil {
 		return nil, err
@@ -235,7 +187,7 @@ func (p *administratorRelationalProjection) reduceProjectGrantAdminAdded(event e
 	})
 }
 
-func (p *administratorRelationalProjection) reduceProjectGrantAdminChanged(event eventstore.Event) (*handler.Statement, error) {
+func (p *relationalTablesProjection) reduceProjectGrantAdminChanged(event eventstore.Event) (*handler.Statement, error) {
 	e, err := assertEvent[*project.GrantMemberChangedEvent](event)
 	if err != nil {
 		return nil, err
@@ -250,7 +202,7 @@ func (p *administratorRelationalProjection) reduceProjectGrantAdminChanged(event
 	)
 }
 
-func (p *administratorRelationalProjection) reduceProjectGrantAdminRemoved(event eventstore.Event) (*handler.Statement, error) {
+func (p *relationalTablesProjection) reduceProjectGrantAdminRemoved(event eventstore.Event) (*handler.Statement, error) {
 	switch e := event.(type) {
 	case *project.GrantMemberRemovedEvent:
 		return p.removeAdministratorStatement(e,
@@ -271,7 +223,7 @@ func (p *administratorRelationalProjection) reduceProjectGrantAdminRemoved(event
 	}
 }
 
-func (p *administratorRelationalProjection) createAdministratorStatement(event eventstore.Event, administrator *domain.Administrator) (*handler.Statement, error) {
+func (p *relationalTablesProjection) createAdministratorStatement(event eventstore.Event, administrator *domain.Administrator) (*handler.Statement, error) {
 	return handler.NewStatement(event, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
@@ -281,7 +233,7 @@ func (p *administratorRelationalProjection) createAdministratorStatement(event e
 	}), nil
 }
 
-func (p *administratorRelationalProjection) updateAdministratorStatement(event eventstore.Event, condition database.Condition, changes ...database.Change) (*handler.Statement, error) {
+func (p *relationalTablesProjection) updateAdministratorStatement(event eventstore.Event, condition database.Condition, changes ...database.Change) (*handler.Statement, error) {
 	return handler.NewStatement(event, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
@@ -293,7 +245,7 @@ func (p *administratorRelationalProjection) updateAdministratorStatement(event e
 	}), nil
 }
 
-func (p *administratorRelationalProjection) removeAdministratorStatement(event eventstore.Event, condition database.Condition) (*handler.Statement, error) {
+func (p *relationalTablesProjection) removeAdministratorStatement(event eventstore.Event, condition database.Condition) (*handler.Statement, error) {
 	return handler.NewStatement(event, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
