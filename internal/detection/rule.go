@@ -33,6 +33,16 @@ type Rule struct {
 	Expr        string     `yaml:"expr"`
 	Engine      EngineType `yaml:"engine"`
 
+	// Priority controls evaluation order. Lower values run first.
+	// Rules with the same priority preserve their insertion order.
+	Priority int `yaml:"priority"`
+
+	// StopOnMatch causes the rule engine to skip all remaining rules
+	// when this rule's expression matches. This provides implicit
+	// IF/ELSE flow control: a high-priority whitelist rule with
+	// StopOnMatch bypasses all subsequent checks.
+	StopOnMatch bool `yaml:"stop_on_match"`
+
 	// Finding configures the output finding when the rule matches.
 	// Only Name and Block are used for the "block" engine; other engines
 	// may override Block based on their own logic.

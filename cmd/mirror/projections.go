@@ -218,6 +218,7 @@ func projections(
 		config.Login.DefaultPaths,
 		[]denylist.AddressChecker{},
 		nil,
+		"",
 	)
 	logging.OnError(ctx, err).Fatal("unable to start commands")
 

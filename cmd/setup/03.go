@@ -99,6 +99,7 @@ func (mig *FirstInstance) Execute(ctx context.Context, _ eventstore.Event) error
 		mig.defaultPaths,
 		[]denylist.AddressChecker{},
 		nil,
+		"",
 	)
 	if err != nil {
 		return err

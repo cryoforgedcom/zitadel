@@ -40,6 +40,8 @@ message DetectionRule {
   DetectionRuleFinding finding = 7;
   string context_template = 8;
   DetectionRuleRateLimit rate_limit = 9;
+  int32 priority = 10;
+  bool stop_on_match = 11;
 }
 
 message ListDetectionRulesRequest {}

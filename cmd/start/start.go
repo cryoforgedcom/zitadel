@@ -292,6 +292,7 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 		config.Login.DefaultPaths,
 		config.Executions.DenyList,
 		dbClient.DB,
+		dbClient.Pool.Config().ConnString(),
 	)
 	if err != nil {
 		return fmt.Errorf("cannot start commands: %w", err)
@@ -361,6 +362,8 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 		signals.RegisterDrainWorker(ctx, q, detectionService.DrainWorker())
 		// register archive worker if Parquet archival is enabled
 		signals.RegisterArchiveWorker(ctx, q, detectionService.ArchiveWorker())
+		// register DuckLake compaction worker if DuckLake mode is enabled
+		signals.RegisterCompactionWorker(ctx, q, detectionService.CompactionWorker())
 	}
 
 	if err = q.Start(ctx); err != nil {
@@ -379,6 +382,8 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 		signals.StartDrainSchedule(ctx, q, detectionService.DrainWorker())
 		// start archive periodic job
 		signals.StartArchiveSchedule(ctx, q, detectionService.ArchiveWorker())
+		// start DuckLake compaction periodic job
+		signals.StartCompactionSchedule(ctx, q, detectionService.CompactionWorker())
 	}
 
 	router := mux.NewRouter()

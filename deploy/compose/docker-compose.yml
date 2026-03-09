@@ -99,6 +99,10 @@ services:
       # Risk signal store
       ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_ENABLED: ${ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_ENABLED:-false}
       ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_MODE: ${ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_MODE:-pg}
+      # DuckLake signal store (replaces PG pipeline when enabled)
+      ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_DUCKLAKE_ENABLED: ${ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_DUCKLAKE_ENABLED:-false}
+      ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_DUCKLAKE_DATAPATH: /var/lib/zitadel/signals
+      ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_DUCKLAKE_BACKEND: fs
       # Risk captcha
       ZITADEL_SYSTEMDEFAULTS_RISK_CAPTCHA_ENABLED: ${ZITADEL_SYSTEMDEFAULTS_RISK_CAPTCHA_ENABLED:-false}
       ZITADEL_SYSTEMDEFAULTS_RISK_CAPTCHA_PROVIDER: ${ZITADEL_SYSTEMDEFAULTS_RISK_CAPTCHA_PROVIDER:-turnstile}
@@ -116,6 +120,7 @@ services:
       start_period: 20s
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:rw
+      - signals-data:/var/lib/zitadel/signals:rw
     networks:
       - zitadel
     depends_on:
@@ -310,4 +315,5 @@ networks:
 volumes:
   postgres-data:
   ollama-data:
+  signals-data:
   zitadel-bootstrap:

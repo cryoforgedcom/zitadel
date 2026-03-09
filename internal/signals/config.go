@@ -51,6 +51,9 @@ type SignalStoreConfig struct {
 	Redis SignalRedisConfig
 	// Archive configures the cold-tier Parquet archival.
 	Archive ArchiveConfig
+	// DuckLake configures the DuckLake-based signal store (Parquet + PG catalog).
+	// When DuckLake.Enabled is true, it replaces the PG/Redis/Archive pipeline.
+	DuckLake DuckLakeConfig
 }
 
 // EffectiveMode returns the configured mode, defaulting to PG.
@@ -139,6 +142,10 @@ func (c ArchiveConfig) EffectiveBackend() ArchiveBackend {
 func (c SignalStoreConfig) Validate() error {
 	if !c.Enabled {
 		return nil
+	}
+	// DuckLake mode replaces PG/Redis pipeline — validate independently.
+	if c.DuckLake.Enabled {
+		return c.DuckLake.Validate()
 	}
 	if c.ChannelSize <= 0 {
 		return fmt.Errorf("risk signal store channel size must be greater than 0")

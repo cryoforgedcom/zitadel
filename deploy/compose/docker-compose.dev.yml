@@ -29,6 +29,8 @@ services:
       ZITADEL_FIRSTINSTANCE_PATPATH: /zitadel/bootstrap/admin.pat
       # Enable the persistent signal store for risk evaluation POC.
       ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_ENABLED: "true"
+      # Enable DuckLake signal store (Parquet + PG catalog).
+      ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_DUCKLAKE_ENABLED: "true"
 
   zitadel-login:
     image: zitadel/zitadel-login:local

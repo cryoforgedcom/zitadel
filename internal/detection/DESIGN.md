@@ -1046,6 +1046,103 @@ No new dependencies required for Phase 1 (PG) or Phase 2 (Redis).
 
 ---
 
+## 18a. DuckLake Signal Store Architecture
+
+### Motivation
+
+The original 3-tier signal store (Redis hot → PG warm → Parquet cold) was complex:
+3 workers (partition, drain, archive), PG UNLOGGED tables, Redis streams, and
+filesystem/S3 Parquet archival. This put unnecessary write pressure on the OLTP
+database and required Redis for optimal throughput.
+
+### DuckLake Architecture
+
+**DuckLake** (DuckDB extension, released May 2025) provides a lakehouse format
+that stores catalog metadata in PostgreSQL and data as Parquet files. Since ZITADEL
+already has PG, this requires **no new infrastructure**.
+
+```
+ZITADEL Pods
+  ┌─────────────────────────────────────────┐
+  │  Signal Emitter (fire-and-forget channel)│
+  │  → Debouncer (batch + time-based flush) │
+  │  → DuckLakeStore.WriteBatch()           │
+  │    → go-duckdb Appender                 │
+  │    → DuckLake INSERT → Parquet files    │
+  └─────────────────────────────────────────┘
+         │ data files              │ catalog metadata
+         ▼                         ▼
+  ┌──────────────┐         ┌──────────────┐
+  │ Filesystem   │         │ PostgreSQL   │
+  │ or S3        │         │ (MVCC)       │
+  │ (Parquet)    │         │              │
+  └──────────────┘         └──────────────┘
+         │                         │
+         └────────────┬────────────┘
+                      ▼
+              ┌──────────────┐
+              │ DuckDB SQL   │
+              │ (reads)      │
+              │ Signals API  │
+              └──────────────┘
+```
+
+### Key Design Decisions
+
+1. **DuckLake over Apache Iceberg**: Iceberg requires a separate catalog service
+   (e.g., Lakekeeper, a Rust sidecar). DuckLake uses PG natively — no new service.
+   Data files are still standard Parquet.
+
+2. **Multi-pod writer safety**: DuckLake coordinates concurrent writers via PG MVCC
+   (optimistic concurrency). No leader election or distributed locks needed.
+
+3. **Single worker**: One `CompactionWorker` (River job, hourly) replaces three
+   workers (partition, drain, archive). It merges small Parquet files into larger
+   time-aligned files.
+
+4. **No Redis tier**: The DuckLake path doesn't use Redis. Buffer → periodic flush
+   is sufficient since Parquet appends are cheap.
+
+5. **Backward compatibility**: When `DuckLake.Enabled = false`, the existing PG
+   signal store continues to work unchanged.
+
+### Configuration
+
+```yaml
+SignalStore:
+  Enabled: true
+  DuckLake:
+    Enabled: true
+    DataPath: /var/lib/zitadel/signals  # or s3://bucket/signals/
+    Backend: fs  # fs or s3
+    FlushInterval: 30s
+    CompactionInterval: 1h
+    S3:
+      Endpoint: ""
+      Bucket: zitadel-signals
+      AccessKey: ""
+      SecretKey: ""
+      UseSSL: true
+```
+
+### Query Capabilities
+
+DuckLakeStore exposes two query methods for the Signals API:
+
+- **SearchSignals**: Filtered, paginated signal retrieval with DuckDB SQL
+- **AggregateSignals**: Group-by field or time_bucket with count/distinct_count
+
+Both accept `SignalFilters` (instance_id, user_id, session_id, ip, operation,
+stream, outcome, country, time range) and return structured results.
+
+### go-duckdb Dependency
+
+- Package: `github.com/duckdb/duckdb-go/v2` (v2.5.5)
+- Requires CGO (adds ~50MB binary size)
+- Uses `database/sql` interface for queries and DuckDB Appender API for bulk writes
+
+---
+
 ## 19. Future: Multi-Engine Pipeline per Rule
 
 ### Problem

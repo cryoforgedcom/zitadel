@@ -108,6 +108,20 @@ type RiskSignalStoreConfig struct {
 		}
 		StreamRetention map[string]time.Duration
 	}
+	DuckLake struct {
+		Enabled            bool
+		DataPath           string
+		Backend            string
+		FlushInterval      time.Duration
+		CompactionInterval time.Duration
+		S3                 struct {
+			Endpoint  string
+			Bucket    string
+			AccessKey string
+			SecretKey string
+			UseSSL    bool
+		}
+	}
 }
 
 // RiskRuleConfig mirrors internal/detection rule config for YAML configuration.

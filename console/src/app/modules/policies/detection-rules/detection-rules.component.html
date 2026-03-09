@@ -35,6 +35,21 @@
         <span>{{ translationKeyForEngine(rule.engine) | translate }}</span>
       </div>
 
+      <div>
+        <span class="metadata-label">{{ 'SETTING.DETECTION_RULES.PRIORITY' | translate }}</span>
+        <span>{{ rule.priority ?? 0 }}</span>
+      </div>
+
+      <div>
+        <span class="metadata-label">{{ 'SETTING.DETECTION_RULES.STOP_ON_MATCH' | translate }}</span>
+        <span>
+          {{
+            (rule.stopOnMatch ? 'SETTING.DETECTION_RULES.STOP_ON_MATCH_ENABLED' : 'SETTING.DETECTION_RULES.STOP_ON_MATCH_DISABLED')
+              | translate
+          }}
+        </span>
+      </div>
+
       <div *ngIf="rule.creationDate">
         <span class="metadata-label">{{ 'SETTING.DETECTION_RULES.CREATED_AT' | translate }}</span>
         <span>{{ rule.creationDate | timestampToDate | date: 'medium' }}</span>

@@ -43,3 +43,7 @@ CREATE UNLOGGED TABLE IF NOT EXISTS signals.rate_limit_counters (
     window_secs  INTEGER     NOT NULL,
     PRIMARY KEY (key)
 );
+
+-- Detection rule priority & stop-on-match columns
+ALTER TABLE IF EXISTS projections.detection_rules ADD COLUMN IF NOT EXISTS priority BIGINT DEFAULT 0;
+ALTER TABLE IF EXISTS projections.detection_rules ADD COLUMN IF NOT EXISTS stop_on_match BOOLEAN DEFAULT FALSE;

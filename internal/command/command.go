@@ -146,6 +146,7 @@ func StartCommands(
 	loginPaths LoginPaths,
 	actionsDeniedHostList []denylist.AddressChecker,
 	signalDB *sql.DB,
+	pgDSN string,
 ) (repo *Commands, err error) {
 	if externalDomain == "" {
 		return nil, zerrors.ThrowInvalidArgument(nil, "COMMAND-Df21s", "no external domain specified")
@@ -300,6 +301,20 @@ func StartCommands(
 				},
 				StreamRetention: riskStreamRetention(defaults.Risk.SignalStore.Archive.StreamRetention),
 			},
+			DuckLake: detection.DuckLakeConfig{
+				Enabled:            defaults.Risk.SignalStore.DuckLake.Enabled,
+				DataPath:           defaults.Risk.SignalStore.DuckLake.DataPath,
+				Backend:            detection.ArchiveBackend(defaults.Risk.SignalStore.DuckLake.Backend),
+				FlushInterval:      defaults.Risk.SignalStore.DuckLake.FlushInterval,
+				CompactionInterval: defaults.Risk.SignalStore.DuckLake.CompactionInterval,
+				S3: detection.ArchiveS3Config{
+					Endpoint:  defaults.Risk.SignalStore.DuckLake.S3.Endpoint,
+					Bucket:    defaults.Risk.SignalStore.DuckLake.S3.Bucket,
+					AccessKey: defaults.Risk.SignalStore.DuckLake.S3.AccessKey,
+					SecretKey: defaults.Risk.SignalStore.DuckLake.S3.SecretKey,
+					UseSSL:    defaults.Risk.SignalStore.DuckLake.S3.UseSSL,
+				},
+			},
 		},
 		Captcha: detection.CaptchaConfig{
 			Enabled:   defaults.Risk.Captcha.Enabled,
@@ -340,7 +355,7 @@ func StartCommands(
 
 	repo.defaultDetectionConfig = riskConfig
 	repo.detectionPolicyProvider = newInstanceDetectionPolicyProvider(es, riskConfig)
-	repo.riskEvaluator, err = detection.New(riskConfig, repo.detectionPolicyProvider, nil, riskLLM, signalDB, redisClient, archiveStore)
+	repo.riskEvaluator, err = detection.New(riskConfig, repo.detectionPolicyProvider, nil, riskLLM, signalDB, pgDSN, redisClient, archiveStore)
 	if err != nil {
 		return nil, fmt.Errorf("risk evaluator: %w", err)
 	}

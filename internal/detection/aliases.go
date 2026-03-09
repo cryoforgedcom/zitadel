@@ -23,6 +23,7 @@ type SignalRedisConfig = signals.SignalRedisConfig
 type ArchiveConfig = signals.ArchiveConfig
 type ArchiveBackend = signals.ArchiveBackend
 type ArchiveS3Config = signals.ArchiveS3Config
+type DuckLakeConfig = signals.DuckLakeConfig
 
 type Prompt = llm.Prompt
 type Classification = llm.Classification

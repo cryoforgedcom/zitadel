@@ -26,6 +26,8 @@ const NEW_RULE_TEMPLATE = `id: my-rule
 description: ""
 expr: "true"
 engine: log  # block | rate_limit | llm | log | captcha
+priority: 0
+stop_on_match: false
 finding:
   name: my_finding
   message: ""
@@ -116,6 +118,8 @@ interface RuleYaml {
   description?: string;
   expr?: string;
   engine?: string;
+  priority?: number;
+  stop_on_match?: boolean;
   finding?: { name?: string; message?: string; block?: boolean };
   rate_limit?: { key?: string; window?: string; max?: number };
   context_template?: string;
@@ -127,6 +131,8 @@ function ruleToYaml(rule: DetectionRule): string {
     description: rule.description || undefined,
     expr: rule.expr,
     engine: engineToString(rule.engine),
+    priority: rule.priority ?? 0,
+    stop_on_match: rule.stopOnMatch ?? false,
     finding: {
       name: rule.finding?.name || undefined,
       message: rule.finding?.message || undefined,
@@ -171,6 +177,8 @@ function yamlToRule(yamlStr: string): DetectionRuleEditorResult {
     description: parsed.description ?? '',
     expr: parsed.expr,
     engine,
+    priority: parsed.priority ?? 0,
+    stopOnMatch: parsed.stop_on_match ?? false,
     finding: {
       name: parsed.finding?.name ?? '',
       message: parsed.finding?.message ?? '',

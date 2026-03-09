@@ -579,6 +579,7 @@ func startCommandsQueries(
 		config.Login.DefaultPaths,
 		config.Executions.DenyList,
 		nil,
+		"",
 	)
 	logging.OnError(ctx, err).Fatal("unable to start commands")
 

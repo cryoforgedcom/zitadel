@@ -63,8 +63,8 @@ func (mig *externalConfigChange) Execute(ctx context.Context, _ eventstore.Event
 		&login.DefaultPaths{},
 		[]denylist.AddressChecker{},
 		nil,
+		"",
 	)
-
 	if err != nil {
 		return err
 	}

@@ -83,6 +83,9 @@ func (e *RuleEngine) Evaluate(ctx context.Context, rc RiskContext, sessionSignal
 		if finding != nil {
 			findings = append(findings, *finding)
 		}
+		if rule.StopOnMatch {
+			break
+		}
 	}
 
 	return findings
@@ -177,7 +180,7 @@ func (e *RuleEngine) dispatchLLM(ctx context.Context, rule *CompiledRule, rc Ris
 
 	// Reuse a cached LLM finding from an earlier evaluation in this session
 	// (e.g. create_session → set_session) to avoid a second model round-trip.
-	if cached := cachedLLMFinding(sessionSignals); cached != nil {
+	if cached := cachedLLMFinding(sessionSignals, rule.ID); cached != nil {
 		logging.Debug(ctx, "risk.llm.rule_cached",
 			slog.String("rule_id", rule.ID),
 			slog.String("risk_session_id", rc.Current.SessionID),

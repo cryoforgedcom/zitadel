@@ -509,7 +509,7 @@ func (s *SessionCommands) riskSignal(ctx context.Context, geoCountryHeader strin
 // session state and HTTP context. Called once per session check.
 func (s *SessionCommands) buildRiskSignal(ctx context.Context, geoCountryHeader string) detection.Signal {
 	signal := detection.Signal{
-		InstanceID: s.sessionWriteModel.aggregate.InstanceID,
+		InstanceID: authz.GetInstance(ctx).InstanceID(),
 		UserID:     s.sessionWriteModel.UserID,
 		SessionID:  s.sessionWriteModel.AggregateID,
 		Operation:  s.operation,

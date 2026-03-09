@@ -1017,6 +1017,20 @@ SystemDefaults:
           auth: 168h
           account: 720h
           notification: 168h
+      # DuckLake stores signals as Parquet files with catalog metadata in PG.
+      # When enabled, this replaces the PG partition/Redis/archive pipeline.
+      DuckLake:
+        Enabled: false # ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_DUCKLAKE_ENABLED
+        DataPath: /var/lib/zitadel/signals # ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_DUCKLAKE_DATAPATH
+        Backend: fs # ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_DUCKLAKE_BACKEND  (fs or s3)
+        FlushInterval: 30s
+        CompactionInterval: 1h
+        S3:
+          Endpoint: "" # ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_DUCKLAKE_S3_ENDPOINT
+          Bucket: zitadel-signals # ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_DUCKLAKE_S3_BUCKET
+          AccessKey: "" # ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_DUCKLAKE_S3_ACCESSKEY
+          SecretKey: "" # ZITADEL_SYSTEMDEFAULTS_RISK_SIGNALSTORE_DUCKLAKE_S3_SECRETKEY
+          UseSSL: true
     Captcha:
       Enabled: false # ZITADEL_SYSTEMDEFAULTS_RISK_CAPTCHA_ENABLED
       Provider: turnstile # ZITADEL_SYSTEMDEFAULTS_RISK_CAPTCHA_PROVIDER (turnstile, hcaptcha, recaptcha)
@@ -1037,6 +1051,8 @@ SystemDefaults:
         description: "Block after 5+ failures from same user in history window"
         expr: 'FailureCount >= 5'
         engine: block
+        priority: 0
+        stop_on_match: false
         finding:
           name: failure_burst
           message: "user reached recent failure burst threshold"
@@ -1045,6 +1061,8 @@ SystemDefaults:
         description: "Block when both IP and user agent change simultaneously"
         expr: 'IPChanged && UAChanged'
         engine: block
+        priority: 10
+        stop_on_match: false
         finding:
           name: context_drift
           message: "login context changed across IP and user agent"
@@ -1053,6 +1071,8 @@ SystemDefaults:
         description: "Flag IP change without UA change — send to LLM for judgement"
         expr: 'IPChanged && !UAChanged && LastSuccess != nil'
         engine: llm
+        priority: 20
+        stop_on_match: false
         context_template: "User IP changed from {{.LastSuccess.IP}} to {{.Current.IP}} within {{.TimeSinceLastSuccess}}. Same user agent. Assess risk."
         finding:
           name: ip_rotation
@@ -1062,6 +1082,8 @@ SystemDefaults:
         description: "Flag when geo-country changes between sessions — possible impossible travel"
         expr: 'CountryChanged && LastSuccess != nil'
         engine: llm
+        priority: 30
+        stop_on_match: false
         context_template: "Country changed from {{.LastSuccess.Country}} to {{.Current.Country}} within {{.TimeSinceLastSuccess}}. IP: {{.LastSuccess.IP}} → {{.Current.IP}}. Assess impossible travel risk."
         finding:
           name: country_change
@@ -1071,14 +1093,18 @@ SystemDefaults:
         description: "Flag unusually high login velocity — possible brute force or automation"
         expr: 'LoginVelocity > 300'
         engine: block
+        priority: 40
+        stop_on_match: false
         finding:
           name: high_velocity
-          message: "login velocity exceeds 20 per hour"
+          message: "login velocity exceeds 300 per hour"
           block: true
       - id: fingerprint-flood
         description: "Rate limit when many distinct fingerprints are seen for the user"
         expr: 'DistinctFingerprints >= 3'
         engine: rate_limit
+        priority: 50
+        stop_on_match: false
         rate_limit:
           # The rendered key is treated as the operator-controlled suffix.
           # ZITADEL prefixes instance, rule ID, and window automatically.

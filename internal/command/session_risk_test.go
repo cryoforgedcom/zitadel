@@ -29,7 +29,7 @@ func newTestDetectionService(t *testing.T) *detection.Service {
 		ContextChangeWindow:   15 * time.Minute,
 		MaxSignalsPerUser:     50,
 		MaxSignalsPerSession:  20,
-	}, nil, nil, nil, nil, nil, nil)
+	}, nil, nil, nil, nil, "", nil, nil)
 	require.NoError(t, err)
 	return svc
 }

@@ -50,6 +50,10 @@ type Service struct {
 	drainWorker     *signals.DrainWorker
 	archiveWorker   *signals.ArchiveWorker
 
+	// DuckLake signal store (nil when DuckLake is not enabled).
+	duckLakeStore     *signals.DuckLakeStore
+	compactionWorker  *signals.CompactionWorker
+
 	// Captcha challenge verification.
 	captchaVerifier captcha.CaptchaVerifier
 }
@@ -62,7 +66,7 @@ type Service struct {
 //
 // When redisClient is nil and mode is "redis", it falls back to PG mode.
 // When archiveStore is non-nil and Archive.Enabled, an archival worker is created.
-func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClient llm.LLMClient, db *sql.DB, redisClient *redis.Client, archiveStore signals.ArchiveStorage) (*Service, error) {
+func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClient llm.LLMClient, db *sql.DB, pgDSN string, redisClient *redis.Client, archiveStore signals.ArchiveStorage) (*Service, error) {
 	basePolicy, err := NewPolicy(cfg)
 	if err != nil {
 		return nil, err
@@ -72,8 +76,22 @@ func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClie
 	var partitionWorker *signals.PartitionWorker
 	var drainWorker *signals.DrainWorker
 	var archiveWorker *signals.ArchiveWorker
+	var duckLakeStore *signals.DuckLakeStore
+	var compactionWorker *signals.CompactionWorker
 
-	if cfg.SignalStore.Enabled && db != nil {
+	if cfg.SignalStore.Enabled && cfg.SignalStore.DuckLake.Enabled && pgDSN != "" {
+		// DuckLake mode: signals stored as Parquet with PG catalog metadata.
+		var err error
+		duckLakeStore, err = signals.NewDuckLakeStore(pgDSN, cfg.SnapshotConfig(), cfg.SignalStore.DuckLake)
+		if err != nil {
+			return nil, fmt.Errorf("ducklake signal store: %w", err)
+		}
+		store = duckLakeStore
+		emitter = signals.NewEmitter(cfg.SignalStore, duckLakeStore)
+		compactionWorker = signals.NewCompactionWorker(duckLakeStore, cfg.SignalStore.DuckLake.CompactionInterval)
+		duckLakeStore.LogInfo(context.Background())
+	} else if cfg.SignalStore.Enabled && db != nil {
+		// Legacy PG mode: signals stored in UNLOGGED partitioned PG tables.
 		pgStore := signals.NewPGStore(db, cfg.SnapshotConfig())
 		if store == nil {
 			store = pgStore
@@ -124,19 +142,21 @@ func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClie
 	rateLimiter, effectiveRateLimit = newRateLimiterStore(cfg.RateLimit, db, redisClient)
 
 	svc := &Service{
-		basePolicy:      basePolicy,
-		policyProvider:  policyProvider,
-		store:           store,
-		llm:             llmClient,
-		rateLimiter:     rateLimiter,
-		now:             time.Now,
-		stopMaint:       make(chan struct{}),
-		db:              db,
-		emitter:         emitter,
-		partitionWorker: partitionWorker,
-		drainWorker:     drainWorker,
-		archiveWorker:   archiveWorker,
-		captchaVerifier: captcha.NewCaptchaVerifier(cfg.Captcha, nil),
+		basePolicy:       basePolicy,
+		policyProvider:   policyProvider,
+		store:            store,
+		llm:              llmClient,
+		rateLimiter:      rateLimiter,
+		now:              time.Now,
+		stopMaint:        make(chan struct{}),
+		db:               db,
+		emitter:          emitter,
+		partitionWorker:  partitionWorker,
+		drainWorker:      drainWorker,
+		archiveWorker:    archiveWorker,
+		duckLakeStore:    duckLakeStore,
+		compactionWorker: compactionWorker,
+		captchaVerifier:  captcha.NewCaptchaVerifier(cfg.Captcha, nil),
 	}
 	go svc.maintenanceLoop()
 	// Start the signal emitter independently of the full risk engine — signal
@@ -204,6 +224,9 @@ func (s *Service) Close() {
 		s.emitterCancel()
 		<-s.emitter.Done()
 	}
+	if s.duckLakeStore != nil {
+		s.duckLakeStore.Close()
+	}
 }
 
 // Emitter returns the signal emitter, or nil when the signal store is not
@@ -267,6 +290,24 @@ func (s *Service) ArchiveWorker() *signals.ArchiveWorker {
 		return nil
 	}
 	return s.archiveWorker
+}
+
+// CompactionWorker returns the DuckLake compaction worker for registration
+// with the River queue, or nil when DuckLake is not enabled.
+func (s *Service) CompactionWorker() *signals.CompactionWorker {
+	if s == nil {
+		return nil
+	}
+	return s.compactionWorker
+}
+
+// DuckLakeStore returns the DuckLake signal store, or nil when DuckLake is
+// not enabled. Used by the Signals API for direct query access.
+func (s *Service) DuckLakeStore() *signals.DuckLakeStore {
+	if s == nil {
+		return nil
+	}
+	return s.duckLakeStore
 }
 
 // CaptchaVerifier returns the captcha verifier, or nil when not configured.
@@ -572,10 +613,18 @@ func (s *Service) failOpenDecision(ctx context.Context, signal signals.Signal, f
 // this session, or nil if no LLM evaluation has been stored yet. This lets the
 // set_session call reuse the result from create_session without a second model
 // round-trip.
-func cachedLLMFinding(sessionSignals []signals.RecordedSignal) *Finding {
+//
+// The optional ruleID is used by the rule engine path: findings produced by a
+// specific rule are stored with source "rule:<id>", whereas the legacy path
+// uses source "llm". Passing ruleID matches both.
+func cachedLLMFinding(sessionSignals []signals.RecordedSignal, ruleID ...string) *Finding {
+	ruleSource := ""
+	if len(ruleID) > 0 {
+		ruleSource = "rule:" + ruleID[0]
+	}
 	for i := len(sessionSignals) - 1; i >= 0; i-- {
 		for _, f := range sessionSignals[i].Findings {
-			if f.Source == "llm" {
+			if f.Source == "llm" || (ruleSource != "" && f.Source == ruleSource) {
 				finding := findingFromRecorded(f)
 				return &finding
 			}
