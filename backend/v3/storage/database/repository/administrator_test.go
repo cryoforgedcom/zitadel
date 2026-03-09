@@ -89,12 +89,12 @@ func TestAdministratorRepository_CRUDAcrossScopes(t *testing.T) {
 			assert.NotEmpty(t, tt.administrator.UpdatedAt)
 
 			got, err := adminRepo.Get(t.Context(), savepoint, database.WithCondition(
-				adminRepo.PrimaryKeyCondition(instanceID, tt.administrator.ID),
+				tt.filter,
 			))
 			require.NoError(t, err)
 			assert.Equal(t, tt.administrator.ID, got.ID)
 			assert.Equal(t, tt.administrator.Scope, got.Scope)
-			assert.Equal(t, tt.administrator.Roles, got.Roles)
+			assert.ElementsMatch(t, tt.administrator.Roles, got.Roles)
 
 			list, err := adminRepo.List(t.Context(), savepoint, database.WithCondition(
 				database.And(tt.filter, adminRepo.RoleCondition(database.TextOperationEqual, tt.administrator.Roles[0])),
@@ -106,39 +106,37 @@ func TestAdministratorRepository_CRUDAcrossScopes(t *testing.T) {
 
 			updatedAt := time.Now().Add(time.Second)
 			_, err = adminRepo.Update(t.Context(), savepoint,
-				adminRepo.PrimaryKeyCondition(instanceID, tt.administrator.ID),
+				tt.filter,
 				adminRepo.SetUpdatedAt(updatedAt),
 				adminRepo.SetRoles([]string{tt.administrator.Roles[0], "AUDITOR"}),
 			)
 			require.NoError(t, err)
 
 			got, err = adminRepo.Get(t.Context(), savepoint, database.WithCondition(
-				adminRepo.PrimaryKeyCondition(instanceID, tt.administrator.ID),
+				tt.filter,
 			))
 			require.NoError(t, err)
-			assert.Equal(t, []string{tt.administrator.Roles[0], "AUDITOR"}, got.Roles)
+			assert.ElementsMatch(t, []string{tt.administrator.Roles[0], "AUDITOR"}, got.Roles)
 			assert.Equal(t, updatedAt.UTC(), got.UpdatedAt.UTC())
 
 			_, err = adminRepo.Update(t.Context(), savepoint,
-				adminRepo.PrimaryKeyCondition(instanceID, tt.administrator.ID),
+				tt.filter,
 				adminRepo.AddRole("SECOND"),
 				adminRepo.RemoveRole("AUDITOR"),
 			)
 			require.NoError(t, err)
 
 			got, err = adminRepo.Get(t.Context(), savepoint, database.WithCondition(
-				adminRepo.PrimaryKeyCondition(instanceID, tt.administrator.ID),
+				tt.filter,
 			))
 			require.NoError(t, err)
-			assert.Equal(t, []string{tt.administrator.Roles[0], "SECOND"}, got.Roles)
+			assert.ElementsMatch(t, []string{tt.administrator.Roles[0], "SECOND"}, got.Roles)
 
-			_, err = adminRepo.Delete(t.Context(), savepoint,
-				adminRepo.PrimaryKeyCondition(instanceID, tt.administrator.ID),
-			)
+			_, err = adminRepo.Delete(t.Context(), savepoint, tt.filter)
 			require.NoError(t, err)
 
 			_, err = adminRepo.Get(t.Context(), savepoint, database.WithCondition(
-				adminRepo.PrimaryKeyCondition(instanceID, tt.administrator.ID),
+				tt.filter,
 			))
 			require.ErrorIs(t, err, database.NewNoRowFoundError(nil))
 		})

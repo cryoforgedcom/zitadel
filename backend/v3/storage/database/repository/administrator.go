@@ -41,7 +41,7 @@ const queryAdministratorStmt = "SELECT administrators.instance_id " +
 	", administrators.project_id " +
 	", administrators.project_grant_id " +
 	", administrators.created_at " +
-	", ARRAY_AGG(administrator_roles.role_name) FILTER (WHERE administrator_roles.administrator_id IS NOT NULL) AS roles " +
+	", ARRAY_AGG(administrator_roles.role_name ORDER BY administrator_roles.role_name) FILTER (WHERE administrator_roles.administrator_id IS NOT NULL) AS roles " +
 	", administrators.updated_at " +
 	"FROM zitadel.administrators " +
 	"LEFT JOIN zitadel.administrator_roles " +
@@ -146,7 +146,13 @@ func (a administrator) Delete(ctx context.Context, client database.QueryExecutor
 	if err := checkRestrictingColumns(condition, a.InstanceIDColumn(), a.UserIDColumn(), a.ScopeColumn()); err != nil {
 		return 0, err
 	}
-	return deleteOne(ctx, client, a, condition)
+
+	builder := database.NewStatementBuilder("DELETE FROM ")
+	builder.WriteString(a.qualifiedTableName())
+	builder.WriteRune(' ')
+	writeCondition(builder, condition)
+
+	return client.Exec(ctx, builder.String(), builder.Args()...)
 }
 
 func (a administrator) SetUpdatedAt(updatedAt time.Time) database.Change {

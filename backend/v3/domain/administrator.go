@@ -7,7 +7,7 @@ import (
 	"github.com/zitadel/zitadel/backend/v3/storage/database"
 )
 
-//go:generate enumer -type AdministratorScope -transform lower -trimprefix AdministratorScope -sql
+//go:generate enumer -type AdministratorScope -transform snake -trimprefix AdministratorScope -sql
 type AdministratorScope uint8
 
 const (
