@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"database/sql"
 	"encoding/pem"
 	"fmt"
 	"math/big"
@@ -35,7 +34,6 @@ import (
 	"github.com/zitadel/zitadel/internal/llm"
 	internal_net "github.com/zitadel/zitadel/internal/net"
 	"github.com/zitadel/zitadel/internal/notification/senders"
-	"github.com/zitadel/zitadel/internal/signals"
 	"github.com/zitadel/zitadel/internal/static"
 	"github.com/zitadel/zitadel/internal/telemetry/tracing"
 	webauthn_helper "github.com/zitadel/zitadel/internal/webauthn"
@@ -145,7 +143,6 @@ func StartCommands(
 	defaultSecretGenerators *SecretGenerators,
 	loginPaths LoginPaths,
 	actionsDeniedHostList []denylist.AddressChecker,
-	signalDB *sql.DB,
 	pgDSN string,
 ) (repo *Commands, err error) {
 	if externalDomain == "" {
@@ -271,35 +268,10 @@ func StartCommands(
 		GeoCountryHeader: defaults.Risk.GeoCountryHeader,
 		SignalStore: detection.SignalStoreConfig{
 			Enabled:     defaults.Risk.SignalStore.Enabled,
-			Mode:        detection.SignalStoreMode(defaults.Risk.SignalStore.Mode),
 			ChannelSize: defaults.Risk.SignalStore.ChannelSize,
 			Debounce: detection.DebouncerConfig{
 				MinFrequency: defaults.Risk.SignalStore.Debounce.MinFrequency,
 				MaxBulkSize:  defaults.Risk.SignalStore.Debounce.MaxBulkSize,
-			},
-			Postgres: detection.SignalPGConfig{
-				PartitionInterval: defaults.Risk.SignalStore.Postgres.PartitionInterval,
-				Retention:         defaults.Risk.SignalStore.Postgres.Retention,
-			},
-			Redis: detection.SignalRedisConfig{
-				MaxLen:         defaults.Risk.SignalStore.Redis.MaxLen,
-				DrainInterval:  defaults.Risk.SignalStore.Redis.DrainInterval,
-				DrainBatchSize: defaults.Risk.SignalStore.Redis.DrainBatchSize,
-				CircuitBreaker: signalCBConfig(defaults.Risk.SignalStore.Redis.CircuitBreaker),
-			},
-			Archive: detection.ArchiveConfig{
-				Enabled:  defaults.Risk.SignalStore.Archive.Enabled,
-				Backend:  detection.ArchiveBackend(defaults.Risk.SignalStore.Archive.Backend),
-				FSPath:   defaults.Risk.SignalStore.Archive.FSPath,
-				Interval: defaults.Risk.SignalStore.Archive.Interval,
-				S3: detection.ArchiveS3Config{
-					Endpoint:  defaults.Risk.SignalStore.Archive.S3.Endpoint,
-					Bucket:    defaults.Risk.SignalStore.Archive.S3.Bucket,
-					AccessKey: defaults.Risk.SignalStore.Archive.S3.AccessKey,
-					SecretKey: defaults.Risk.SignalStore.Archive.S3.SecretKey,
-					UseSSL:    defaults.Risk.SignalStore.Archive.S3.UseSSL,
-				},
-				StreamRetention: riskStreamRetention(defaults.Risk.SignalStore.Archive.StreamRetention),
 			},
 			DuckLake: detection.DuckLakeConfig{
 				Enabled:            defaults.Risk.SignalStore.DuckLake.Enabled,
@@ -339,23 +311,9 @@ func StartCommands(
 		redisClient = cacheConnectors.Redis.Client
 	}
 
-	// Create archive storage when archival is enabled.
-	var archiveStore detection.ArchiveStorage
-	if riskConfig.SignalStore.Archive.Enabled {
-		switch riskConfig.SignalStore.Archive.EffectiveBackend() {
-		case detection.ArchiveBackendS3:
-			// TODO(signals): Wire S3 archive backend via minio client from static
-			// storage. Currently falls back to FS — the S3 config is parsed but
-			// the minio.Client is not injected into StartCommands yet.
-			archiveStore = signals.NewFSArchiveStorage(riskConfig.SignalStore.Archive.FSPath)
-		default:
-			archiveStore = signals.NewFSArchiveStorage(riskConfig.SignalStore.Archive.FSPath)
-		}
-	}
-
 	repo.defaultDetectionConfig = riskConfig
 	repo.detectionPolicyProvider = newInstanceDetectionPolicyProvider(es, riskConfig)
-	repo.riskEvaluator, err = detection.New(riskConfig, repo.detectionPolicyProvider, nil, riskLLM, signalDB, pgDSN, redisClient, archiveStore)
+	repo.riskEvaluator, err = detection.New(riskConfig, repo.detectionPolicyProvider, nil, riskLLM, pgDSN, redisClient)
 	if err != nil {
 		return nil, fmt.Errorf("risk evaluator: %w", err)
 	}
@@ -541,20 +499,6 @@ func llmCBConfig(c *sd.RiskCBConfig) *llm.CBConfig {
 	}
 }
 
-func signalCBConfig(c *sd.RiskCBConfig) *signals.CBConfig {
-	if c == nil {
-		return nil
-	}
-	return &signals.CBConfig{
-		Interval:               c.Interval,
-		MaxConsecutiveFailures: c.MaxConsecutiveFailures,
-		MaxFailureRatio:        c.MaxFailureRatio,
-		Timeout:                c.Timeout,
-		MaxRetryRequests:       c.MaxRetryRequests,
-		FailOpen:               c.FailOpen,
-	}
-}
-
 func riskRules(rules []sd.RiskRuleConfig) []detection.Rule {
 	if len(rules) == 0 {
 		return nil
@@ -578,17 +522,6 @@ func riskRules(rules []sd.RiskRuleConfig) []detection.Rule {
 				Max:         r.RateLimit.Max,
 			},
 		}
-	}
-	return out
-}
-
-func riskStreamRetention(m map[string]time.Duration) map[detection.SignalStream]time.Duration {
-	if len(m) == 0 {
-		return nil
-	}
-	out := make(map[detection.SignalStream]time.Duration, len(m))
-	for k, v := range m {
-		out[detection.SignalStream(k)] = v
 	}
 	return out
 }

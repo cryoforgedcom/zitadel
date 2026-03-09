@@ -578,7 +578,6 @@ func startCommandsQueries(
 		config.DefaultInstance.SecretGenerators,
 		config.Login.DefaultPaths,
 		config.Executions.DenyList,
-		nil,
 		"",
 	)
 	logging.OnError(ctx, err).Fatal("unable to start commands")

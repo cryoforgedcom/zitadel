@@ -20,6 +20,9 @@
   <ng-container *ngIf="setting()?.id === 'detection_rules' && serviceType === PolicyComponentServiceType.ADMIN">
     <cnsl-detection-rules></cnsl-detection-rules>
   </ng-container>
+  <ng-container *ngIf="setting()?.id === 'signals_explorer' && serviceType === PolicyComponentServiceType.ADMIN">
+    <cnsl-signals-explorer></cnsl-signals-explorer>
+  </ng-container>
   <ng-container *ngIf="setting()?.id === 'verified_domains'">
     <cnsl-domains></cnsl-domains>
   </ng-container>

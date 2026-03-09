@@ -43,45 +43,31 @@ type Service struct {
 	stopMaint      chan struct{} // closed to stop the maintenance goroutine
 
 	// Signal store components (nil when SignalStore is not enabled).
-	db              *sql.DB
-	emitter         *signals.Emitter
-	emitterCancel   context.CancelFunc
-	partitionWorker *signals.PartitionWorker
-	drainWorker     *signals.DrainWorker
-	archiveWorker   *signals.ArchiveWorker
+	emitter       *signals.Emitter
+	emitterCancel context.CancelFunc
 
-	// DuckLake signal store (nil when DuckLake is not enabled).
-	duckLakeStore     *signals.DuckLakeStore
-	compactionWorker  *signals.CompactionWorker
+	// DuckLake signal store.
+	duckLakeStore    *signals.DuckLakeStore
+	compactionWorker *signals.CompactionWorker
 
 	// Captcha challenge verification.
 	captchaVerifier captcha.CaptchaVerifier
 }
 
-// New creates a risk evaluation service. When db is non-nil and
-// cfg.SignalStore.Enabled is true, it creates a signal store with a
-// fire-and-forget emitter. The emitter sink depends on the configured mode:
-//   - "pg" (default): writes directly to PostgreSQL
-//   - "redis": writes to a Redis Stream, with a drain worker flushing to PG
-//
-// When redisClient is nil and mode is "redis", it falls back to PG mode.
-// When archiveStore is non-nil and Archive.Enabled, an archival worker is created.
-func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClient llm.LLMClient, db *sql.DB, pgDSN string, redisClient *redis.Client, archiveStore signals.ArchiveStorage) (*Service, error) {
+// New creates a risk evaluation service. When pgDSN is non-empty and
+// cfg.SignalStore is enabled, it creates a DuckLake signal store with a
+// fire-and-forget emitter and compaction worker.
+func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClient llm.LLMClient, pgDSN string, redisClient *redis.Client) (*Service, error) {
 	basePolicy, err := NewPolicy(cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	var emitter *signals.Emitter
-	var partitionWorker *signals.PartitionWorker
-	var drainWorker *signals.DrainWorker
-	var archiveWorker *signals.ArchiveWorker
 	var duckLakeStore *signals.DuckLakeStore
 	var compactionWorker *signals.CompactionWorker
 
-	if cfg.SignalStore.Enabled && cfg.SignalStore.DuckLake.Enabled && pgDSN != "" {
-		// DuckLake mode: signals stored as Parquet with PG catalog metadata.
-		var err error
+	if cfg.SignalStore.Enabled && pgDSN != "" {
 		duckLakeStore, err = signals.NewDuckLakeStore(pgDSN, cfg.SnapshotConfig(), cfg.SignalStore.DuckLake)
 		if err != nil {
 			return nil, fmt.Errorf("ducklake signal store: %w", err)
@@ -90,42 +76,10 @@ func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClie
 		emitter = signals.NewEmitter(cfg.SignalStore, duckLakeStore)
 		compactionWorker = signals.NewCompactionWorker(duckLakeStore, cfg.SignalStore.DuckLake.CompactionInterval)
 		duckLakeStore.LogInfo(context.Background())
-	} else if cfg.SignalStore.Enabled && db != nil {
-		// Legacy PG mode: signals stored in UNLOGGED partitioned PG tables.
-		pgStore := signals.NewPGStore(db, cfg.SnapshotConfig())
-		if store == nil {
-			store = pgStore
-		}
-
-		var sink signals.SignalSink = pgStore
-		mode := cfg.SignalStore.EffectiveMode()
-
-		if mode == signals.SignalStoreModeRedis && redisClient != nil {
-			redisSink := signals.NewRedisStreamSink(redisClient, cfg.SignalStore.Redis)
-
-			// Ensure consumer group exists for the drain worker.
-			if err := redisSink.EnsureConsumerGroup(context.Background()); err != nil {
-				logging.WithError(context.Background(), err).Warn(
-					"risk.signal_store.redis_group_create_failed",
-				)
-				// Fall back to PG if we can't set up Redis.
-			} else {
-				sink = signals.NewGuardedSink(redisSink, cfg.SignalStore.Redis.CircuitBreaker)
-				drainWorker = signals.NewDrainWorker(redisClient, pgStore, cfg.SignalStore.Redis)
-			}
-		}
-
-		emitter = signals.NewEmitter(cfg.SignalStore, sink)
-		partitionWorker = signals.NewPartitionWorker(db, cfg.SignalStore.Postgres)
-
-		// Create archive worker when archival is enabled and storage is provided.
-		if cfg.SignalStore.Archive.Enabled && archiveStore != nil {
-			archiveWorker = signals.NewArchiveWorker(db, archiveStore, cfg.SignalStore.Archive, cfg.SignalStore.Postgres)
-		}
 	}
 
 	if store == nil {
-		store = signals.NewMemoryStore(cfg.SnapshotConfig())
+		store = noopStore{}
 	}
 	if cfg.LLM.Enabled() && llmClient == nil {
 		return nil, fmt.Errorf("risk llm client required when mode is %q", cfg.LLM.Mode.Normalized())
@@ -139,7 +93,7 @@ func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClie
 		effectiveRateLimit  = ratelimit.ModeMemory
 		rateLimiter         ratelimit.RateLimiterStore
 	)
-	rateLimiter, effectiveRateLimit = newRateLimiterStore(cfg.RateLimit, db, redisClient)
+	rateLimiter, effectiveRateLimit = newRateLimiterStore(cfg.RateLimit, nil, redisClient)
 
 	svc := &Service{
 		basePolicy:       basePolicy,
@@ -149,27 +103,20 @@ func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClie
 		rateLimiter:      rateLimiter,
 		now:              time.Now,
 		stopMaint:        make(chan struct{}),
-		db:               db,
 		emitter:          emitter,
-		partitionWorker:  partitionWorker,
-		drainWorker:      drainWorker,
-		archiveWorker:    archiveWorker,
 		duckLakeStore:    duckLakeStore,
 		compactionWorker: compactionWorker,
 		captchaVerifier:  captcha.NewCaptchaVerifier(cfg.Captcha, nil),
 	}
 	go svc.maintenanceLoop()
-	// Start the signal emitter independently of the full risk engine — signal
-	// collection is useful on its own for auditing and future risk analysis.
 	if emitter != nil {
 		ctx, cancel := context.WithCancel(context.Background())
 		svc.emitterCancel = cancel
 		go emitter.Start(ctx)
-		mode := cfg.SignalStore.EffectiveMode()
 		if instrumentation.IsStreamEnabled(instrumentation.StreamRisk) {
 			logging.Info(ctx, "risk.signal_store.started",
 				slog.Int("channel_size", cfg.SignalStore.ChannelSize),
-				slog.String("mode", string(mode)),
+				slog.String("mode", "ducklake"),
 			)
 		}
 	}
@@ -182,9 +129,7 @@ func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClie
 	return svc, nil
 }
 
-// maintenanceLoop runs periodic cleanup for the in-memory store and rate limiter.
-// It prunes expired sessions and rate limit counters every maintenance interval
-// to prevent unbounded memory growth.
+// maintenanceLoop runs periodic cleanup for the rate limiter.
 func (s *Service) maintenanceLoop() {
 	const interval = 5 * time.Minute
 	ticker := time.NewTicker(interval)
@@ -195,12 +140,6 @@ func (s *Service) maintenanceLoop() {
 		case <-s.stopMaint:
 			return
 		case <-ticker.C:
-			now := s.now()
-			// Prune expired session entries from the in-memory store.
-			if ms, ok := s.store.(*signals.MemoryStore); ok {
-				ms.PruneSessions(now)
-			}
-			// Prune expired rate limit counters.
 			if s.rateLimiter != nil {
 				s.rateLimiter.Prune(context.Background())
 			}
@@ -263,33 +202,6 @@ func newRateLimiterStore(cfg ratelimit.Config, db *sql.DB, redisClient *redis.Cl
 	default:
 		return ratelimit.NewMemoryRateLimiter(), ratelimit.ModeMemory
 	}
-}
-
-// PartitionWorker returns the partition management worker for registration
-// with the River queue, or nil when the signal store is not enabled.
-func (s *Service) PartitionWorker() *signals.PartitionWorker {
-	if s == nil {
-		return nil
-	}
-	return s.partitionWorker
-}
-
-// DrainWorker returns the Redis drain worker for registration with the River
-// queue, or nil when not using Redis mode.
-func (s *Service) DrainWorker() *signals.DrainWorker {
-	if s == nil {
-		return nil
-	}
-	return s.drainWorker
-}
-
-// ArchiveWorker returns the Parquet archive worker for registration with the
-// River queue, or nil when archival is not enabled.
-func (s *Service) ArchiveWorker() *signals.ArchiveWorker {
-	if s == nil {
-		return nil
-	}
-	return s.archiveWorker
 }
 
 // CompactionWorker returns the DuckLake compaction worker for registration
@@ -631,4 +543,16 @@ func cachedLLMFinding(sessionSignals []signals.RecordedSignal, ruleID ...string)
 		}
 	}
 	return nil
+}
+
+// noopStore is a signal store that does nothing. Used when the signal store
+// is not configured (e.g. in tests or when DuckLake is disabled).
+type noopStore struct{}
+
+func (noopStore) Snapshot(_ context.Context, _ signals.Signal, _ signals.SnapshotConfig) (signals.Snapshot, error) {
+return signals.Snapshot{}, nil
+}
+
+func (noopStore) Save(_ context.Context, _ signals.Signal, _ []signals.RecordedFinding, _ signals.SnapshotConfig) error {
+return nil
 }

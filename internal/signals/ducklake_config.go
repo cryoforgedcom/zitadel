@@ -5,6 +5,23 @@ import (
 	"time"
 )
 
+// ArchiveBackend selects the storage backend for signal data.
+type ArchiveBackend string
+
+const (
+	ArchiveBackendFS ArchiveBackend = "fs"
+	ArchiveBackendS3 ArchiveBackend = "s3"
+)
+
+// ArchiveS3Config configures S3-compatible storage for signal data.
+type ArchiveS3Config struct {
+	Endpoint  string
+	Bucket    string
+	AccessKey string
+	SecretKey string
+	UseSSL    bool
+}
+
 // DuckLakeConfig configures the DuckLake-based signal store.
 // When enabled, signals are stored as Parquet files with catalog metadata
 // in PostgreSQL via DuckDB's DuckLake extension.

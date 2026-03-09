@@ -69,6 +69,15 @@ export const DETECTION_RULES: SidenavSetting = {
   },
 };
 
+export const SIGNALS_EXPLORER: SidenavSetting = {
+  id: 'signals_explorer',
+  i18nKey: 'SETTINGS.LIST.SIGNALS_EXPLORER',
+  groupI18nKey: 'SETTINGS.GROUPS.SECURITY',
+  requiredRoles: {
+    [PolicyComponentServiceType.ADMIN]: ['iam.policy.read'],
+  },
+};
+
 export const VIEWS: SidenavSetting = {
   id: 'views',
   i18nKey: 'SETTINGS.LIST.VIEWS',

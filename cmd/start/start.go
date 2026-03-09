@@ -115,6 +115,7 @@ import (
 	"github.com/zitadel/zitadel/internal/queue"
 	"github.com/zitadel/zitadel/internal/serviceping"
 	"github.com/zitadel/zitadel/internal/signals"
+	signals_api "github.com/zitadel/zitadel/internal/api/signals"
 	"github.com/zitadel/zitadel/internal/static"
 	es_v4 "github.com/zitadel/zitadel/internal/v2/eventstore"
 	es_v4_pg "github.com/zitadel/zitadel/internal/v2/eventstore/postgres"
@@ -291,7 +292,6 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 		config.DefaultInstance.SecretGenerators,
 		config.Login.DefaultPaths,
 		config.Executions.DenyList,
-		dbClient.DB,
 		dbClient.Pool.Config().ConnString(),
 	)
 	if err != nil {
@@ -356,13 +356,7 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 	}
 
 	if detectionService := commands.DetectionService(); detectionService != nil {
-		// register signal store partition worker if the risk signal store is enabled
-		signals.RegisterPartitionWorker(ctx, q, detectionService.PartitionWorker())
-		// register Redis drain worker if the signal store uses Redis mode
-		signals.RegisterDrainWorker(ctx, q, detectionService.DrainWorker())
-		// register archive worker if Parquet archival is enabled
-		signals.RegisterArchiveWorker(ctx, q, detectionService.ArchiveWorker())
-		// register DuckLake compaction worker if DuckLake mode is enabled
+		// register DuckLake compaction worker
 		signals.RegisterCompactionWorker(ctx, q, detectionService.CompactionWorker())
 	}
 
@@ -376,12 +370,6 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 	}
 
 	if detectionService := commands.DetectionService(); detectionService != nil {
-		// start signal partition management periodic job
-		signals.StartPartitionSchedule(ctx, q, detectionService.PartitionWorker())
-		// start Redis drain periodic job
-		signals.StartDrainSchedule(ctx, q, detectionService.DrainWorker())
-		// start archive periodic job
-		signals.StartArchiveSchedule(ctx, q, detectionService.ArchiveWorker())
 		// start DuckLake compaction periodic job
 		signals.StartCompactionSchedule(ctx, q, detectionService.CompactionWorker())
 	}
@@ -411,6 +399,13 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 	}
 	commands.GrpcMethodExisting = checkExisting(api.ListGrpcMethods())
 	commands.GrpcServiceExisting = checkExisting(api.ListGrpcServices())
+
+	// Register Signals HTTP/JSON API when DuckLake store is available.
+	if detectionService := commands.DetectionService(); detectionService != nil {
+		if signalsHandler := signals_api.NewHandler(detectionService.DuckLakeStore()); signalsHandler != nil {
+			signalsHandler.RegisterRoutes(router)
+		}
+	}
 
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)

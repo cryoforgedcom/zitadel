@@ -757,22 +757,16 @@ auth flow must satisfy before proceeding.
 ```
 cmd/start/start.go
   └── internal/command/command.go:StartCommands()
-        └── risk.New(cfg, store, llm, db, redisClient, archiveStore)
-              ├── PGStore (always when db != nil)
-              ├── Emitter → Sink (PGStore or GuardedSink→RedisStreamSink)
-              ├── PartitionWorker (PG partition management)
-              ├── DrainWorker (Redis→PG, only in redis mode)
-              ├── ArchiveWorker (PG→Parquet, only when archive enabled)
+        └── risk.New(cfg, store, llm, pgDSN, redisClient)
+              ├── DuckLakeStore (Parquet + PG catalog via DuckDB)
+              ├── Emitter → DuckLakeStore
+              ├── CompactionWorker (Parquet file merging)
               └── CaptchaVerifier (Turnstile/hCaptcha/reCAPTCHA)
 
 cmd/start/start.go (worker registration)
-  ├── risk.RegisterPartitionWorker(ctx, q, svc)
-  ├── risk.RegisterDrainWorker(ctx, q, svc)
-  ├── risk.RegisterArchiveWorker(ctx, q, svc)
+  ├── risk.RegisterCompactionWorker(ctx, q, svc)
   │   (after q.Start())
-  ├── risk.StartPartitionSchedule(ctx, q, svc)
-  ├── risk.StartDrainSchedule(ctx, q, svc)
-  └── risk.StartArchiveSchedule(ctx, q, svc)
+  └── risk.StartCompactionSchedule(ctx, q, svc)
 ```
 
 ### Data Flow
@@ -1046,7 +1040,12 @@ No new dependencies required for Phase 1 (PG) or Phase 2 (Redis).
 
 ---
 
-## 18a. DuckLake Signal Store Architecture
+## 18a. DuckLake Signal Store Architecture (Active)
+
+> **Note:** This is the active signal store architecture. Sections 1–18 below describe
+> the original PG/Redis/Parquet tiered design which has been removed. The DuckLake
+> architecture replaces all of it with a simpler pipeline: Go buffer → DuckLake
+> (PG catalog + Parquet data files) → CompactionWorker.
 
 ### Motivation
 

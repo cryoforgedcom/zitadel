@@ -1,0 +1,172 @@
+<cnsl-card title="{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.TITLE' | translate }}"
+  description="{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.DESCRIPTION' | translate }}">
+
+  <!-- Filters -->
+  <div class="filters" [formGroup]="filterForm">
+    <mat-form-field appearance="outline" class="filter-field">
+      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.STREAM' | translate }}</mat-label>
+      <mat-select formControlName="stream">
+        <mat-option value="">{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.ALL' | translate }}</mat-option>
+        <mat-option *ngFor="let s of streams" [value]="s">{{ s }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
+      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.OUTCOME' | translate }}</mat-label>
+      <mat-select formControlName="outcome">
+        <mat-option value="">{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.ALL' | translate }}</mat-option>
+        <mat-option *ngFor="let o of outcomes" [value]="o">{{ o }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
+      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.OPERATION' | translate }}</mat-label>
+      <input matInput formControlName="operation" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
+      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.IP' | translate }}</mat-label>
+      <input matInput formControlName="ip" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
+      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.COUNTRY' | translate }}</mat-label>
+      <input matInput formControlName="country" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
+      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.USER_ID' | translate }}</mat-label>
+      <input matInput formControlName="user_id" />
+    </mat-form-field>
+
+    <div class="filter-actions">
+      <button mat-raised-button color="primary" (click)="search()">
+        <mat-icon>search</mat-icon>
+        {{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.SEARCH' | translate }}
+      </button>
+      <button mat-stroked-button (click)="resetFilters()">
+        {{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.RESET' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="results-header">
+    <span class="result-count">{{ totalCount }} {{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.RESULTS' | translate }}</span>
+    <span class="pagination-info" *ngIf="totalCount > 0">
+      {{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.PAGE' | translate }} {{ currentPage }} / {{ totalPages }}
+    </span>
+  </div>
+
+  <mat-spinner *ngIf="loading" diameter="30"></mat-spinner>
+
+  <table mat-table [dataSource]="signals" *ngIf="!loading && signals.length > 0" class="signals-table">
+    <ng-container matColumnDef="created_at">
+      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.TIME' | translate }}</th>
+      <td mat-cell *matCellDef="let s">{{ s.created_at | date:'short' }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="stream">
+      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.STREAM' | translate }}</th>
+      <td mat-cell *matCellDef="let s">
+        <span class="badge badge-stream">{{ s.stream }}</span>
+      </td>
+    </ng-container>
+
+    <ng-container matColumnDef="operation">
+      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.OPERATION' | translate }}</th>
+      <td mat-cell *matCellDef="let s">{{ s.operation }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="outcome">
+      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.OUTCOME' | translate }}</th>
+      <td mat-cell *matCellDef="let s">
+        <span class="badge" [ngClass]="{
+          'badge-success': s.outcome === 'success',
+          'badge-failure': s.outcome === 'failure',
+          'badge-blocked': s.outcome === 'blocked',
+          'badge-challenged': s.outcome === 'challenged'
+        }">{{ s.outcome }}</span>
+      </td>
+    </ng-container>
+
+    <ng-container matColumnDef="ip">
+      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.IP' | translate }}</th>
+      <td mat-cell *matCellDef="let s">{{ s.ip }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="country">
+      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.COUNTRY' | translate }}</th>
+      <td mat-cell *matCellDef="let s">{{ s.country }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="user_id">
+      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.USER_ID' | translate }}</th>
+      <td mat-cell *matCellDef="let s">
+        <span class="user-id" *ngIf="s.user_id">{{ s.user_id | slice:0:12 }}…</span>
+      </td>
+    </ng-container>
+
+    <ng-container matColumnDef="findings">
+      <th mat-header-cell *matHeaderCellDef>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.FINDINGS' | translate }}</th>
+      <td mat-cell *matCellDef="let s">
+        <span class="badge badge-finding" *ngFor="let f of s.findings">{{ f }}</span>
+      </td>
+    </ng-container>
+
+    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+  </table>
+
+  <div *ngIf="!loading && signals.length === 0" class="empty-state">
+    {{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.NO_SIGNALS' | translate }}
+  </div>
+
+  <!-- Pagination -->
+  <div class="pagination" *ngIf="totalCount > limit">
+    <button mat-icon-button (click)="prevPage()" [disabled]="!hasPrevPage">
+      <mat-icon>chevron_left</mat-icon>
+    </button>
+    <button mat-icon-button (click)="nextPage()" [disabled]="!hasNextPage">
+      <mat-icon>chevron_right</mat-icon>
+    </button>
+  </div>
+</cnsl-card>
+
+<!-- Aggregation Card -->
+<cnsl-card title="{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.AGG_TITLE' | translate }}"
+  description="{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.AGG_DESCRIPTION' | translate }}">
+
+  <div class="agg-controls" [formGroup]="aggForm">
+    <mat-form-field appearance="outline" class="filter-field">
+      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.GROUP_BY' | translate }}</mat-label>
+      <mat-select formControlName="group_by">
+        <mat-option *ngFor="let g of groupByOptions" [value]="g">{{ g }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
+      <mat-label>{{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.METRIC' | translate }}</mat-label>
+      <mat-select formControlName="metric">
+        <mat-option *ngFor="let m of metrics" [value]="m">{{ m }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <button mat-raised-button color="primary" (click)="aggregate()">
+      <mat-icon>bar_chart</mat-icon>
+      {{ 'SETTINGS.DETECTION.SIGNALS_EXPLORER.AGGREGATE' | translate }}
+    </button>
+  </div>
+
+  <mat-spinner *ngIf="aggLoading" diameter="30"></mat-spinner>
+
+  <div class="agg-results" *ngIf="!aggLoading && aggBuckets.length > 0">
+    <div class="agg-bucket" *ngFor="let b of aggBuckets">
+      <span class="bucket-key">{{ b.key }}</span>
+      <div class="bucket-bar-container">
+        <div class="bucket-bar" [style.width.%]="(b.count / aggBuckets[0].count) * 100"></div>
+      </div>
+      <span class="bucket-count">{{ b.count }}</span>
+    </div>
+  </div>
+</cnsl-card>

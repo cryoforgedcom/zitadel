@@ -1,0 +1,138 @@
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+
+.filter-field {
+  min-width: 140px;
+  max-width: 200px;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary, #666);
+}
+
+.signals-table {
+  width: 100%;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.badge-stream {
+  background: var(--color-primary-light, #e3f2fd);
+  color: var(--color-primary, #1976d2);
+}
+
+.badge-success {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.badge-failure {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.badge-blocked {
+  background: #fbe9e7;
+  color: #bf360c;
+}
+
+.badge-challenged {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.badge-finding {
+  background: #fce4ec;
+  color: #880e4f;
+  margin-right: 4px;
+}
+
+.user-id {
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-text-secondary, #999);
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.agg-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+
+.agg-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.agg-bucket {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.bucket-key {
+  min-width: 120px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-align: right;
+}
+
+.bucket-bar-container {
+  flex: 1;
+  height: 20px;
+  background: var(--color-background-secondary, #f5f5f5);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bucket-bar {
+  height: 100%;
+  background: var(--color-primary, #1976d2);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  min-width: 2px;
+}
+
+.bucket-count {
+  min-width: 50px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #333);
+}

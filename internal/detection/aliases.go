@@ -14,16 +14,11 @@ type Outcome = signals.Outcome
 type SignalStream = signals.SignalStream
 type HTTPContext = signals.HTTPContext
 type Emitter = signals.Emitter
-type ArchiveStorage = signals.ArchiveStorage
 type SignalStoreConfig = signals.SignalStoreConfig
-type SignalStoreMode = signals.SignalStoreMode
 type DebouncerConfig = signals.DebouncerConfig
-type SignalPGConfig = signals.SignalPGConfig
-type SignalRedisConfig = signals.SignalRedisConfig
-type ArchiveConfig = signals.ArchiveConfig
+type DuckLakeConfig = signals.DuckLakeConfig
 type ArchiveBackend = signals.ArchiveBackend
 type ArchiveS3Config = signals.ArchiveS3Config
-type DuckLakeConfig = signals.DuckLakeConfig
 
 type Prompt = llm.Prompt
 type Classification = llm.Classification
@@ -47,9 +42,6 @@ const (
 	OutcomeFailure    = signals.OutcomeFailure
 	OutcomeBlocked    = signals.OutcomeBlocked
 	OutcomeChallenged = signals.OutcomeChallenged
-
-	SignalStoreModePG    = signals.SignalStoreModePG
-	SignalStoreModeRedis = signals.SignalStoreModeRedis
 
 	ArchiveBackendFS = signals.ArchiveBackendFS
 	ArchiveBackendS3 = signals.ArchiveBackendS3

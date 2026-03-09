@@ -36,6 +36,7 @@ import { OidcWebkeysModule } from '../policies/oidc-webkeys/oidc-webkeys.module'
 import { NotificationSMTPProviderComponent } from '../policies/notification-smtp-provider/notification-smtp-provider.component';
 import { DetectionSettingsComponent } from '../policies/detection-settings/detection-settings.component';
 import { DetectionRulesComponent } from '../policies/detection-rules/detection-rules.component';
+import { SignalsExplorerComponent } from '../policies/signals-explorer/signals-explorer.component';
 
 @NgModule({
   declarations: [SettingsListComponent],
@@ -56,6 +57,7 @@ import { DetectionRulesComponent } from '../policies/detection-rules/detection-r
     NotificationSMTPProviderComponent,
     DetectionSettingsComponent,
     DetectionRulesComponent,
+    SignalsExplorerComponent,
     PrivacyPolicyModule,
     MessageTextsPolicyModule,
     SecurityPolicyModule,

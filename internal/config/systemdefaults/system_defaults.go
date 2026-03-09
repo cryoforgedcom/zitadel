@@ -78,35 +78,10 @@ type RiskRateLimitConfig struct {
 // RiskSignalStoreConfig mirrors internal/signals signal-store config for YAML configuration.
 type RiskSignalStoreConfig struct {
 	Enabled     bool
-	Mode        string
 	ChannelSize int
 	Debounce    struct {
 		MinFrequency time.Duration
 		MaxBulkSize  uint
-	}
-	Postgres struct {
-		PartitionInterval time.Duration
-		Retention         time.Duration
-	}
-	Redis struct {
-		MaxLen         int64
-		DrainInterval  time.Duration
-		DrainBatchSize int64
-		CircuitBreaker *RiskCBConfig
-	}
-	Archive struct {
-		Enabled  bool
-		Backend  string
-		FSPath   string
-		Interval time.Duration
-		S3       struct {
-			Endpoint  string
-			Bucket    string
-			AccessKey string
-			SecretKey string
-			UseSSL    bool
-		}
-		StreamRetention map[string]time.Duration
 	}
 	DuckLake struct {
 		Enabled            bool
