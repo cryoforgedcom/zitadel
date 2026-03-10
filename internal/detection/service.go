@@ -115,14 +115,14 @@ func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClie
 		svc.emitterCancel = cancel
 		go emitter.Start(ctx)
 		if instrumentation.IsStreamEnabled(instrumentation.StreamRisk) {
-			logging.Info(ctx, "risk.signal_store.started",
+			logging.Info(ctx, "detection.signal_store.started",
 				slog.Int("channel_size", cfg.SignalStore.ChannelSize),
 				slog.String("mode", "ducklake"),
 			)
 		}
 	}
 	if len(basePolicy.Rules) > 0 || policyProvider != nil {
-		logging.Info(context.Background(), "risk.ratelimit.backend_selected",
+		logging.Info(context.Background(), "detection.ratelimit.backend_selected",
 			slog.String("configured_mode", string(configuredRateLimit)),
 			slog.String("effective_mode", string(effectiveRateLimit)),
 		)
@@ -220,7 +220,7 @@ func newRateLimiterStore(cfg ratelimit.Config, db *sql.DB, redisClient *redis.Cl
 		if redisClient != nil {
 			return ratelimit.NewRedisRateLimiter(redisClient), ratelimit.ModeRedis
 		}
-		logging.Warn(context.Background(), "risk.ratelimit.redis_unavailable_fallback_memory",
+		logging.Warn(context.Background(), "detection.ratelimit.redis_unavailable_fallback_memory",
 			slog.String("configured_mode", string(ratelimit.ModeRedis)),
 			slog.String("effective_mode", string(ratelimit.ModeMemory)),
 		)
@@ -229,7 +229,7 @@ func newRateLimiterStore(cfg ratelimit.Config, db *sql.DB, redisClient *redis.Cl
 		if db != nil {
 			return ratelimit.NewPGRateLimiter(db), ratelimit.ModePG
 		}
-		logging.Warn(context.Background(), "risk.ratelimit.pg_unavailable_fallback_memory",
+		logging.Warn(context.Background(), "detection.ratelimit.pg_unavailable_fallback_memory",
 			slog.String("configured_mode", string(ratelimit.ModePG)),
 			slog.String("effective_mode", string(ratelimit.ModeMemory)),
 		)
@@ -318,8 +318,8 @@ func (s *Service) Evaluate(ctx context.Context, signal signals.Signal) (_ Decisi
 	if len(policy.Rules) > 0 {
 		// Expression-based rule evaluation.
 		rc := buildRiskContext(signal, snapshot)
-		ruleEngine := NewRuleEngine(policy.Rules, s.rateLimiter, s.llm, policy.Config.LLM, s.findingRecorder(), s.emitter)
-		findings = ruleEngine.Evaluate(ctx, rc, snapshot.SessionSignals)
+		ruleEvaluator := NewRuleEvaluator(policy.Rules, s.rateLimiter, s.llm, policy.Config.LLM, s.findingRecorder(), s.emitter)
+		findings = ruleEvaluator.Evaluate(ctx, rc, snapshot.SessionSignals)
 	} else {
 		// Legacy hardcoded heuristics (backward-compatible fallback).
 		findings = make([]Finding, 0, 2)
@@ -367,14 +367,14 @@ func (s *Service) Evaluate(ctx context.Context, signal signals.Signal) (_ Decisi
 		attribute.Int64("risk.latency_ms", elapsed.Milliseconds()),
 	)
 
-	logging.Info(ctx, "risk.eval.complete",
-		slog.String("risk_user_id", signal.UserID),
-		slog.String("risk_session_id", signal.SessionID),
-		slog.String("risk_operation", signal.Operation),
-		slog.Bool("risk_allow", decision.Allow),
-		slog.String("risk_findings", strings.Join(names, ",")),
-		slog.Int("risk_finding_count", len(findings)),
-		slog.Int64("risk_latency_ms", elapsed.Milliseconds()),
+	logging.Info(ctx, "detection.eval.complete",
+		slog.String("detection_user_id", signal.UserID),
+		slog.String("detection_session_id", signal.SessionID),
+		slog.String("detection_operation", signal.Operation),
+		slog.Bool("detection_allow", decision.Allow),
+		slog.String("detection_findings", strings.Join(names, ",")),
+		slog.Int("detection_finding_count", len(findings)),
+		slog.Int64("detection_latency_ms", elapsed.Milliseconds()),
 	)
 
 	return decision, nil
@@ -450,9 +450,9 @@ func (s *Service) evaluateLLM(ctx context.Context, signal signals.Signal, snapsh
 		if cfg.LLM.LogPrompts {
 			level = slog.LevelInfo
 		}
-		logging.Log(ctx, level, "risk.llm.classification_cached",
-			slog.String("risk_user_id", signal.UserID),
-			slog.String("risk_session_id", signal.SessionID),
+		logging.Log(ctx, level, "detection.llm.classification_cached",
+			slog.String("detection_user_id", signal.UserID),
+			slog.String("detection_session_id", signal.SessionID),
 			slog.String("llm_classification", cached.Name),
 			slog.String("llm_mode", string(cfg.LLM.Mode.Normalized())),
 		)
@@ -468,9 +468,9 @@ func (s *Service) evaluateLLM(ctx context.Context, signal signals.Signal, snapsh
 	if cfg.LLM.LogPrompts {
 		promptLevel = slog.LevelInfo
 	}
-	logging.Log(ctx, promptLevel, "risk.llm.prompt",
-		slog.String("risk_user_id", signal.UserID),
-		slog.String("risk_session_id", signal.SessionID),
+	logging.Log(ctx, promptLevel, "detection.llm.prompt",
+		slog.String("detection_user_id", signal.UserID),
+		slog.String("detection_session_id", signal.SessionID),
 		slog.String("llm_context", prompt.User),
 	)
 
@@ -488,9 +488,9 @@ func (s *Service) evaluateLLM(ctx context.Context, signal signals.Signal, snapsh
 
 	if err != nil {
 		if errors.Is(err, llm.ErrCircuitOpen) {
-			logging.Warn(ctx, "risk.llm.circuit_open",
-				slog.String("risk_user_id", signal.UserID),
-				slog.String("risk_session_id", signal.SessionID),
+			logging.Warn(ctx, "detection.llm.circuit_open",
+				slog.String("detection_user_id", signal.UserID),
+				slog.String("detection_session_id", signal.SessionID),
 			)
 			s.emitLLMSignal(signal, "llm.circuit_open", signals.OutcomeFailure,
 				fmt.Sprintf(`{"latency_ms":%d}`, llmElapsed.Milliseconds()))
@@ -499,8 +499,8 @@ func (s *Service) evaluateLLM(ctx context.Context, signal signals.Signal, snapsh
 			}
 			return nil, nil
 		}
-		logging.WithError(ctx, err).Warn("risk.llm.classify_failed",
-			slog.String("risk_user_id", signal.UserID),
+		logging.WithError(ctx, err).Warn("detection.llm.classify_failed",
+			slog.String("detection_user_id", signal.UserID),
 			slog.Int64("llm_latency_ms", llmElapsed.Milliseconds()),
 		)
 		s.emitLLMSignal(signal, "llm.classify_failed", signals.OutcomeFailure,
@@ -522,9 +522,9 @@ func (s *Service) evaluateLLM(ctx context.Context, signal signals.Signal, snapsh
 	if cfg.LLM.LogPrompts {
 		classLevel = slog.LevelInfo
 	}
-	logging.Log(ctx, classLevel, "risk.llm.classified",
-		slog.String("risk_user_id", signal.UserID),
-		slog.String("risk_session_id", signal.SessionID),
+	logging.Log(ctx, classLevel, "detection.llm.classified",
+		slog.String("detection_user_id", signal.UserID),
+		slog.String("detection_session_id", signal.SessionID),
 		slog.String("llm_classification", level),
 		slog.Float64("llm_confidence", classification.Confidence),
 		slog.String("llm_reason", classification.Reason),
@@ -587,10 +587,10 @@ func (s *Service) failOpenDecision(ctx context.Context, signal signals.Signal, f
 	if !failOpen {
 		return Decision{}, err
 	}
-	logging.WithError(ctx, err).Warn("risk.eval.failed_fail_open",
-		slog.String("risk_user_id", signal.UserID),
-		slog.String("risk_session_id", signal.SessionID),
-		slog.String("risk_operation", signal.Operation),
+	logging.WithError(ctx, err).Warn("detection.eval.failed_fail_open",
+		slog.String("detection_user_id", signal.UserID),
+		slog.String("detection_session_id", signal.SessionID),
+		slog.String("detection_operation", signal.Operation),
 	)
 	return Decision{Allow: true}, nil
 }

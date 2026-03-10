@@ -57,3 +57,22 @@ const (
 )
 
 var ErrCircuitOpen = llm.ErrCircuitOpen
+
+// Backward-compatible aliases for the Engine → Action rename.
+// External packages still reference the old names; these aliases
+// keep them compiling until those callers are updated.
+type EngineType = ActionType
+
+const (
+	EngineBlock     = ActionBlock
+	EngineRateLimit = ActionRateLimit
+	EngineLLM       = ActionLLM
+	EngineLog       = ActionLog
+	EngineCaptcha   = ActionCaptcha
+)
+
+// RuleEngine is a backward-compatible alias for RuleEvaluator.
+type RuleEngine = RuleEvaluator
+
+// NewRuleEngine is a backward-compatible alias for NewRuleEvaluator.
+var NewRuleEngine = NewRuleEvaluator

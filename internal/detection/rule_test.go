@@ -13,7 +13,7 @@ func TestCompileRules_Valid(t *testing.T) {
 		{
 			ID:     "failure-burst",
 			Expr:   "FailureCount >= 5",
-			Engine: EngineBlock,
+			Action: ActionBlock,
 			FindingCfg: RuleFinding{
 				Name:  "failure_burst",
 				Block: true,
@@ -22,7 +22,7 @@ func TestCompileRules_Valid(t *testing.T) {
 		{
 			ID:     "context-drift",
 			Expr:   "IPChanged && UAChanged",
-			Engine: EngineBlock,
+			Action: ActionBlock,
 			FindingCfg: RuleFinding{
 				Name:  "context_drift",
 				Block: true,
@@ -44,7 +44,7 @@ func TestCompileRules_InvalidExpr(t *testing.T) {
 		{
 			ID:     "bad",
 			Expr:   "nonexistentField > 5",
-			Engine: EngineBlock,
+			Action: ActionBlock,
 		},
 	}
 	_, err := CompileRules(rules)
@@ -55,7 +55,7 @@ func TestCompileRules_InvalidExpr(t *testing.T) {
 
 func TestCompileRules_NoID(t *testing.T) {
 	rules := []Rule{
-		{Expr: "FailureCount > 0", Engine: EngineBlock},
+		{Expr: "FailureCount > 0", Action: ActionBlock},
 	}
 	_, err := CompileRules(rules)
 	if err == nil {
@@ -65,7 +65,7 @@ func TestCompileRules_NoID(t *testing.T) {
 
 func TestCompileRules_NoExpr(t *testing.T) {
 	rules := []Rule{
-		{ID: "empty", Engine: EngineBlock},
+		{ID: "empty", Action: ActionBlock},
 	}
 	_, err := CompileRules(rules)
 	if err == nil {
@@ -83,7 +83,7 @@ func TestCompileRules_InvalidRateLimitConfig(t *testing.T) {
 			rule: Rule{
 				ID:     "bad-window",
 				Expr:   "true",
-				Engine: EngineRateLimit,
+				Action: ActionRateLimit,
 				RateLimitCfg: RuleRateLimit{
 					Max: 1,
 				},
@@ -94,7 +94,7 @@ func TestCompileRules_InvalidRateLimitConfig(t *testing.T) {
 			rule: Rule{
 				ID:     "bad-max",
 				Expr:   "true",
-				Engine: EngineRateLimit,
+				Action: ActionRateLimit,
 				RateLimitCfg: RuleRateLimit{
 					Window: time.Minute,
 				},
@@ -117,7 +117,7 @@ func TestCompiledRule_Evaluate(t *testing.T) {
 		{
 			ID:     "test",
 			Expr:   "FailureCount >= 3",
-			Engine: EngineBlock,
+			Action: ActionBlock,
 			FindingCfg: RuleFinding{
 				Name:  "test_finding",
 				Block: true,
@@ -162,7 +162,7 @@ func TestCompiledRule_DeltaFlags(t *testing.T) {
 		{
 			ID:     "drift",
 			Expr:   "IPChanged && UAChanged",
-			Engine: EngineBlock,
+			Action: ActionBlock,
 			FindingCfg: RuleFinding{
 				Name:  "drift",
 				Block: true,
@@ -204,7 +204,7 @@ func TestCompiledRule_NilPointerAccess(t *testing.T) {
 		{
 			ID:     "ip-check",
 			Expr:   "LastSuccess != nil && IPChanged",
-			Engine: EngineBlock,
+			Action: ActionBlock,
 			FindingCfg: RuleFinding{
 				Name: "ip_check",
 			},
@@ -237,12 +237,12 @@ func TestCompiledRule_NilPointerAccess(t *testing.T) {
 	}
 }
 
-func TestRuleEngine_Evaluate_BlockEngine(t *testing.T) {
+func TestRuleEvaluator_Evaluate_BlockAction(t *testing.T) {
 	rules, err := CompileRules([]Rule{
 		{
 			ID:     "burst",
 			Expr:   "FailureCount >= 5",
-			Engine: EngineBlock,
+			Action: ActionBlock,
 			FindingCfg: RuleFinding{
 				Name:    "failure_burst",
 				Message: "too many failures",
@@ -252,7 +252,7 @@ func TestRuleEngine_Evaluate_BlockEngine(t *testing.T) {
 		{
 			ID:     "drift",
 			Expr:   "IPChanged && UAChanged",
-			Engine: EngineBlock,
+			Action: ActionBlock,
 			FindingCfg: RuleFinding{
 				Name:    "context_drift",
 				Message: "context changed",
@@ -264,7 +264,7 @@ func TestRuleEngine_Evaluate_BlockEngine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	engine := NewRuleEngine(rules, ratelimit.NewMemoryRateLimiter(), nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, ratelimit.NewMemoryRateLimiter(), nil, LLMConfig{}, nil, nil)
 	ctx := context.Background()
 
 	// Only burst matches.
@@ -292,12 +292,12 @@ func TestRuleEngine_Evaluate_BlockEngine(t *testing.T) {
 	}
 }
 
-func TestRuleEngine_RateLimitEngine(t *testing.T) {
+func TestRuleEvaluator_RateLimitAction(t *testing.T) {
 	rules, err := CompileRules([]Rule{
 		{
 			ID:     "fp-flood",
 			Expr:   "DistinctFingerprints >= 3",
-			Engine: EngineRateLimit,
+			Action: ActionRateLimit,
 			FindingCfg: RuleFinding{
 				Name:  "fingerprint_flood",
 				Block: true,
@@ -314,7 +314,7 @@ func TestRuleEngine_RateLimitEngine(t *testing.T) {
 	}
 
 	limiter := ratelimit.NewMemoryRateLimiter()
-	engine := NewRuleEngine(rules, limiter, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, limiter, nil, LLMConfig{}, nil, nil)
 	ctx := context.Background()
 	now := time.Now()
 
@@ -346,12 +346,12 @@ func TestRuleEngine_RateLimitEngine(t *testing.T) {
 	}
 }
 
-func TestRuleEngine_RateLimitIsolatesInstances(t *testing.T) {
+func TestRuleEvaluator_RateLimitIsolatesInstances(t *testing.T) {
 	rules, err := CompileRules([]Rule{
 		{
 			ID:     "fp-flood",
 			Expr:   "DistinctFingerprints >= 3",
-			Engine: EngineRateLimit,
+			Action: ActionRateLimit,
 			FindingCfg: RuleFinding{
 				Name:  "fingerprint_flood",
 				Block: true,
@@ -368,7 +368,7 @@ func TestRuleEngine_RateLimitIsolatesInstances(t *testing.T) {
 	}
 
 	limiter := ratelimit.NewMemoryRateLimiter()
-	engine := NewRuleEngine(rules, limiter, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, limiter, nil, LLMConfig{}, nil, nil)
 	ctx := context.Background()
 
 	firstTenant := RiskContext{
@@ -389,12 +389,12 @@ func TestRuleEngine_RateLimitIsolatesInstances(t *testing.T) {
 	}
 }
 
-func TestRuleEngine_RateLimitIsolatesRules(t *testing.T) {
+func TestRuleEvaluator_RateLimitIsolatesRules(t *testing.T) {
 	rules, err := CompileRules([]Rule{
 		{
 			ID:     "rule-a",
 			Expr:   "true",
-			Engine: EngineRateLimit,
+			Action: ActionRateLimit,
 			FindingCfg: RuleFinding{
 				Name:  "rule_a_limit",
 				Block: true,
@@ -408,7 +408,7 @@ func TestRuleEngine_RateLimitIsolatesRules(t *testing.T) {
 		{
 			ID:     "rule-b",
 			Expr:   "true",
-			Engine: EngineRateLimit,
+			Action: ActionRateLimit,
 			FindingCfg: RuleFinding{
 				Name:  "rule_b_limit",
 				Block: true,
@@ -425,7 +425,7 @@ func TestRuleEngine_RateLimitIsolatesRules(t *testing.T) {
 	}
 
 	limiter := ratelimit.NewMemoryRateLimiter()
-	engine := NewRuleEngine(rules, limiter, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, limiter, nil, LLMConfig{}, nil, nil)
 	ctx := context.Background()
 
 	findings := engine.Evaluate(ctx, RiskContext{
@@ -439,12 +439,12 @@ func TestRuleEngine_RateLimitIsolatesRules(t *testing.T) {
 	}
 }
 
-func TestRuleEngine_LogEngine(t *testing.T) {
+func TestRuleEvaluator_LogAction(t *testing.T) {
 	rules, err := CompileRules([]Rule{
 		{
 			ID:     "observe",
 			Expr:   "FailureCount > 0",
-			Engine: EngineLog,
+			Action: ActionLog,
 			FindingCfg: RuleFinding{
 				Name:    "observation",
 				Message: "failures detected",
@@ -455,7 +455,7 @@ func TestRuleEngine_LogEngine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	engine := NewRuleEngine(rules, nil, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, nil, nil, LLMConfig{}, nil, nil)
 	ctx := context.Background()
 
 	findings := engine.Evaluate(ctx, RiskContext{FailureCount: 1}, nil)
@@ -463,7 +463,7 @@ func TestRuleEngine_LogEngine(t *testing.T) {
 		t.Fatalf("len(findings) = %d, want 1", len(findings))
 	}
 	if findings[0].Block {
-		t.Error("log engine should never block")
+		t.Error("log action should never block")
 	}
 	if findings[0].Source != "rule:observe" {
 		t.Errorf("Source = %q, want %q", findings[0].Source, "rule:observe")
@@ -475,7 +475,7 @@ func TestRenderKeyTemplate(t *testing.T) {
 		{
 			ID:     "test",
 			Expr:   "true",
-			Engine: EngineRateLimit,
+			Action: ActionRateLimit,
 			RateLimitCfg: RuleRateLimit{
 				KeyTemplate: "ip:{{.Current.IP}}",
 				Window:      time.Minute,
@@ -503,7 +503,7 @@ func TestRenderKeyTemplate_EmptyWhenUnset(t *testing.T) {
 		{
 			ID:     "test",
 			Expr:   "true",
-			Engine: EngineRateLimit,
+			Action: ActionRateLimit,
 			RateLimitCfg: RuleRateLimit{
 				Window: time.Minute,
 				Max:    5,
@@ -544,7 +544,7 @@ func TestRenderContextTemplate(t *testing.T) {
 		{
 			ID:              "test",
 			Expr:            "true",
-			Engine:          EngineLLM,
+			Action:          ActionLLM,
 			ContextTemplate: "IP changed from {{.LastSuccess.IP}} to {{.Current.IP}}",
 		},
 	})
@@ -570,7 +570,7 @@ func TestCompileRules_TrueExpression(t *testing.T) {
 		{
 			ID:     "always-match",
 			Expr:   "true",
-			Engine: EngineBlock,
+			Action: ActionBlock,
 			FindingCfg: RuleFinding{
 				Name:  "always",
 				Block: true,
@@ -607,8 +607,8 @@ func TestCompileRules_EmptyRules(t *testing.T) {
 
 func TestCompileRules_DuplicateIDs(t *testing.T) {
 	rules := []Rule{
-		{ID: "dup", Expr: "true", Engine: EngineBlock},
-		{ID: "dup", Expr: "FailureCount > 0", Engine: EngineLog},
+		{ID: "dup", Expr: "true", Action: ActionBlock},
+		{ID: "dup", Expr: "FailureCount > 0", Action: ActionLog},
 	}
 	compiled, err := CompileRules(rules)
 	if err != nil {
@@ -619,12 +619,12 @@ func TestCompileRules_DuplicateIDs(t *testing.T) {
 	}
 }
 
-func TestRuleEngine_CaptchaEngine(t *testing.T) {
+func TestRuleEvaluator_CaptchaAction(t *testing.T) {
 	rules, err := CompileRules([]Rule{
 		{
 			ID:     "captcha-test",
 			Expr:   "true",
-			Engine: EngineCaptcha,
+			Action: ActionCaptcha,
 			FindingCfg: RuleFinding{
 				Name: "captcha_required",
 			},
@@ -634,7 +634,7 @@ func TestRuleEngine_CaptchaEngine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	engine := NewRuleEngine(rules, nil, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, nil, nil, LLMConfig{}, nil, nil)
 	findings := engine.Evaluate(context.Background(), RiskContext{}, nil)
 	if len(findings) != 1 {
 		t.Fatalf("len(findings) = %d, want 1", len(findings))
@@ -650,52 +650,52 @@ func TestRuleEngine_CaptchaEngine(t *testing.T) {
 		t.Errorf("Message = %q, want %q", f.Message, "captcha verification required")
 	}
 	if f.Block {
-		t.Error("captcha engine should not block")
+		t.Error("captcha action should not block")
 	}
 	if !f.Challenge {
-		t.Error("captcha engine should set Challenge = true")
+		t.Error("captcha action should set Challenge = true")
 	}
 	if f.ChallengeType != "captcha" {
 		t.Errorf("ChallengeType = %q, want %q", f.ChallengeType, "captcha")
 	}
 }
 
-func TestRuleEngine_Evaluate_NoRules(t *testing.T) {
-	engine := NewRuleEngine(nil, nil, nil, LLMConfig{}, nil, nil)
+func TestRuleEvaluator_Evaluate_NoRules(t *testing.T) {
+	engine := NewRuleEvaluator(nil, nil, nil, LLMConfig{}, nil, nil)
 	findings := engine.Evaluate(context.Background(), RiskContext{}, nil)
 	if len(findings) != 0 {
 		t.Fatalf("len(findings) = %d, want 0", len(findings))
 	}
 }
 
-func TestRuleEngine_UnknownEngine(t *testing.T) {
-	// Compile with a valid engine, then mutate to an unknown engine type
+func TestRuleEvaluator_UnknownAction(t *testing.T) {
+	// Compile with a valid action, then mutate to an unknown action type
 	// to exercise the dispatch default branch.
 	rules, err := CompileRules([]Rule{
 		{
 			ID:     "sneaky",
 			Expr:   "true",
-			Engine: EngineBlock,
+			Action: ActionBlock,
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	rules[0].Engine = EngineType("mystery")
+	rules[0].Action = ActionType("mystery")
 
-	engine := NewRuleEngine(rules, nil, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, nil, nil, LLMConfig{}, nil, nil)
 	findings := engine.Evaluate(context.Background(), RiskContext{}, nil)
 	if len(findings) != 0 {
-		t.Fatalf("len(findings) = %d, want 0 for unknown engine", len(findings))
+		t.Fatalf("len(findings) = %d, want 0 for unknown action", len(findings))
 	}
 }
 
-func TestRuleEngine_MultipleRulesAllMatch(t *testing.T) {
+func TestRuleEvaluator_MultipleRulesAllMatch(t *testing.T) {
 	rules, err := CompileRules([]Rule{
 		{
 			ID:     "block-all",
 			Expr:   "true",
-			Engine: EngineBlock,
+			Action: ActionBlock,
 			FindingCfg: RuleFinding{
 				Name:  "block_finding",
 				Block: true,
@@ -704,7 +704,7 @@ func TestRuleEngine_MultipleRulesAllMatch(t *testing.T) {
 		{
 			ID:     "log-all",
 			Expr:   "true",
-			Engine: EngineLog,
+			Action: ActionLog,
 			FindingCfg: RuleFinding{
 				Name:    "log_finding",
 				Message: "observed",
@@ -713,7 +713,7 @@ func TestRuleEngine_MultipleRulesAllMatch(t *testing.T) {
 		{
 			ID:     "rate-all",
 			Expr:   "true",
-			Engine: EngineRateLimit,
+			Action: ActionRateLimit,
 			FindingCfg: RuleFinding{
 				Name:  "rate_finding",
 				Block: true,
@@ -730,7 +730,7 @@ func TestRuleEngine_MultipleRulesAllMatch(t *testing.T) {
 	}
 
 	limiter := ratelimit.NewMemoryRateLimiter()
-	engine := NewRuleEngine(rules, limiter, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, limiter, nil, LLMConfig{}, nil, nil)
 	ctx := context.Background()
 
 	// First evaluation: block and log fire immediately; rate_limit is within limit.
@@ -739,7 +739,7 @@ func TestRuleEngine_MultipleRulesAllMatch(t *testing.T) {
 		t.Fatalf("first call: len(findings) = %d, want 2 (block + log)", len(findings))
 	}
 
-	// Second evaluation: rate_limit now exceeds, all three engines produce findings.
+	// Second evaluation: rate_limit now exceeds, all three actions produce findings.
 	findings = engine.Evaluate(ctx, RiskContext{Current: Signal{UserID: "u1"}}, nil)
 	if len(findings) != 3 {
 		t.Fatalf("second call: len(findings) = %d, want 3", len(findings))
@@ -761,7 +761,7 @@ func TestCompiledRule_ContextTemplateEmpty(t *testing.T) {
 		{
 			ID:     "no-ctx",
 			Expr:   "true",
-			Engine: EngineBlock,
+			Action: ActionBlock,
 		},
 	})
 	if err != nil {

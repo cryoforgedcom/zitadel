@@ -10,20 +10,20 @@ import (
 	"github.com/expr-lang/expr/vm"
 )
 
-// EngineType determines what happens when a rule expression matches.
-type EngineType string
+// ActionType determines what happens when a rule expression matches.
+type ActionType string
 
 const (
-	// EngineBlock produces a blocking finding directly — no engine call.
-	EngineBlock EngineType = "block"
-	// EngineRateLimit checks a fixed-window counter before deciding.
-	EngineRateLimit EngineType = "rate_limit"
-	// EngineLLM forwards a focused context to the LLM/SLM for judgement.
-	EngineLLM EngineType = "llm"
-	// EngineLog emits a structured log entry (observe-mode, never blocks).
-	EngineLog EngineType = "log"
-	// EngineCaptcha produces a challenge finding requiring captcha verification.
-	EngineCaptcha EngineType = "captcha"
+	// ActionBlock produces a blocking finding directly — no action call.
+	ActionBlock ActionType = "block"
+	// ActionRateLimit checks a fixed-window counter before deciding.
+	ActionRateLimit ActionType = "rate_limit"
+	// ActionLLM forwards a focused context to the LLM/SLM for judgement.
+	ActionLLM ActionType = "llm"
+	// ActionLog emits a structured log entry (observe-mode, never blocks).
+	ActionLog ActionType = "log"
+	// ActionCaptcha produces a challenge finding requiring captcha verification.
+	ActionCaptcha ActionType = "captcha"
 )
 
 // Rule is the YAML-level definition loaded from configuration.
@@ -31,28 +31,28 @@ type Rule struct {
 	ID          string     `yaml:"id"`
 	Description string     `yaml:"description"`
 	Expr        string     `yaml:"expr"`
-	Engine      EngineType `yaml:"engine"`
+	Action      ActionType `yaml:"engine"`
 
 	// Priority controls evaluation order. Lower values run first.
 	// Rules with the same priority preserve their insertion order.
 	Priority int `yaml:"priority"`
 
-	// StopOnMatch causes the rule engine to skip all remaining rules
+	// StopOnMatch causes the rule evaluator to skip all remaining rules
 	// when this rule's expression matches. This provides implicit
 	// IF/ELSE flow control: a high-priority whitelist rule with
 	// StopOnMatch bypasses all subsequent checks.
 	StopOnMatch bool `yaml:"stop_on_match"`
 
 	// Finding configures the output finding when the rule matches.
-	// Only Name and Block are used for the "block" engine; other engines
+	// Only Name and Block are used for the "block" action; other actions
 	// may override Block based on their own logic.
 	FindingCfg RuleFinding `yaml:"finding"`
 
 	// ContextTemplate is a Go text/template rendered with RiskContext when
-	// the rule forwards to the LLM engine. Produces a compact, focused prompt.
+	// the rule forwards to the LLM action. Produces a compact, focused prompt.
 	ContextTemplate string `yaml:"context_template"`
 
-	// RateLimit configures the rate_limit engine.
+	// RateLimit configures the rate_limit action.
 	RateLimitCfg RuleRateLimit `yaml:"rate_limit"`
 }
 
@@ -63,7 +63,7 @@ type RuleFinding struct {
 	Block   bool   `yaml:"block"`
 }
 
-// RuleRateLimit configures the rate_limit engine for a rule.
+// RuleRateLimit configures the rate_limit action for a rule.
 type RuleRateLimit struct {
 	// KeyTemplate is a Go text/template rendered with RiskContext to produce
 	// the counter key (e.g. "ip:{{.Current.IP}}", "user:{{.Current.UserID}}").
@@ -103,13 +103,13 @@ func compileRule(r Rule) (CompiledRule, error) {
 		return CompiledRule{}, fmt.Errorf("rule must have an expression")
 	}
 
-	// Validate engine type.
-	switch r.Engine {
-	case EngineBlock, EngineRateLimit, EngineLLM, EngineLog, EngineCaptcha:
+	// Validate action type.
+	switch r.Action {
+	case ActionBlock, ActionRateLimit, ActionLLM, ActionLog, ActionCaptcha:
 	case "":
-		return CompiledRule{}, fmt.Errorf("rule must have an engine")
+		return CompiledRule{}, fmt.Errorf("rule must have an action")
 	default:
-		return CompiledRule{}, fmt.Errorf("unknown engine type %q", r.Engine)
+		return CompiledRule{}, fmt.Errorf("unknown action type %q", r.Action)
 	}
 
 	// Compile expression with type-safe environment.
@@ -123,7 +123,7 @@ func compileRule(r Rule) (CompiledRule, error) {
 
 	cr := CompiledRule{Rule: r, program: program}
 
-	// Parse optional context template for LLM engine.
+	// Parse optional context template for LLM action.
 	if r.ContextTemplate != "" {
 		tmpl, err := template.New(r.ID + "_ctx").Parse(r.ContextTemplate)
 		if err != nil {
@@ -132,7 +132,7 @@ func compileRule(r Rule) (CompiledRule, error) {
 		cr.ctxTemplate = tmpl
 	}
 
-	// Parse optional key template for rate_limit engine.
+	// Parse optional key template for rate_limit action.
 	if r.RateLimitCfg.KeyTemplate != "" {
 		tmpl, err := template.New(r.ID + "_key").Parse(r.RateLimitCfg.KeyTemplate)
 		if err != nil {
@@ -141,7 +141,7 @@ func compileRule(r Rule) (CompiledRule, error) {
 		cr.keyTemplate = tmpl
 	}
 
-	if r.Engine == EngineRateLimit {
+	if r.Action == ActionRateLimit {
 		if r.RateLimitCfg.Window <= 0 {
 			return CompiledRule{}, fmt.Errorf("rate_limit window must be greater than 0")
 		}

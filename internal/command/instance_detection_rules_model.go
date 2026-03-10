@@ -45,7 +45,7 @@ func (wm *InstanceDetectionRulesWriteModel) Reduce() error {
 					ID:          e.RuleID,
 					Description: e.Description,
 					Expr:        e.Expr,
-					Engine:      e.Engine,
+					Action:      e.Engine,
 					Priority:    e.Priority,
 					StopOnMatch: e.StopOnMatch,
 					FindingCfg: detection.RuleFinding{
@@ -76,7 +76,7 @@ func (wm *InstanceDetectionRulesWriteModel) Reduce() error {
 				rule.Rule.Expr = *e.Expr
 			}
 			if e.Engine != nil {
-				rule.Rule.Engine = *e.Engine
+				rule.Rule.Action = *e.Engine
 			}
 			if e.FindingName != nil {
 				rule.Rule.FindingCfg.Name = *e.FindingName

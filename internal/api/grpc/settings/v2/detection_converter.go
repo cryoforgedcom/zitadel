@@ -42,7 +42,7 @@ func detectionRuleToPb(rule detection.Rule, creationDate, changeDate time.Time) 
 		Id:          rule.ID,
 		Description: rule.Description,
 		Expr:        rule.Expr,
-		Engine:      detectionRuleEngineToPb(rule.Engine),
+		Engine:      detectionRuleEngineToPb(rule.Action),
 		Finding: &pb.DetectionRuleFinding{
 			Name:    rule.FindingCfg.Name,
 			Message: rule.FindingCfg.Message,
@@ -50,7 +50,7 @@ func detectionRuleToPb(rule detection.Rule, creationDate, changeDate time.Time) 
 		},
 		ContextTemplate: rule.ContextTemplate,
 	}
-	if rule.Engine == detection.EngineRateLimit {
+	if rule.Action == detection.EngineRateLimit {
 		resp.RateLimit = &pb.DetectionRuleRateLimit{
 			Key:    rule.RateLimitCfg.KeyTemplate,
 			Window: durationpb.New(rule.RateLimitCfg.Window),
@@ -74,7 +74,7 @@ func queryDetectionRuleToPb(rule *query.DetectionRule) *pb.DetectionRule {
 		ID:          rule.ID,
 		Description: rule.Description,
 		Expr:        rule.Expr,
-		Engine:      rule.Engine,
+		Action:      rule.Engine,
 		Priority:    int(rule.Priority),
 		StopOnMatch: rule.StopOnMatch,
 		FindingCfg: detection.RuleFinding{
@@ -100,7 +100,7 @@ func detectionRuleToDomain(rule *pb.DetectionRule) (detection.Rule, error) {
 		ID:              rule.GetId(),
 		Description:     rule.GetDescription(),
 		Expr:            rule.GetExpr(),
-		Engine:          engine,
+		Action:          engine,
 		ContextTemplate: rule.GetContextTemplate(),
 	}
 	if finding := rule.GetFinding(); finding != nil {

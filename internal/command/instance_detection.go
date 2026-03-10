@@ -103,7 +103,7 @@ func detectionRulesEqual(a, b detection.Rule) bool {
 	return a.ID == b.ID &&
 		a.Description == b.Description &&
 		a.Expr == b.Expr &&
-		a.Engine == b.Engine &&
+		a.Action == b.Action &&
 		a.Priority == b.Priority &&
 		a.StopOnMatch == b.StopOnMatch &&
 		a.FindingCfg == b.FindingCfg &&

@@ -57,7 +57,7 @@ func NewDetectionRuleAddedEvent(ctx context.Context, aggregate *eventstore.Aggre
 		RuleID:          rule.ID,
 		Description:     rule.Description,
 		Expr:            rule.Expr,
-		Engine:          rule.Engine,
+		Engine:          rule.Action,
 		Priority:        rule.Priority,
 		StopOnMatch:     rule.StopOnMatch,
 		FindingName:     rule.FindingCfg.Name,

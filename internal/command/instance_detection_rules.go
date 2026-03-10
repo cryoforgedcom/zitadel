@@ -173,8 +173,8 @@ func detectionRuleChanges(current, target detection.Rule) []instance.DetectionRu
 	if current.Expr != target.Expr {
 		changes = append(changes, instance.ChangeDetectionRuleExpr(target.Expr))
 	}
-	if current.Engine != target.Engine {
-		changes = append(changes, instance.ChangeDetectionRuleEngine(target.Engine))
+	if current.Action != target.Action {
+		changes = append(changes, instance.ChangeDetectionRuleEngine(target.Action))
 	}
 	if current.Priority != target.Priority {
 		changes = append(changes, instance.ChangeDetectionRulePriority(target.Priority))

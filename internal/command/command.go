@@ -513,7 +513,7 @@ func riskRules(rules []sd.RiskRuleConfig) []detection.Rule {
 			ID:          r.ID,
 			Description: r.Description,
 			Expr:        r.Expr,
-			Engine:      detection.EngineType(r.Engine),
+			Action:      detection.EngineType(r.Engine),
 			FindingCfg: detection.RuleFinding{
 				Name:    r.Finding.Name,
 				Message: r.Finding.Message,

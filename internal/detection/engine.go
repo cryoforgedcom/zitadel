@@ -24,9 +24,9 @@ type signalEmitter interface {
 	Emit(signal signals.Signal)
 }
 
-// RuleEngine evaluates compiled rules against a RiskContext and dispatches
-// matching rules to their configured engine (block, rate_limit, llm, log).
-type RuleEngine struct {
+// RuleEvaluator evaluates compiled rules against a RiskContext and dispatches
+// matching rules to their configured action (block, rate_limit, llm, log).
+type RuleEvaluator struct {
 	rules           []CompiledRule
 	limiter         ratelimit.RateLimiterStore
 	llm             llm.LLMClient
@@ -35,12 +35,12 @@ type RuleEngine struct {
 	emitter         signalEmitter
 }
 
-// NewRuleEngine creates a rule engine with compiled rules and engine backends.
-func NewRuleEngine(rules []CompiledRule, limiter ratelimit.RateLimiterStore, llmClient llm.LLMClient, llmCfg llm.Config, findingRecorder FindingRecorder, emitter signalEmitter) *RuleEngine {
+// NewRuleEvaluator creates a rule evaluator with compiled rules and action backends.
+func NewRuleEvaluator(rules []CompiledRule, limiter ratelimit.RateLimiterStore, llmClient llm.LLMClient, llmCfg llm.Config, findingRecorder FindingRecorder, emitter signalEmitter) *RuleEvaluator {
 	if limiter == nil {
 		limiter = ratelimit.NewMemoryRateLimiter()
 	}
-	return &RuleEngine{
+	return &RuleEvaluator{
 		rules:           rules,
 		limiter:         limiter,
 		llm:             llmClient,
@@ -54,17 +54,17 @@ func NewRuleEngine(rules []CompiledRule, limiter ratelimit.RateLimiterStore, llm
 // from any that matched. Rules are evaluated in order; all rules run regardless
 // of prior matches. sessionSignals is used to cache LLM findings across the
 // create→set session pair.
-func (e *RuleEngine) Evaluate(ctx context.Context, rc RiskContext, sessionSignals []signals.RecordedSignal) []Finding {
+func (e *RuleEvaluator) Evaluate(ctx context.Context, rc RiskContext, sessionSignals []signals.RecordedSignal) []Finding {
 	findings := make([]Finding, 0, len(e.rules))
 
 	for i := range e.rules {
 		rule := &e.rules[i]
 		matched, err := rule.Evaluate(rc)
 		if err != nil {
-			logging.WithError(ctx, err).Warn("risk.expr.eval_error",
+			logging.WithError(ctx, err).Warn("detection.rule.eval_error",
 				slog.String("rule_id", rule.ID),
 				slog.String("rule_expr", rule.Expr),
-				slog.String("risk_user_id", rc.Current.UserID),
+				slog.String("detection_user_id", rc.Current.UserID),
 			)
 			continue
 		}
@@ -72,26 +72,26 @@ func (e *RuleEngine) Evaluate(ctx context.Context, rc RiskContext, sessionSignal
 			continue
 		}
 
-		logging.Info(ctx, "risk.expr.rule_matched",
+		logging.Info(ctx, "detection.rule.matched",
 			slog.String("rule_id", rule.ID),
 			slog.String("rule_expr", rule.Expr),
-			slog.String("rule_engine", string(rule.Engine)),
-			slog.String("risk_user_id", rc.Current.UserID),
-			slog.String("risk_session_id", rc.Current.SessionID),
-			slog.String("risk_operation", rc.Current.Operation),
-			slog.String("risk_ip", rc.Current.IP),
-			slog.String("risk_country", rc.Current.Country),
-			slog.Int("risk_failure_count", rc.FailureCount),
-			slog.Bool("risk_ip_changed", rc.IPChanged),
-			slog.Bool("risk_ua_changed", rc.UAChanged),
-			slog.Bool("risk_country_changed", rc.CountryChanged),
-			slog.Bool("risk_language_changed", rc.LanguageChanged),
-			slog.Int("risk_distinct_ips", rc.DistinctIPs),
-			slog.Int("risk_distinct_fps", rc.DistinctFingerprints),
-			slog.Int("risk_distinct_countries", rc.DistinctCountries),
-			slog.Int("risk_login_hour_utc", rc.LoginHourUTC),
-			slog.Float64("risk_login_velocity", rc.LoginVelocity),
-			slog.Int("risk_proxy_hops", rc.ProxyHopCount),
+			slog.String("rule_action", string(rule.Action)),
+			slog.String("detection_user_id", rc.Current.UserID),
+			slog.String("detection_session_id", rc.Current.SessionID),
+			slog.String("detection_operation", rc.Current.Operation),
+			slog.String("detection_ip", rc.Current.IP),
+			slog.String("detection_country", rc.Current.Country),
+			slog.Int("detection_failure_count", rc.FailureCount),
+			slog.Bool("detection_ip_changed", rc.IPChanged),
+			slog.Bool("detection_ua_changed", rc.UAChanged),
+			slog.Bool("detection_country_changed", rc.CountryChanged),
+			slog.Bool("detection_language_changed", rc.LanguageChanged),
+			slog.Int("detection_distinct_ips", rc.DistinctIPs),
+			slog.Int("detection_distinct_fps", rc.DistinctFingerprints),
+			slog.Int("detection_distinct_countries", rc.DistinctCountries),
+			slog.Int("detection_login_hour_utc", rc.LoginHourUTC),
+			slog.Float64("detection_login_velocity", rc.LoginVelocity),
+			slog.Int("detection_proxy_hops", rc.ProxyHopCount),
 		)
 
 		finding := e.dispatch(ctx, rule, rc, sessionSignals)
@@ -99,7 +99,7 @@ func (e *RuleEngine) Evaluate(ctx context.Context, rc RiskContext, sessionSignal
 			findings = append(findings, *finding)
 			// Non-LLM engines don't emit their own signals, so emit a
 			// detection-stream signal here for cross-stream correlation.
-			if rule.Engine != EngineLLM {
+			if rule.Action != ActionLLM {
 				e.emitDetectionSignal(rc, rule, *finding)
 			}
 		}
@@ -111,28 +111,28 @@ func (e *RuleEngine) Evaluate(ctx context.Context, rc RiskContext, sessionSignal
 	return findings
 }
 
-func (e *RuleEngine) dispatch(ctx context.Context, rule *CompiledRule, rc RiskContext, sessionSignals []signals.RecordedSignal) *Finding {
-	switch rule.Engine {
-	case EngineBlock:
+func (e *RuleEvaluator) dispatch(ctx context.Context, rule *CompiledRule, rc RiskContext, sessionSignals []signals.RecordedSignal) *Finding {
+	switch rule.Action {
+	case ActionBlock:
 		return e.dispatchBlock(rule, rc)
-	case EngineRateLimit:
+	case ActionRateLimit:
 		return e.dispatchRateLimit(ctx, rule, rc)
-	case EngineLLM:
+	case ActionLLM:
 		return e.dispatchLLM(ctx, rule, rc, sessionSignals)
-	case EngineLog:
+	case ActionLog:
 		return e.dispatchLog(ctx, rule, rc)
-	case EngineCaptcha:
+	case ActionCaptcha:
 		return e.dispatchCaptcha(ctx, rule, rc)
 	default:
-		logging.Warn(ctx, "risk.expr.unknown_engine",
+		logging.Warn(ctx, "detection.rule.unknown_action",
 			slog.String("rule_id", rule.ID),
-			slog.String("rule_engine", string(rule.Engine)),
+			slog.String("rule_action", string(rule.Action)),
 		)
 		return nil
 	}
 }
 
-func (e *RuleEngine) dispatchBlock(rule *CompiledRule, _ RiskContext) *Finding {
+func (e *RuleEvaluator) dispatchBlock(rule *CompiledRule, _ RiskContext) *Finding {
 	return &Finding{
 		Name:    rule.FindingCfg.Name,
 		Source:  "rule:" + rule.ID,
@@ -141,10 +141,10 @@ func (e *RuleEngine) dispatchBlock(rule *CompiledRule, _ RiskContext) *Finding {
 	}
 }
 
-func (e *RuleEngine) dispatchRateLimit(ctx context.Context, rule *CompiledRule, rc RiskContext) *Finding {
+func (e *RuleEvaluator) dispatchRateLimit(ctx context.Context, rule *CompiledRule, rc RiskContext) *Finding {
 	renderedKey, err := rule.RenderKeyTemplate(rc)
 	if err != nil {
-		logging.WithError(ctx, err).Warn("risk.ratelimit.key_render_failed",
+		logging.WithError(ctx, err).Warn("detection.ratelimit.key_render_failed",
 			slog.String("rule_id", rule.ID),
 		)
 		return nil
@@ -157,25 +157,25 @@ func (e *RuleEngine) dispatchRateLimit(ctx context.Context, rule *CompiledRule, 
 	storageKey := ratelimit.CanonicalRateLimitKey(rule.ID, rc.Current.InstanceID, rule.RateLimitCfg.Window, renderedKey)
 	count, allowed := e.limiter.Check(ctx, storageKey, rule.RateLimitCfg.Window, rule.RateLimitCfg.Max)
 	if allowed {
-		logging.Debug(ctx, "risk.ratelimit.within_limit",
+		logging.Debug(ctx, "detection.ratelimit.within_limit",
 			slog.String("rule_id", rule.ID),
 			slog.String("ratelimit_key", displayKey),
 			slog.String("ratelimit_storage_key", storageKey),
 			slog.Int("ratelimit_count", count),
 			slog.Int("ratelimit_max", rule.RateLimitCfg.Max),
-			slog.String("risk_instance_id", rc.Current.InstanceID),
+			slog.String("detection_instance_id", rc.Current.InstanceID),
 		)
 		return nil
 	}
 
-	logging.Info(ctx, "risk.ratelimit.exceeded",
+	logging.Info(ctx, "detection.ratelimit.exceeded",
 		slog.String("rule_id", rule.ID),
 		slog.String("ratelimit_key", displayKey),
 		slog.String("ratelimit_storage_key", storageKey),
 		slog.Int("ratelimit_count", count),
 		slog.Int("ratelimit_max", rule.RateLimitCfg.Max),
-		slog.String("risk_instance_id", rc.Current.InstanceID),
-		slog.String("risk_user_id", rc.Current.UserID),
+		slog.String("detection_instance_id", rc.Current.InstanceID),
+		slog.String("detection_user_id", rc.Current.UserID),
 	)
 
 	msg := rule.FindingCfg.Message
@@ -190,9 +190,9 @@ func (e *RuleEngine) dispatchRateLimit(ctx context.Context, rule *CompiledRule, 
 	}
 }
 
-func (e *RuleEngine) dispatchLLM(ctx context.Context, rule *CompiledRule, rc RiskContext, sessionSignals []signals.RecordedSignal) *Finding {
+func (e *RuleEvaluator) dispatchLLM(ctx context.Context, rule *CompiledRule, rc RiskContext, sessionSignals []signals.RecordedSignal) *Finding {
 	if e.llm == nil || !e.llmCfg.Enabled() {
-		logging.Debug(ctx, "risk.llm.skipped_disabled",
+		logging.Debug(ctx, "detection.llm.skipped_disabled",
 			slog.String("rule_id", rule.ID),
 		)
 		return nil
@@ -201,9 +201,9 @@ func (e *RuleEngine) dispatchLLM(ctx context.Context, rule *CompiledRule, rc Ris
 	// Reuse a cached LLM finding from an earlier evaluation in this session
 	// (e.g. create_session → set_session) to avoid a second model round-trip.
 	if cached := cachedLLMFinding(sessionSignals, rule.ID); cached != nil {
-		logging.Debug(ctx, "risk.llm.rule_cached",
+		logging.Debug(ctx, "detection.llm.rule_cached",
 			slog.String("rule_id", rule.ID),
-			slog.String("risk_session_id", rc.Current.SessionID),
+			slog.String("detection_session_id", rc.Current.SessionID),
 			slog.String("llm_classification", cached.Name),
 		)
 		return cached
@@ -212,7 +212,7 @@ func (e *RuleEngine) dispatchLLM(ctx context.Context, rule *CompiledRule, rc Ris
 	// Render a focused context for the LLM instead of sending full history.
 	contextStr, err := rule.RenderContextTemplate(rc)
 	if err != nil {
-		logging.WithError(ctx, err).Warn("risk.llm.context_render_failed",
+		logging.WithError(ctx, err).Warn("detection.llm.context_render_failed",
 			slog.String("rule_id", rule.ID),
 		)
 		return nil
@@ -222,7 +222,7 @@ func (e *RuleEngine) dispatchLLM(ctx context.Context, rule *CompiledRule, rc Ris
 	if contextStr == "" {
 		b, err := json.Marshal(rc)
 		if err != nil {
-			logging.WithError(ctx, err).Warn("risk.llm.context_marshal_failed",
+			logging.WithError(ctx, err).Warn("detection.llm.context_marshal_failed",
 				slog.String("rule_id", rule.ID),
 			)
 			return nil
@@ -250,10 +250,10 @@ func (e *RuleEngine) dispatchLLM(ctx context.Context, rule *CompiledRule, rc Ris
 // runLLMAsync calls the LLM in the background for observe-mode rules, logs
 // the result, and persists the finding back to the signal store so it appears
 // in the Signal Explorer.
-func (e *RuleEngine) runLLMAsync(ctx context.Context, rule *CompiledRule, rc RiskContext, prompt llm.Prompt) {
+func (e *RuleEvaluator) runLLMAsync(ctx context.Context, rule *CompiledRule, rc RiskContext, prompt llm.Prompt) {
 	defer func() {
 		if r := recover(); r != nil {
-			logging.Warn(ctx, "risk.llm.async_panic",
+			logging.Warn(ctx, "detection.llm.async_panic",
 				slog.Any("panic", r),
 				slog.String("rule_id", rule.ID),
 			)
@@ -269,23 +269,23 @@ func (e *RuleEngine) runLLMAsync(ctx context.Context, rule *CompiledRule, rc Ris
 	if finding != nil && e.findingRecorder != nil {
 		recorded := recordedFindings([]Finding{*finding})
 		if err := e.findingRecorder.AppendFindings(ctx, rc.Current.InstanceID, rc.Current.SessionID, rc.Current.Timestamp, recorded); err != nil {
-			logging.WithError(ctx, err).Warn("risk.llm.async_persist_failed",
+			logging.WithError(ctx, err).Warn("detection.llm.async_persist_failed",
 				slog.String("rule_id", rule.ID),
-				slog.String("risk_session_id", rc.Current.SessionID),
+				slog.String("detection_session_id", rc.Current.SessionID),
 			)
 		}
 	}
 }
 
 // runLLM calls the LLM synchronously and returns a Finding (or nil on error).
-func (e *RuleEngine) runLLM(ctx context.Context, rule *CompiledRule, rc RiskContext, prompt llm.Prompt) *Finding {
+func (e *RuleEvaluator) runLLM(ctx context.Context, rule *CompiledRule, rc RiskContext, prompt llm.Prompt) *Finding {
 	start := time.Now()
 	classification, err := e.llm.Classify(ctx, prompt)
 	llmLatencyMs := time.Since(start).Milliseconds()
 	if err != nil {
-		logging.WithError(ctx, err).Warn("risk.llm.classify_failed",
+		logging.WithError(ctx, err).Warn("detection.llm.classify_failed",
 			slog.String("rule_id", rule.ID),
-			slog.String("risk_user_id", rc.Current.UserID),
+			slog.String("detection_user_id", rc.Current.UserID),
 			slog.Int64("llm_latency_ms", llmLatencyMs),
 		)
 		e.emitLLMSignal(rc, "llm.classify_failed", signals.OutcomeFailure,
@@ -298,10 +298,10 @@ func (e *RuleEngine) runLLM(ctx context.Context, rule *CompiledRule, rc RiskCont
 		level = "unknown"
 	}
 
-	logging.Info(ctx, "risk.llm.classified",
+	logging.Info(ctx, "detection.llm.classified",
 		slog.String("rule_id", rule.ID),
-		slog.String("risk_user_id", rc.Current.UserID),
-		slog.String("risk_session_id", rc.Current.SessionID),
+		slog.String("detection_user_id", rc.Current.UserID),
+		slog.String("detection_session_id", rc.Current.SessionID),
 		slog.String("llm_classification", level),
 		slog.Float64("llm_confidence", classification.Confidence),
 		slog.String("llm_reason", classification.Reason),
@@ -328,7 +328,7 @@ func (e *RuleEngine) runLLM(ctx context.Context, rule *CompiledRule, rc RiskCont
 }
 
 // emitLLMSignal emits a signal on the "llm" stream if the emitter is set.
-func (e *RuleEngine) emitLLMSignal(rc RiskContext, operation string, outcome signals.Outcome, payload string) {
+func (e *RuleEvaluator) emitLLMSignal(rc RiskContext, operation string, outcome signals.Outcome, payload string) {
 	if e.emitter == nil {
 		return
 	}
@@ -356,7 +356,7 @@ func (e *RuleEngine) emitLLMSignal(rc RiskContext, operation string, outcome sig
 // findings (block, rate_limit, log, captcha). This makes rule evaluations
 // visible as separate log entries that can be reached via drill-down from the
 // finding badge on the originating request signal.
-func (e *RuleEngine) emitDetectionSignal(rc RiskContext, rule *CompiledRule, finding Finding) {
+func (e *RuleEvaluator) emitDetectionSignal(rc RiskContext, rule *CompiledRule, finding Finding) {
 	if e.emitter == nil {
 		return
 	}
@@ -367,14 +367,14 @@ func (e *RuleEngine) emitDetectionSignal(rc RiskContext, rule *CompiledRule, fin
 		outcome = signals.OutcomeChallenged
 	}
 	s := rc.Current
-	payload := fmt.Sprintf(`{"rule_id":%q,"engine":%q,"finding":%q,"message":%q,"block":%t}`,
-		rule.ID, rule.Engine, finding.Name, finding.Message, finding.Block)
+	payload := fmt.Sprintf(`{"rule_id":%q,"action":%q,"finding":%q,"message":%q,"block":%t}`,
+		rule.ID, rule.Action, finding.Name, finding.Message, finding.Block)
 	e.emitter.Emit(signals.Signal{
 		InstanceID: s.InstanceID,
 		UserID:     s.UserID,
 		CallerID:   s.CallerID,
 		SessionID:  s.SessionID,
-		Operation:  "detection." + string(rule.Engine),
+		Operation:  "detection." + string(rule.Action),
 		Stream:     signals.StreamDetection,
 		Resource:   "rule:" + rule.ID,
 		Outcome:    outcome,
@@ -388,15 +388,15 @@ func (e *RuleEngine) emitDetectionSignal(rc RiskContext, rule *CompiledRule, fin
 	})
 }
 
-func (e *RuleEngine) dispatchLog(ctx context.Context, rule *CompiledRule, rc RiskContext) *Finding {
-	logging.Info(ctx, "risk.expr.observe",
+func (e *RuleEvaluator) dispatchLog(ctx context.Context, rule *CompiledRule, rc RiskContext) *Finding {
+	logging.Info(ctx, "detection.rule.observe",
 		slog.String("rule_id", rule.ID),
 		slog.String("rule_expr", rule.Expr),
 		slog.String("rule_description", rule.Description),
-		slog.String("risk_user_id", rc.Current.UserID),
-		slog.String("risk_session_id", rc.Current.SessionID),
-		slog.String("risk_operation", rc.Current.Operation),
-		slog.String("risk_ip", rc.Current.IP),
+		slog.String("detection_user_id", rc.Current.UserID),
+		slog.String("detection_session_id", rc.Current.SessionID),
+		slog.String("detection_operation", rc.Current.Operation),
+		slog.String("detection_ip", rc.Current.IP),
 	)
 	// Log-only rules produce a non-blocking finding for audit.
 	return &Finding{
@@ -407,13 +407,13 @@ func (e *RuleEngine) dispatchLog(ctx context.Context, rule *CompiledRule, rc Ris
 	}
 }
 
-func (e *RuleEngine) dispatchCaptcha(ctx context.Context, rule *CompiledRule, rc RiskContext) *Finding {
-	logging.Info(ctx, "risk.captcha.challenge_required",
+func (e *RuleEvaluator) dispatchCaptcha(ctx context.Context, rule *CompiledRule, rc RiskContext) *Finding {
+	logging.Info(ctx, "detection.captcha.challenge_required",
 		slog.String("rule_id", rule.ID),
-		slog.String("risk_user_id", rc.Current.UserID),
-		slog.String("risk_session_id", rc.Current.SessionID),
-		slog.String("risk_operation", rc.Current.Operation),
-		slog.String("risk_ip", rc.Current.IP),
+		slog.String("detection_user_id", rc.Current.UserID),
+		slog.String("detection_session_id", rc.Current.SessionID),
+		slog.String("detection_operation", rc.Current.Operation),
+		slog.String("detection_ip", rc.Current.IP),
 	)
 	msg := rule.FindingCfg.Message
 	if msg == "" {
