@@ -57,7 +57,7 @@ type SessionCommands struct {
 	currentUserAgent     *domain.UserAgent
 	operation            string
 	detectionFindings    []detection.Finding
-	cachedDetectionSignal *detection.Signal // lazily built, reused across enforce + record
+	cachedDetectionSignal *signals.Signal // lazily built, reused across enforce + record
 }
 
 func (c *Commands) NewSessionCommands(cmds []SessionCommand, session *SessionWriteModel, userAgent *domain.UserAgent, operation string) *SessionCommands {
@@ -396,7 +396,7 @@ func (c *Commands) updateSession(ctx context.Context, checks *SessionCommands, m
 			_, pushErr := c.eventstore.Push(ctx, cmds...)
 			logging.OnError(pushErr).Error("unable to store check failures")
 		}
-		c.recordDetectionOutcome(ctx, checks, detection.OutcomeFailure, nil)
+		c.recordDetectionOutcome(ctx, checks, signals.OutcomeFailure, nil)
 		return nil, err
 	}
 	checks.ChangeMetadata(ctx, metadata)
@@ -422,7 +422,7 @@ func (c *Commands) updateSession(ctx context.Context, checks *SessionCommands, m
 	if err != nil {
 		return nil, err
 	}
-	c.recordDetectionOutcome(ctx, checks, detection.OutcomeSuccess, checks.detectionFindings)
+	c.recordDetectionOutcome(ctx, checks, signals.OutcomeSuccess, checks.detectionFindings)
 	changed := sessionWriteModelToSessionChanged(checks.sessionWriteModel)
 	changed.NewToken = sessionToken
 	return changed, nil
@@ -433,7 +433,7 @@ func (c *Commands) enforceDetection(ctx context.Context, checks *SessionCommands
 		return nil
 	}
 	ctx = detectionlog.NewCtx(ctx, detectionlog.StreamRisk)
-	signal := checks.detectionSignal(ctx, c.geoCountryHeader, detection.OutcomeSuccess)
+	signal := checks.detectionSignal(ctx, c.geoCountryHeader, signals.OutcomeSuccess)
 	decision, err := c.detectionEvaluator.Evaluate(ctx, signal)
 	if err != nil {
 		checks.detectionFindings = nil
@@ -447,7 +447,7 @@ func (c *Commands) enforceDetection(ctx context.Context, checks *SessionCommands
 	// Challenge findings require a captcha response — return a specific
 	// error code so the client can present the challenge widget.
 	if decision.HasChallenge() && !decision.HasBlockingFindings() {
-		c.recordDetectionOutcome(ctx, checks, detection.OutcomeChallenged, decision.Findings)
+		c.recordDetectionOutcome(ctx, checks, signals.OutcomeChallenged, decision.Findings)
 		detectionlog.Info(ctx, "detection.eval.challenge_required",
 			slog.String("detection_user_id", signal.UserID),
 			slog.String("detection_session_id", signal.SessionID),
@@ -458,7 +458,7 @@ func (c *Commands) enforceDetection(ctx context.Context, checks *SessionCommands
 		return zerrors.ThrowPreconditionFailed(nil, "COMMAND-RISK1", "Errors.Risk.ChallengeRequired")
 	}
 
-	c.recordDetectionOutcome(ctx, checks, detection.OutcomeBlocked, decision.Findings)
+	c.recordDetectionOutcome(ctx, checks, signals.OutcomeBlocked, decision.Findings)
 	detectionlog.Warn(ctx, "detection.eval.blocked",
 		slog.String("detection_user_id", signal.UserID),
 		slog.String("detection_session_id", signal.SessionID),
@@ -468,13 +468,13 @@ func (c *Commands) enforceDetection(ctx context.Context, checks *SessionCommands
 	return zerrors.ThrowPermissionDenied(nil, "COMMAND-RISK0", "Errors.PermissionDenied")
 }
 
-func (c *Commands) recordDetectionOutcome(ctx context.Context, checks *SessionCommands, outcome detection.Outcome, findings []detection.Finding) {
+func (c *Commands) recordDetectionOutcome(ctx context.Context, checks *SessionCommands, outcome signals.Outcome, findings []detection.Finding) {
 	if c.signalRecorder == nil {
 		return
 	}
 	ctx = detectionlog.NewCtx(ctx, detectionlog.StreamRisk)
 	signal := checks.detectionSignal(ctx, c.geoCountryHeader, outcome)
-	signal.Stream = detection.StreamEvents
+	signal.Stream = signals.StreamEvents
 	signal.CallerID = authz.GetCtxData(ctx).UserID
 	if err := c.signalRecorder.Record(ctx, signal, findings); err != nil {
 		detectionlog.WithError(ctx, err).Warn("detection.record.failed",
@@ -489,7 +489,7 @@ func (c *Commands) recordDetectionOutcome(ctx context.Context, checks *SessionCo
 // outcome. The base signal (everything except outcome) is built once and cached
 // so that enforceDetection + recordDetectionOutcome don't duplicate HTTP header
 // extraction and UserAgent parsing.
-func (s *SessionCommands) detectionSignal(ctx context.Context, geoCountryHeader string, outcome detection.Outcome) detection.Signal {
+func (s *SessionCommands) detectionSignal(ctx context.Context, geoCountryHeader string, outcome signals.Outcome) signals.Signal {
 	if s.cachedDetectionSignal == nil {
 		sig := s.buildDetectionSignal(ctx, geoCountryHeader)
 		s.cachedDetectionSignal = &sig
@@ -507,8 +507,8 @@ func (s *SessionCommands) detectionSignal(ctx context.Context, geoCountryHeader 
 
 // buildDetectionSignal constructs the base signal (without outcome/timestamp) from
 // session state and HTTP context. Called once per session check.
-func (s *SessionCommands) buildDetectionSignal(ctx context.Context, geoCountryHeader string) detection.Signal {
-	signal := detection.Signal{
+func (s *SessionCommands) buildDetectionSignal(ctx context.Context, geoCountryHeader string) signals.Signal {
+	signal := signals.Signal{
 		InstanceID: authz.GetInstance(ctx).InstanceID(),
 		UserID:     s.sessionWriteModel.UserID,
 		SessionID:  s.sessionWriteModel.AggregateID,

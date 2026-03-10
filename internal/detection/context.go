@@ -24,6 +24,11 @@ type RiskContext struct {
 	SuccessCount int
 	TotalCount   int
 
+	// Outcome is the string representation of Current.Outcome, provided
+	// for use in expr rules where the named Outcome type cannot be compared
+	// directly with string literals.
+	Outcome string
+
 	// Delta flags comparing Current against LastSuccess.
 	IPChanged bool // current IP differs from last success IP
 	UAChanged bool // current user agent differs from last success UA
@@ -67,6 +72,7 @@ type RiskContext struct {
 func buildRiskContext(signal signals.Signal, snapshot signals.Snapshot) RiskContext {
 	rc := RiskContext{
 		Current:            signal,
+		Outcome:            string(signal.Outcome),
 		TotalCount:         len(snapshot.UserSignals),
 		SessionSignalCount: len(snapshot.SessionSignals),
 		LoginHourUTC:       signal.Timestamp.UTC().Hour(),

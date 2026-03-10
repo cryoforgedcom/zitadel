@@ -19,9 +19,9 @@ type Config struct {
 	MaxSignalsPerUser     int
 	MaxSignalsPerSession  int
 	LLM                   llm.Config
-	// Rules defines expression-based detection rules. When non-empty the rule engine
-	// replaces the hardcoded failureBurst/contextDrift heuristics. When empty
-	// the legacy heuristics are used for backward compatibility.
+	// Rules defines expression-based detection rules. When non-empty, these are
+	// used for evaluation. When empty, built-in default rules replicate the
+	// failure_burst and context_drift heuristics.
 	Rules []Rule `yaml:"rules"`
 	// GeoCountryHeader is the HTTP header name that carries the ISO 3166-1 alpha-2
 	// country code injected by a reverse proxy or CDN (e.g. "CF-IPCountry" for
@@ -68,4 +68,16 @@ func (c Config) Validate() error {
 		return err
 	}
 	return c.LLM.Validate()
+}
+
+// defaultCompiledRules returns compiled default rules when no custom rules are
+// configured. Panics if compilation fails (should never happen for built-in
+// expressions).
+func (c Config) defaultCompiledRules() []CompiledRule {
+	rules := DefaultRules(c)
+	compiled, err := CompileRules(rules)
+	if err != nil {
+		panic(fmt.Sprintf("BUG: default rule compilation failed: %v", err))
+	}
+	return compiled
 }

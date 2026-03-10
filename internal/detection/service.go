@@ -289,28 +289,24 @@ func (s *Service) Evaluate(ctx context.Context, signal signals.Signal) (_ Decisi
 	}
 
 	var findings []Finding
-	if len(policy.Rules) > 0 {
-		// Expression-based rule evaluation.
+	rules := policy.Rules
+	if len(rules) == 0 {
+		// No custom rules: use built-in defaults that replicate the legacy
+		// failureBurst + contextDrift heuristics via the rule engine.
+		rules = policy.Config.defaultCompiledRules()
+	}
+	if len(rules) > 0 {
 		rc := buildRiskContext(signal, snapshot)
-		ruleEvaluator := NewRuleEvaluator(policy.Rules, s.rateLimiter, s.llm, policy.Config.LLM, s.findingRecorder(), s.runtime.Emitter())
+		var emitter signalEmitter
+		if em := s.runtime.Emitter(); em != nil {
+			emitter = em
+		}
+		ruleEvaluator := NewRuleEvaluator(rules, s.rateLimiter, s.llm, policy.Config.LLM, s.findingRecorder(), emitter)
 		findings = ruleEvaluator.Evaluate(ctx, rc, snapshot.SessionSignals)
-	} else {
-		// Legacy hardcoded heuristics (backward-compatible fallback).
-		findings = make([]Finding, 0, 2)
-		if s.failureBurst(policy.Config, signal, snapshot) {
-			findings = append(findings, Finding{
-				Name:    "failure_burst",
-				Message: fmt.Sprintf("user reached %d recent failed session checks", policy.Config.FailureBurstThreshold),
-				Block:   true,
-			})
-		}
-		if finding, ok := s.contextDrift(policy.Config, signal, snapshot); ok {
-			findings = append(findings, finding)
-		}
 	}
 
-	// LLM evaluation runs regardless of rule engine — rules with engine=llm
-	// use focused prompts, while this provides the full-context classification.
+	// LLM evaluation runs when no custom rules are configured — provides
+	// the full-context classification as a standalone finding.
 	if len(policy.Rules) == 0 {
 		llmFinding, err := s.evaluateLLM(ctx, signal, snapshot, policy.Config)
 		if err != nil {
@@ -369,45 +365,6 @@ func (s *Service) Record(ctx context.Context, signal signals.Signal, findings []
 		return nil
 	}
 	return s.store.Save(ctx, signal, recordedFindings(findings), policy.Config.SnapshotConfig())
-}
-
-func (s *Service) failureBurst(cfg Config, signal signals.Signal, snapshot signals.Snapshot) bool {
-	if signal.Outcome != signals.OutcomeFailure {
-		return false
-	}
-	failures := 0
-	for _, previous := range snapshot.UserSignals {
-		if previous.Outcome == signals.OutcomeFailure {
-			failures++
-		}
-	}
-	return failures+1 >= cfg.FailureBurstThreshold
-}
-
-func (s *Service) contextDrift(cfg Config, signal signals.Signal, snapshot signals.Snapshot) (Finding, bool) {
-	if signal.Outcome != signals.OutcomeSuccess || signal.IP == "" || signal.UserAgent == "" {
-		return Finding{}, false
-	}
-	for i := len(snapshot.UserSignals) - 1; i >= 0; i-- {
-		previous := snapshot.UserSignals[i]
-		if previous.Outcome != signals.OutcomeSuccess {
-			continue
-		}
-		if signal.Timestamp.Sub(previous.Timestamp) > cfg.ContextChangeWindow {
-			break
-		}
-		ipChanged := previous.IP != "" && previous.IP != signal.IP
-		userAgentChanged := previous.UserAgent != "" && !strings.EqualFold(previous.UserAgent, signal.UserAgent)
-		if ipChanged && userAgentChanged {
-			return Finding{
-				Name:    "context_drift",
-				Message: "recent login context changed across IP and user agent",
-				Block:   true,
-			}, true
-		}
-		return Finding{}, false
-	}
-	return Finding{}, false
 }
 
 func (s *Service) evaluateLLM(ctx context.Context, signal signals.Signal, snapshot signals.Snapshot, cfg Config) (_ *Finding, err error) {

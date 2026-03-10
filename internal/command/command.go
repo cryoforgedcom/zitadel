@@ -25,6 +25,7 @@ import (
 	"github.com/zitadel/zitadel/internal/cache/connector"
 	"github.com/zitadel/zitadel/internal/command/preparation"
 	sd "github.com/zitadel/zitadel/internal/config/systemdefaults"
+	"github.com/zitadel/zitadel/internal/captcha"
 	"github.com/zitadel/zitadel/internal/crypto"
 	"github.com/zitadel/zitadel/internal/denylist"
 	"github.com/zitadel/zitadel/internal/detection"
@@ -33,6 +34,8 @@ import (
 	"github.com/zitadel/zitadel/internal/id"
 	"github.com/zitadel/zitadel/internal/llm"
 	internal_net "github.com/zitadel/zitadel/internal/net"
+	"github.com/zitadel/zitadel/internal/ratelimit"
+	"github.com/zitadel/zitadel/internal/signals"
 	"github.com/zitadel/zitadel/internal/notification/senders"
 	"github.com/zitadel/zitadel/internal/static"
 	"github.com/zitadel/zitadel/internal/telemetry/tracing"
@@ -252,8 +255,8 @@ func StartCommands(
 		ContextChangeWindow:   defaults.Risk.ContextChangeWindow,
 		MaxSignalsPerUser:     defaults.Risk.MaxSignalsPerUser,
 		MaxSignalsPerSession:  defaults.Risk.MaxSignalsPerSession,
-		LLM: detection.LLMConfig{
-			Mode:               detection.LLMMode(defaults.Risk.LLM.Mode),
+		LLM: llm.Config{
+			Mode:               llm.LLMMode(defaults.Risk.LLM.Mode),
 			Endpoint:           defaults.Risk.LLM.Endpoint,
 			Model:              defaults.Risk.LLM.Model,
 			Timeout:            defaults.Risk.LLM.Timeout,
@@ -269,24 +272,24 @@ func StartCommands(
 		},
 		Rules:            detectionRules(defaults.Risk.Rules),
 		GeoCountryHeader: defaults.Risk.GeoCountryHeader,
-		SignalStore: detection.SignalStoreConfig{
+		SignalStore: signals.SignalStoreConfig{
 			Enabled:     defaults.Risk.SignalStore.Enabled,
 			ChannelSize: defaults.Risk.SignalStore.ChannelSize,
-			Debounce: detection.DebouncerConfig{
+			Debounce: signals.DebouncerConfig{
 				MinFrequency: defaults.Risk.SignalStore.Debounce.MinFrequency,
 				MaxBulkSize:  defaults.Risk.SignalStore.Debounce.MaxBulkSize,
 			},
-			Streams: detection.StreamsConfig{
+			Streams: signals.StreamsConfig{
 				API:        defaults.Risk.SignalStore.Streams.API,
 				HTTPAccess: defaults.Risk.SignalStore.Streams.HTTPAccess,
 			},
-			DuckLake: detection.DuckLakeConfig{
+			DuckLake: signals.DuckLakeConfig{
 				Enabled:            defaults.Risk.SignalStore.DuckLake.Enabled,
 				DataPath:           defaults.Risk.SignalStore.DuckLake.DataPath,
-				Backend:            detection.ArchiveBackend(defaults.Risk.SignalStore.DuckLake.Backend),
+				Backend:            signals.ArchiveBackend(defaults.Risk.SignalStore.DuckLake.Backend),
 				FlushInterval:      defaults.Risk.SignalStore.DuckLake.FlushInterval,
 				CompactionInterval: defaults.Risk.SignalStore.DuckLake.CompactionInterval,
-				S3: detection.ArchiveS3Config{
+				S3: signals.ArchiveS3Config{
 					Endpoint:  defaults.Risk.SignalStore.DuckLake.S3.Endpoint,
 					Bucket:    defaults.Risk.SignalStore.DuckLake.S3.Bucket,
 					AccessKey: defaults.Risk.SignalStore.DuckLake.S3.AccessKey,
@@ -295,7 +298,7 @@ func StartCommands(
 				},
 			},
 		},
-		Captcha: detection.CaptchaConfig{
+		Captcha: captcha.CaptchaConfig{
 			Enabled:   defaults.Risk.Captcha.Enabled,
 			Provider:  defaults.Risk.Captcha.Provider,
 			SiteKey:   defaults.Risk.Captcha.SiteKey,
@@ -303,11 +306,11 @@ func StartCommands(
 			VerifyURL: defaults.Risk.Captcha.VerifyURL,
 			Timeout:   defaults.Risk.Captcha.Timeout,
 		},
-		RateLimit: detection.RateLimitConfig{
-			Mode: detection.RateLimitMode(defaults.Risk.RateLimit.Mode),
+		RateLimit: ratelimit.Config{
+			Mode: ratelimit.Mode(defaults.Risk.RateLimit.Mode),
 		},
 	}
-	var detectionLLM detection.LLMClient
+	var detectionLLM llm.LLMClient
 	if detectionConfig.LLM.Enabled() {
 		detectionLLM = llm.NewOllamaClient(detectionConfig.LLM, httpClient)
 	}

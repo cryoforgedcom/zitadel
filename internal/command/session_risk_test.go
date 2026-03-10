@@ -12,9 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/zitadel/zitadel/internal/api/authz"
+	"github.com/zitadel/zitadel/internal/captcha"
 	"github.com/zitadel/zitadel/internal/detection"
 	"github.com/zitadel/zitadel/internal/domain"
 	"github.com/zitadel/zitadel/internal/repository/session"
+	"github.com/zitadel/zitadel/internal/signals"
 	"github.com/zitadel/zitadel/internal/zerrors"
 )
 
@@ -61,12 +63,12 @@ type fakeRiskEvaluator struct {
 	failOpen    bool
 	decision    detection.Decision
 	evaluateErr error
-	recorded    []detection.Signal
+	recorded    []signals.Signal
 	findings    [][]detection.Finding
 }
 
 // Evaluator interface
-func (f *fakeRiskEvaluator) Evaluate(context.Context, detection.Signal) (detection.Decision, error) {
+func (f *fakeRiskEvaluator) Evaluate(context.Context, signals.Signal) (detection.Decision, error) {
 	if f.evaluateErr != nil {
 		if f.failOpen {
 			return detection.Decision{Allow: true}, nil
@@ -77,7 +79,7 @@ func (f *fakeRiskEvaluator) Evaluate(context.Context, detection.Signal) (detecti
 }
 
 // SignalRecorder interface
-func (f *fakeRiskEvaluator) Record(_ context.Context, signal detection.Signal, findings []detection.Finding) error {
+func (f *fakeRiskEvaluator) Record(_ context.Context, signal signals.Signal, findings []detection.Finding) error {
 	f.recorded = append(f.recorded, signal)
 	f.findings = append(f.findings, append([]detection.Finding(nil), findings...))
 	return nil
@@ -88,7 +90,7 @@ func (f *fakeRiskEvaluator) VerifyCaptcha(context.Context, string, string) (bool
 	return true, nil
 }
 
-func (f *fakeRiskEvaluator) CaptchaVerifier() detection.CaptchaVerifier {
+func (f *fakeRiskEvaluator) CaptchaVerifier() captcha.CaptchaVerifier {
 	return nil
 }
 
@@ -122,7 +124,7 @@ func TestCommands_updateSession_blockedByRisk(t *testing.T) {
 	require.ErrorIs(t, err, zerrors.ThrowPermissionDenied(nil, "COMMAND-RISK0", "Errors.PermissionDenied"))
 	assert.Nil(t, got)
 	require.Len(t, evaluator.recorded, 1)
-	assert.Equal(t, detection.OutcomeBlocked, evaluator.recorded[0].Outcome)
+	assert.Equal(t, signals.OutcomeBlocked, evaluator.recorded[0].Outcome)
 }
 
 func TestCommands_updateSession_challengedByRisk(t *testing.T) {
@@ -156,7 +158,7 @@ func TestCommands_updateSession_challengedByRisk(t *testing.T) {
 	assert.True(t, zerrors.IsPreconditionFailed(err), "challenge should return PreconditionFailed, got: %v", err)
 	assert.Nil(t, got)
 	require.Len(t, evaluator.recorded, 1)
-	assert.Equal(t, detection.OutcomeChallenged, evaluator.recorded[0].Outcome)
+	assert.Equal(t, signals.OutcomeChallenged, evaluator.recorded[0].Outcome)
 }
 
 func TestCommands_updateSession_riskFailOpen(t *testing.T) {
@@ -203,7 +205,7 @@ func TestCommands_updateSession_riskFailOpen(t *testing.T) {
 	require.NotNil(t, got)
 	assert.Equal(t, "token", got.NewToken)
 	require.Len(t, evaluator.recorded, 1)
-	assert.Equal(t, detection.OutcomeSuccess, evaluator.recorded[0].Outcome)
+	assert.Equal(t, signals.OutcomeSuccess, evaluator.recorded[0].Outcome)
 }
 
 func TestCommands_updateSession_recordsRiskFindingsOnSuccess(t *testing.T) {
@@ -305,7 +307,7 @@ func TestCommands_updateSession_threeSessionsSameContextAllowed(t *testing.T) {
 		assert.Equalf(t, "token-"+s.id, got.NewToken, "session %d should have a token", i+1)
 
 		// Record the successful signal so subsequent sessions see the history.
-		require.NoError(t, detectionSvc.Record(ctx, checks.detectionSignal(ctx, "", detection.OutcomeSuccess), nil))
+		require.NoError(t, detectionSvc.Record(ctx, checks.detectionSignal(ctx, "", signals.OutcomeSuccess), nil))
 	}
 }
 
@@ -349,7 +351,7 @@ func TestCommands_updateSession_contextDriftBlocksThirdSession(t *testing.T) {
 		require.NoErrorf(t, err, "session %d should be allowed", i+1)
 		require.NotNil(t, got)
 
-		require.NoError(t, detectionSvc.Record(ctx, checks.detectionSignal(ctx, "", detection.OutcomeSuccess), nil))
+		require.NoError(t, detectionSvc.Record(ctx, checks.detectionSignal(ctx, "", signals.OutcomeSuccess), nil))
 	}
 
 	// Session 3: different IP and user-agent → contextDrift must block.
