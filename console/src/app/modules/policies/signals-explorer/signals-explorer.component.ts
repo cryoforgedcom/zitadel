@@ -16,10 +16,7 @@ import { GrpcService } from 'src/app/services/grpc.service';
 import { ToastService } from 'src/app/services/toast.service';
 
 import { Signal, SignalFilters, AggregationBucket, Finding } from 'src/app/proto/generated/zitadel/signal/v2/signal_pb';
-import {
-  ListSignalsRequest,
-  AggregateSignalsRequest,
-} from 'src/app/proto/generated/zitadel/signal/v2/signal_service_pb';
+import { ListSignalsRequest, AggregateSignalsRequest } from 'src/app/proto/generated/zitadel/signal/v2/signal_service_pb';
 import { ListQuery } from 'src/app/proto/generated/zitadel/object/v2/object_pb';
 
 interface TimeRange {
@@ -34,7 +31,7 @@ interface BreakdownRow {
   pct: number;
 }
 
-type Tab = 'overview' | 'logs';
+type Tab = 'findings' | 'overview' | 'logs';
 
 @Component({
   selector: 'cnsl-signals-explorer',
@@ -69,7 +66,7 @@ export class SignalsExplorerComponent implements OnInit {
   private readonly toast = inject(ToastService);
 
   // Navigation
-  activeTab: Tab = 'overview';
+  activeTab: Tab = 'findings';
 
   // Loading
   loading = false;
@@ -100,6 +97,15 @@ export class SignalsExplorerComponent implements OnInit {
   topCountries: BreakdownRow[] = [];
   topUsers: BreakdownRow[] = [];
 
+  // Findings tab data
+  findingsTopRules: BreakdownRow[] = [];
+  findingsTopUsers: BreakdownRow[] = [];
+  findingsBlockedCount = 0;
+  findingsChallengedCount = 0;
+  findingsTotalCount = 0;
+  findingsRecentSignals: Signal.AsObject[] = [];
+  findingsLoading = false;
+
   // Expanded row (logs tab)
   expandedSignal: Signal.AsObject | null = null;
 
@@ -128,12 +134,16 @@ export class SignalsExplorerComponent implements OnInit {
 
   ngOnInit(): void {
     this.refresh();
+    this.loadFindings();
   }
 
   switchTab(tab: Tab): void {
     this.activeTab = tab;
     if (tab === 'logs' && this.signals.length === 0) {
       this.search();
+    }
+    if (tab === 'findings') {
+      this.loadFindings();
     }
   }
 
@@ -143,6 +153,9 @@ export class SignalsExplorerComponent implements OnInit {
     this.loadBreakdowns();
     if (this.activeTab === 'logs') {
       this.search();
+    }
+    if (this.activeTab === 'findings') {
+      this.loadFindings();
     }
   }
 
@@ -289,6 +302,87 @@ export class SignalsExplorerComponent implements OnInit {
           .map((b) => ({ key: b.key, count: b.count, pct: (b.count / total) * 100 }));
       });
     }
+  }
+
+  loadFindings(): void {
+    if (!this.grpc.signal) return;
+    this.findingsLoading = true;
+
+    // Top rules: aggregate detection stream by resource (which is "rule:<id>")
+    const ruleReq = new AggregateSignalsRequest();
+    const ruleFilters = this.buildFilters();
+    ruleFilters.setStream('detection');
+    ruleReq.setFilters(ruleFilters);
+    ruleReq.setGroupBy('resource');
+    ruleReq.setMetric('count');
+    this.grpc.signal.aggregateSignals(ruleReq, null).then((resp) => {
+      const buckets = resp.getBucketsList().map((b) => b.toObject());
+      const total = buckets.reduce((s, b) => s + b.count, 0) || 1;
+      this.findingsTotalCount = total;
+      this.findingsTopRules = buckets
+        .filter((b) => b.key)
+        .slice(0, 10)
+        .map((b) => ({ key: b.key, count: b.count, pct: (b.count / total) * 100 }));
+    });
+
+    // Top users affected by detection findings
+    const userReq = new AggregateSignalsRequest();
+    const userFilters = this.buildFilters();
+    userFilters.setStream('detection');
+    userReq.setFilters(userFilters);
+    userReq.setGroupBy('user_id');
+    userReq.setMetric('count');
+    this.grpc.signal.aggregateSignals(userReq, null).then((resp) => {
+      const buckets = resp.getBucketsList().map((b) => b.toObject());
+      const total = buckets.reduce((s, b) => s + b.count, 0) || 1;
+      this.findingsTopUsers = buckets
+        .filter((b) => b.key)
+        .slice(0, 10)
+        .map((b) => ({ key: b.key, count: b.count, pct: (b.count / total) * 100 }));
+    });
+
+    // Blocked vs challenged counts
+    const blockedReq = new AggregateSignalsRequest();
+    const blockedFilters = this.buildFilters();
+    blockedFilters.setStream('detection');
+    blockedFilters.setOutcome('blocked');
+    blockedReq.setFilters(blockedFilters);
+    blockedReq.setGroupBy('outcome');
+    blockedReq.setMetric('count');
+    this.grpc.signal.aggregateSignals(blockedReq, null).then((resp) => {
+      this.findingsBlockedCount = resp.getBucketsList().reduce((s, b) => s + b.toObject().count, 0);
+    });
+
+    const challengedReq = new AggregateSignalsRequest();
+    const challengedFilters = this.buildFilters();
+    challengedFilters.setStream('detection');
+    challengedFilters.setOutcome('challenged');
+    challengedReq.setFilters(challengedFilters);
+    challengedReq.setGroupBy('outcome');
+    challengedReq.setMetric('count');
+    this.grpc.signal.aggregateSignals(challengedReq, null).then((resp) => {
+      this.findingsChallengedCount = resp.getBucketsList().reduce((s, b) => s + b.toObject().count, 0);
+    });
+
+    // Recent signals with findings (detection stream, most recent)
+    const recentQuery = new ListQuery();
+    recentQuery.setOffset(0);
+    recentQuery.setLimit(20);
+    const recentReq = new ListSignalsRequest();
+    const recentFilters = this.buildFilters();
+    recentFilters.setStream('detection');
+    recentReq.setQuery(recentQuery);
+    recentReq.setFilters(recentFilters);
+    this.grpc.signal.listSignals(recentReq, null).then(
+      (resp) => {
+        this.findingsRecentSignals = resp.getSignalsList().map((s) => s.toObject());
+        this.findingsLoading = false;
+      },
+      (err) => {
+        this.toast.showError(err);
+        this.findingsLoading = false;
+      },
+    );
   }
 
   buildChartPath(): void {

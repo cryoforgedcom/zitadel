@@ -54,7 +54,7 @@ export const SECURITY: SidenavSetting = {
 export const DETECTION: SidenavSetting = {
   id: 'detection',
   i18nKey: 'SETTINGS.LIST.DETECTION',
-  groupI18nKey: 'SETTINGS.GROUPS.SECURITY',
+  groupI18nKey: 'SETTINGS.GROUPS.OBSERVABILITY',
   requiredRoles: {
     [PolicyComponentServiceType.ADMIN]: ['iam.policy.read'],
   },
@@ -63,7 +63,7 @@ export const DETECTION: SidenavSetting = {
 export const DETECTION_RULES: SidenavSetting = {
   id: 'detection_rules',
   i18nKey: 'SETTINGS.LIST.DETECTION_RULES',
-  groupI18nKey: 'SETTINGS.GROUPS.SECURITY',
+  groupI18nKey: 'SETTINGS.GROUPS.OBSERVABILITY',
   requiredRoles: {
     [PolicyComponentServiceType.ADMIN]: ['iam.policy.read'],
   },
@@ -72,7 +72,7 @@ export const DETECTION_RULES: SidenavSetting = {
 export const SIGNALS_EXPLORER: SidenavSetting = {
   id: 'signals_explorer',
   i18nKey: 'SETTINGS.LIST.SIGNALS_EXPLORER',
-  groupI18nKey: 'SETTINGS.GROUPS.SECURITY',
+  groupI18nKey: 'SETTINGS.GROUPS.OBSERVABILITY',
   requiredRoles: {
     [PolicyComponentServiceType.ADMIN]: ['iam.policy.read'],
   },
