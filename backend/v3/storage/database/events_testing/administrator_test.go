@@ -201,7 +201,7 @@ func TestServer_AdministratorReduces(t *testing.T) {
 			ProjectId: projectResp.GetId(),
 			GrantId:   projectGrant.ID,
 			UserId:    user.GetUserId(),
-			Roles:     []string{"PROJECT_OWNER"},
+			Roles:     []string{"PROJECT_GRANT_OWNER"},
 		})
 		require.NoError(t, err)
 
@@ -210,14 +210,14 @@ func TestServer_AdministratorReduces(t *testing.T) {
 				database.And(adminRepo.ProjectGrantAdministratorCondition(instanceID, projectGrant.ID), adminRepo.UserIDCondition(user.GetUserId())),
 			))
 			require.NoError(collect, err)
-			assert.Equal(collect, []string{"PROJECT_OWNER"}, admin.Roles)
+			assert.Equal(collect, []string{"PROJECT_GRANT_OWNER"}, admin.Roles)
 		}, retryDuration, tick)
 
 		_, err = MgmtClient.UpdateProjectGrantMember(iamCtx, &mgmt_pb.UpdateProjectGrantMemberRequest{
 			ProjectId: projectResp.GetId(),
 			GrantId:   projectGrant.ID,
 			UserId:    user.GetUserId(),
-			Roles:     []string{"PROJECT_OWNER_VIEWER"},
+			Roles:     []string{"PROJECT_GRANT_OWNER_VIEWER"},
 		})
 		require.NoError(t, err)
 
@@ -226,7 +226,7 @@ func TestServer_AdministratorReduces(t *testing.T) {
 				database.And(adminRepo.ProjectGrantAdministratorCondition(instanceID, projectGrant.ID), adminRepo.UserIDCondition(user.GetUserId())),
 			))
 			require.NoError(collect, err)
-			assert.Equal(collect, []string{"PROJECT_OWNER_VIEWER"}, admin.Roles)
+			assert.Equal(collect, []string{"PROJECT_GRANT_OWNER_VIEWER"}, admin.Roles)
 		}, retryDuration, tick)
 
 		_, err = MgmtClient.RemoveProjectGrantMember(iamCtx, &mgmt_pb.RemoveProjectGrantMemberRequest{

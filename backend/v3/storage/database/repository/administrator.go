@@ -29,10 +29,6 @@ func (a administrator) unqualifiedRolesTableName() string {
 	return "administrator_roles"
 }
 
-func (a administrator) qualifiedRolesTableName() string {
-	return "zitadel." + a.unqualifiedRolesTableName()
-}
-
 const queryAdministratorStmt = "SELECT administrators.instance_id " +
 	", administrators.id " +
 	", administrators.user_id " +
@@ -41,15 +37,14 @@ const queryAdministratorStmt = "SELECT administrators.instance_id " +
 	", administrators.project_id " +
 	", administrators.project_grant_id " +
 	", administrators.created_at " +
-	", ARRAY_AGG(administrator_roles.role_name ORDER BY administrator_roles.role_name) FILTER (WHERE administrator_roles.administrator_id IS NOT NULL) AS roles " +
 	", administrators.updated_at " +
+	", ARRAY_AGG(administrator_roles.role_name ORDER BY administrator_roles.role_name) FILTER (WHERE administrator_roles.administrator_id IS NOT NULL) AS roles " +
 	"FROM zitadel.administrators " +
 	"LEFT JOIN zitadel.administrator_roles " +
 	"ON administrators.instance_id = administrator_roles.instance_id " +
 	"AND administrators.id = administrator_roles.administrator_id"
 
 func (a administrator) Get(ctx context.Context, client database.QueryExecutor, opts ...database.QueryOption) (*domain.Administrator, error) {
-	opts = append(opts, database.WithGroupBy(a.InstanceIDColumn(), a.IDColumn()))
 	builder, err := a.prepareQuery(opts)
 	if err != nil {
 		return nil, err
@@ -58,7 +53,6 @@ func (a administrator) Get(ctx context.Context, client database.QueryExecutor, o
 }
 
 func (a administrator) List(ctx context.Context, client database.QueryExecutor, opts ...database.QueryOption) ([]*domain.Administrator, error) {
-	opts = append(opts, database.WithGroupBy(a.InstanceIDColumn(), a.IDColumn()))
 	builder, err := a.prepareQuery(opts)
 	if err != nil {
 		return nil, err
@@ -67,6 +61,7 @@ func (a administrator) List(ctx context.Context, client database.QueryExecutor, 
 }
 
 func (a administrator) prepareQuery(opts []database.QueryOption) (*database.StatementBuilder, error) {
+	opts = append(opts, database.WithGroupBy(a.InstanceIDColumn(), a.IDColumn()))
 	options := new(database.QueryOpts)
 	for _, opt := range opts {
 		opt(options)
