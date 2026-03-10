@@ -83,6 +83,7 @@
       <input class="filter-input" placeholder="User ID" formControlName="user_id" (keyup.enter)="refresh()" />
       <input class="filter-input" placeholder="Search payload…" formControlName="payload" (keyup.enter)="refresh()" />
       <input class="filter-input filter-input-sm" placeholder="Trace ID" formControlName="trace_id" (keyup.enter)="refresh()" />
+      <input class="filter-input filter-input-sm" placeholder="Span ID" formControlName="span_id" (keyup.enter)="refresh()" />
       <button class="icon-btn" (click)="resetFilters()" matTooltip="Reset filters">
         <mat-icon>close</mat-icon>
       </button>
@@ -242,9 +243,10 @@
       <ng-container matColumnDef="findings">
         <th mat-header-cell *matHeaderCellDef>Findings</th>
         <td mat-cell *matCellDef="let s">
-          <span class="finding-pill" *ngIf="findingsCount(s) > 0" [class.finding-block]="hasBlockFindings(s)">
+          <button class="finding-pill" *ngIf="findingsCount(s) > 0" [class.finding-block]="hasBlockFindings(s)"
+            (click)="drillToFinding(s, $event)" matTooltip="Drill to detection log">
             {{ findingsCount(s) }}
-          </span>
+          </button>
         </td>
       </ng-container>
 
@@ -277,6 +279,10 @@
               <div class="kv" *ngIf="s.traceId">
                 <span class="kv-label">Trace ID</span>
                 <span class="kv-val mono">{{ s.traceId }}</span>
+              </div>
+              <div class="kv" *ngIf="s.spanId">
+                <span class="kv-label">Span ID</span>
+                <span class="kv-val mono">{{ s.spanId }}</span>
               </div>
             </div>
 

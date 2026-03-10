@@ -98,7 +98,9 @@ func buildRiskContext(signal signals.Signal, snapshot signals.Snapshot) RiskCont
 			}
 		}
 		// Exclude blocked signals from velocity to prevent cascading lockout.
-		if s.Outcome != signals.OutcomeBlocked {
+		// Only count request-stream signals — detection/LLM/event signals
+		// should not inflate the login velocity metric.
+		if s.Outcome != signals.OutcomeBlocked && s.Stream == signals.StreamRequests {
 			velocityCount++
 		}
 		if s.IP != "" {

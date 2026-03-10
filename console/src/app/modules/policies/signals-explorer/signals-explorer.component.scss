@@ -106,8 +106,9 @@
 .badge-warn { background: #fef9c3; color: #854d0e; }
 
 .finding-pill {
-  display: inline-flex; align-items: center; justify-content: center; min-width: 1.125rem; height: 1.125rem; padding: 0 .3125rem; border-radius: 999px; font-size: .6875rem; font-weight: 600; background: var(--bg2); color: var(--t2);
-  &.finding-block { background: #fee2e2; color: #991b1b; }
+  display: inline-flex; align-items: center; justify-content: center; min-width: 1.125rem; height: 1.125rem; padding: 0 .3125rem; border-radius: 999px; font-size: .6875rem; font-weight: 600; background: var(--bg2); color: var(--t2); border: none; cursor: pointer; transition: background .15s, color .15s;
+  &:hover { background: var(--accent); color: #fff; }
+  &.finding-block { background: #fee2e2; color: #991b1b; &:hover { background: #ef4444; color: #fff; } }
 }
 .expand-btn {
   background: none; border: none; padding: .125rem; cursor: pointer; color: var(--t3); display: flex; border-radius: 4px;

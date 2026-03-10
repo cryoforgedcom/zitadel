@@ -102,6 +102,7 @@ func toSignalFilters(ctx context.Context, f *signalpb.SignalFilters) sig.SignalF
 	sf.Resource = f.GetResource()
 	sf.Payload = f.GetPayload()
 	sf.TraceID = f.GetTraceId()
+	sf.SpanID = f.GetSpanId()
 	if ts := f.GetAfter(); ts != nil {
 		t := ts.AsTime()
 		sf.After = &t
@@ -148,5 +149,6 @@ func recordedSignalToProto(rs sig.RecordedSignal) *signalpb.Signal {
 		Findings:       findings,
 		Payload:        rs.Payload,
 		TraceId:        rs.TraceID,
+		SpanId:         rs.SpanID,
 	}
 }

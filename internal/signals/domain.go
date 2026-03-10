@@ -11,6 +11,7 @@ const (
 	StreamEvents        SignalStream = "events"
 	StreamNotifications SignalStream = "notifications"
 	StreamLLM           SignalStream = "llm"
+	StreamDetection     SignalStream = "detection"
 )
 
 const (
@@ -53,6 +54,8 @@ type Signal struct {
 	// TraceID is the OpenTelemetry trace ID active when this signal was emitted.
 	// Enables cross-stream correlation (e.g. request → LLM → event).
 	TraceID string
+	// SpanID is the OpenTelemetry span ID — identifies the specific operation within a trace.
+	SpanID string
 }
 
 type RecordedFinding struct {

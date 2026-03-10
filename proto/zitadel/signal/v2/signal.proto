@@ -38,6 +38,8 @@ message Signal {
   // OpenTelemetry trace ID that was active when this signal was emitted.
   // Enables cross-stream correlation (e.g. request → LLM → event).
   string trace_id = 21;
+  // OpenTelemetry span ID — identifies the specific operation within a trace.
+  string span_id = 22;
 }
 
 // Finding is a single detection outcome attached to a signal.
@@ -78,6 +80,8 @@ message SignalFilters {
   string payload = 11;
   // Exact match on OpenTelemetry trace ID for cross-stream correlation.
   string trace_id = 12;
+  // Exact match on OpenTelemetry span ID.
+  string span_id = 13;
   // Only signals recorded after this time are returned.
   optional google.protobuf.Timestamp after = 8;
   // Only signals recorded before this time are returned.

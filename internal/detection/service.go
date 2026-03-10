@@ -199,6 +199,11 @@ func (s *Service) enrichBatch(ctx context.Context, batch []signals.Signal) []sig
 			recorded[i] = signals.RecordedSignal{Signal: sig}
 			continue
 		}
+		// If any finding is blocking, update the signal outcome so the
+		// persisted record accurately reflects the detection decision.
+		if !decision.Allow {
+			sig.Outcome = signals.OutcomeBlocked
+		}
 		recorded[i] = signals.RecordedSignal{
 			Signal:   sig,
 			Findings: recordedFindings(decision.Findings),
@@ -278,6 +283,12 @@ func (s *Service) Evaluate(ctx context.Context, signal signals.Signal) (_ Decisi
 		signal.Timestamp = s.now().UTC()
 	}
 	if signal.UserID == "" {
+		return Decision{Allow: true}, nil
+	}
+
+	// Detection and LLM signals are output of the detection system, not input.
+	// Evaluating them would create a feedback loop.
+	if signal.Stream == signals.StreamDetection || signal.Stream == signals.StreamLLM {
 		return Decision{Allow: true}, nil
 	}
 
@@ -561,6 +572,7 @@ func (s *Service) emitLLMSignal(base signals.Signal, operation string, outcome s
 		Country:    base.Country,
 		Payload:    payload,
 		TraceID:    base.TraceID,
+		SpanID:     base.SpanID,
 	})
 }
 

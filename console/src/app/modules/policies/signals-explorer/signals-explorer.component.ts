@@ -112,6 +112,7 @@ export class SignalsExplorerComponent implements OnInit {
     user_id: [''],
     payload: [''],
     trace_id: [''],
+    span_id: [''],
   });
 
   displayedColumns = ['createdAt', 'stream', 'resource', 'operation', 'outcome', 'ip', 'userId', 'findings', 'expand'];
@@ -190,6 +191,7 @@ export class SignalsExplorerComponent implements OnInit {
     if (f.user_id) filters.setUserId(f.user_id);
     if (f.payload) filters.setPayload(f.payload);
     if (f.trace_id) filters.setTraceId(f.trace_id);
+    if (f.span_id) filters.setSpanId(f.span_id);
     return filters;
   }
 
@@ -398,7 +400,20 @@ export class SignalsExplorerComponent implements OnInit {
   /** Correlate by trace ID: filter the explorer to show all signals sharing the same OTEL trace. */
   correlate(signal: Signal.AsObject): void {
     if (!signal.traceId) return;
-    this.filterForm.patchValue({ trace_id: signal.traceId, stream: '' });
+    this.filterForm.reset();
+    this.filterForm.patchValue({ trace_id: signal.traceId });
+    this.activeTab = 'logs';
+    this.offset = 0;
+    this.refresh();
+    this.search();
+  }
+
+  /** Drill from a finding badge to the detection-stream signal(s) sharing the same trace. */
+  drillToFinding(signal: Signal.AsObject, event: MouseEvent): void {
+    event.stopPropagation();
+    if (!signal.traceId) return;
+    this.filterForm.reset();
+    this.filterForm.patchValue({ trace_id: signal.traceId, stream: 'detection' });
     this.activeTab = 'logs';
     this.offset = 0;
     this.refresh();

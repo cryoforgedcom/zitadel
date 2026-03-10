@@ -63,6 +63,7 @@ func SignalConnectUnaryInterceptor(emitter *Emitter, geoCountryHeader string) co
 				SecFetchSite:   hctx.SecFetchSite,
 				IsHTTPS:        hctx.IsHTTPS,
 				TraceID:        tracing.TraceIDFromCtx(ctx),
+				SpanID:         tracing.SpanIDFromCtx(ctx),
 			}
 			emitter.Emit(sig)
 			return resp, handlerErr
@@ -120,6 +121,7 @@ func SignalHTTPMiddleware(emitter *Emitter, geoCountryHeader string) func(http.H
 				SecFetchSite:   hctx.SecFetchSite,
 				IsHTTPS:        hctx.IsHTTPS,
 				TraceID:        tracing.TraceIDFromCtx(ctx),
+				SpanID:         tracing.SpanIDFromCtx(ctx),
 			})
 		})
 	}

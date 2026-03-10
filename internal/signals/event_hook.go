@@ -15,6 +15,7 @@ import (
 func NewEventSignalHook(emitter *Emitter) func(ctx context.Context, events []eventstore.Event) {
 	return func(ctx context.Context, events []eventstore.Event) {
 		traceID := tracing.TraceIDFromCtx(ctx)
+		spanID := tracing.SpanIDFromCtx(ctx)
 		for _, e := range events {
 			agg := e.Aggregate()
 			ts := e.CreatedAt()
@@ -39,6 +40,7 @@ func NewEventSignalHook(emitter *Emitter) func(ctx context.Context, events []eve
 				Timestamp:  ts,
 				Payload:    payload,
 				TraceID:    traceID,
+				SpanID:     spanID,
 			})
 		}
 	}

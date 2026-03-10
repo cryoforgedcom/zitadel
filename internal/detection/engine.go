@@ -97,6 +97,11 @@ func (e *RuleEngine) Evaluate(ctx context.Context, rc RiskContext, sessionSignal
 		finding := e.dispatch(ctx, rule, rc, sessionSignals)
 		if finding != nil {
 			findings = append(findings, *finding)
+			// Non-LLM engines don't emit their own signals, so emit a
+			// detection-stream signal here for cross-stream correlation.
+			if rule.Engine != EngineLLM {
+				e.emitDetectionSignal(rc, rule, *finding)
+			}
 		}
 		if rule.StopOnMatch {
 			break
@@ -343,6 +348,43 @@ func (e *RuleEngine) emitLLMSignal(rc RiskContext, operation string, outcome sig
 		Country:    s.Country,
 		Payload:    payload,
 		TraceID:    s.TraceID,
+		SpanID:     s.SpanID,
+	})
+}
+
+// emitDetectionSignal emits a signal on the "detection" stream for non-LLM rule
+// findings (block, rate_limit, log, captcha). This makes rule evaluations
+// visible as separate log entries that can be reached via drill-down from the
+// finding badge on the originating request signal.
+func (e *RuleEngine) emitDetectionSignal(rc RiskContext, rule *CompiledRule, finding Finding) {
+	if e.emitter == nil {
+		return
+	}
+	outcome := signals.OutcomeSuccess
+	if finding.Block {
+		outcome = signals.OutcomeBlocked
+	} else if finding.Challenge {
+		outcome = signals.OutcomeChallenged
+	}
+	s := rc.Current
+	payload := fmt.Sprintf(`{"rule_id":%q,"engine":%q,"finding":%q,"message":%q,"block":%t}`,
+		rule.ID, rule.Engine, finding.Name, finding.Message, finding.Block)
+	e.emitter.Emit(signals.Signal{
+		InstanceID: s.InstanceID,
+		UserID:     s.UserID,
+		CallerID:   s.CallerID,
+		SessionID:  s.SessionID,
+		Operation:  "detection." + string(rule.Engine),
+		Stream:     signals.StreamDetection,
+		Resource:   "rule:" + rule.ID,
+		Outcome:    outcome,
+		Timestamp:  time.Now().UTC(),
+		IP:         s.IP,
+		UserAgent:  s.UserAgent,
+		Country:    s.Country,
+		Payload:    payload,
+		TraceID:    s.TraceID,
+		SpanID:     s.SpanID,
 	})
 }
 
