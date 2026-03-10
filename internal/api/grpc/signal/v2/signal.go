@@ -114,6 +114,105 @@ func toSignalFilters(ctx context.Context, f *signalpb.SignalFilters) sig.SignalF
 	return sf
 }
 
+func (s *Server) ListFindings(
+	ctx context.Context,
+	req *connect.Request[signalpb.ListFindingsRequest],
+) (*connect.Response[signalpb.ListFindingsResponse], error) {
+	offset := 0
+	limit := 100
+	if q := req.Msg.GetQuery(); q != nil {
+		offset = int(q.GetOffset())
+		if q.GetLimit() > 0 && int(q.GetLimit()) < 1000 {
+			limit = int(q.GetLimit())
+		}
+	}
+
+	filters := toFindingFilters(ctx, req.Msg.GetFilters())
+	results, total, err := s.store.SearchFindings(ctx, filters, offset, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &signalpb.ListFindingsResponse{
+		Details: &objectpb.ListDetails{
+			TotalResult: uint64(total),
+		},
+		Findings: make([]*signalpb.FindingWithContext, 0, len(results)),
+	}
+	for _, r := range results {
+		resp.Findings = append(resp.Findings, findingResultToProto(r))
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *Server) AggregateFindings(
+	ctx context.Context,
+	req *connect.Request[signalpb.AggregateFindingsRequest],
+) (*connect.Response[signalpb.AggregateFindingsResponse], error) {
+	filters := toFindingFilters(ctx, req.Msg.GetFilters())
+	groupBy := req.Msg.GetGroupBy()
+	if groupBy == "" {
+		groupBy = "name"
+	}
+	topN := int(req.Msg.GetTopN())
+	if topN <= 0 {
+		topN = 10
+	}
+
+	buckets, err := s.store.AggregateFindings(ctx, filters, groupBy, topN)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &signalpb.AggregateFindingsResponse{
+		Buckets: make([]*signalpb.AggregationBucket, 0, len(buckets)),
+	}
+	for _, b := range buckets {
+		resp.Buckets = append(resp.Buckets, &signalpb.AggregationBucket{
+			Key:   b.Key,
+			Count: b.Value,
+		})
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func toFindingFilters(ctx context.Context, f *signalpb.FindingFilters) sig.FindingFilters {
+	ff := sig.FindingFilters{
+		SignalFilters: toSignalFilters(ctx, nil),
+	}
+	if f == nil {
+		return ff
+	}
+	ff.SignalFilters = toSignalFilters(ctx, f.GetSignalFilters())
+	ff.FindingName = f.GetFindingName()
+	ff.FindingSource = f.GetFindingSource()
+	ff.BlockOnly = f.GetBlockOnly()
+	ff.ChallengeOnly = f.GetChallengeOnly()
+	return ff
+}
+
+func findingResultToProto(r sig.FindingResult) *signalpb.FindingWithContext {
+	return &signalpb.FindingWithContext{
+		Finding: &signalpb.Finding{
+			Name:          r.Name,
+			Source:        r.Source,
+			Message:       r.Message,
+			Confidence:    r.Confidence,
+			Block:         r.Block,
+			Challenge:     r.Challenge,
+			ChallengeType: r.ChallengeType,
+		},
+		SignalTimestamp: timestamppb.New(r.SignalTimestamp),
+		UserId:         r.UserID,
+		SessionId:      r.SessionID,
+		Ip:             r.IP,
+		Operation:      r.Operation,
+		Stream:         string(r.Stream),
+		Outcome:        string(r.Outcome),
+		TraceId:        r.TraceID,
+	}
+}
+
 func recordedSignalToProto(rs sig.RecordedSignal) *signalpb.Signal {
 	findings := make([]*signalpb.Finding, 0, len(rs.Findings))
 	for _, f := range rs.Findings {
