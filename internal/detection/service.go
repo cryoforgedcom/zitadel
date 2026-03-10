@@ -21,18 +21,18 @@ import (
 	"github.com/zitadel/zitadel/internal/signals"
 )
 
-type Evaluator interface {
-	Evaluate(ctx context.Context, signal signals.Signal) (Decision, error)
-	Record(ctx context.Context, signal signals.Signal, findings []Finding) error
-	// VerifyCaptcha verifies a captcha token. Returns true when captcha is
-	// not configured or verification succeeds.
-	VerifyCaptcha(ctx context.Context, token string, remoteIP string) (bool, error)
-	// CaptchaVerifier returns the configured verifier, or nil.
-	CaptchaVerifier() captcha.CaptchaVerifier
-}
+// Compile-time interface satisfaction checks.
+var (
+	_ Evaluator         = (*Service)(nil)
+	_ SignalRecorder    = (*Service)(nil)
+	_ ChallengeVerifier = (*Service)(nil)
+)
 
 var tracer = instrumentation.NewTracer("risk")
 
+// Service is the central detection component. It implements Evaluator,
+// SignalRecorder, and ChallengeVerifier. Lifecycle infrastructure
+// (emitter, DuckLake, compaction) is managed by the embedded *Runtime.
 type Service struct {
 	basePolicy     Policy
 	policyProvider PolicyProvider
@@ -42,40 +42,29 @@ type Service struct {
 	now            func() time.Time
 	stopMaint      chan struct{} // closed to stop the maintenance goroutine
 
-	// Signal store components (nil when SignalStore is not enabled).
-	emitter       *signals.Emitter
-	emitterCancel context.CancelFunc
-
-	// DuckLake signal store.
-	duckLakeStore    *signals.DuckLakeStore
-	compactionWorker *signals.CompactionWorker
+	// Runtime owns the signal store lifecycle (nil when disabled).
+	runtime *Runtime
 
 	// Captcha challenge verification.
 	captchaVerifier captcha.CaptchaVerifier
 }
 
-// New creates a risk evaluation service. When pgDSN is non-empty and
-// cfg.SignalStore is enabled, it creates a DuckLake signal store with a
-// fire-and-forget emitter and compaction worker.
+// New creates a detection service. An optional *Runtime provides signal
+// store infrastructure (emitter, DuckLake). Pass nil when signal storage
+// is disabled.
 func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClient llm.LLMClient, pgDSN string, redisClient *redis.Client) (*Service, error) {
 	basePolicy, err := NewPolicy(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	var emitter *signals.Emitter
-	var duckLakeStore *signals.DuckLakeStore
-	var compactionWorker *signals.CompactionWorker
-
-	if cfg.SignalStore.Enabled && pgDSN != "" {
-		duckLakeStore, err = signals.NewDuckLakeStore(pgDSN, cfg.SnapshotConfig(), cfg.SignalStore.DuckLake)
-		if err != nil {
-			return nil, fmt.Errorf("ducklake signal store: %w", err)
-		}
-		store = duckLakeStore
-		emitter = signals.NewEmitter(cfg.SignalStore, duckLakeStore)
-		compactionWorker = signals.NewCompactionWorker(duckLakeStore, cfg.SignalStore.DuckLake.CompactionInterval)
-		duckLakeStore.LogInfo(context.Background())
+	// Create runtime for signal store lifecycle (nil when disabled).
+	rt, err := NewRuntime(cfg, pgDSN)
+	if err != nil {
+		return nil, err
+	}
+	if rt != nil {
+		store = rt.DuckLakeStore()
 	}
 
 	if store == nil {
@@ -96,30 +85,19 @@ func New(cfg Config, policyProvider PolicyProvider, store signals.Store, llmClie
 	rateLimiter, effectiveRateLimit = newRateLimiterStore(cfg.RateLimit, nil, redisClient)
 
 	svc := &Service{
-		basePolicy:       basePolicy,
-		policyProvider:   policyProvider,
-		store:            store,
-		llm:              llmClient,
-		rateLimiter:      rateLimiter,
-		now:              time.Now,
-		stopMaint:        make(chan struct{}),
-		emitter:          emitter,
-		duckLakeStore:    duckLakeStore,
-		compactionWorker: compactionWorker,
-		captchaVerifier:  captcha.NewCaptchaVerifier(cfg.Captcha, nil),
+		basePolicy:      basePolicy,
+		policyProvider:  policyProvider,
+		store:           store,
+		llm:             llmClient,
+		rateLimiter:     rateLimiter,
+		now:             time.Now,
+		stopMaint:       make(chan struct{}),
+		runtime:         rt,
+		captchaVerifier: captcha.NewCaptchaVerifier(cfg.Captcha, nil),
 	}
 	go svc.maintenanceLoop()
-	if emitter != nil {
-		emitter.SetEnrichFunc(svc.enrichBatch)
-		ctx, cancel := context.WithCancel(context.Background())
-		svc.emitterCancel = cancel
-		go emitter.Start(ctx)
-		if instrumentation.IsStreamEnabled(instrumentation.StreamRisk) {
-			logging.Info(ctx, "detection.signal_store.started",
-				slog.Int("channel_size", cfg.SignalStore.ChannelSize),
-				slog.String("mode", "ducklake"),
-			)
-		}
+	if rt != nil && rt.Emitter() != nil {
+		rt.Emitter().SetEnrichFunc(svc.enrichBatch)
 	}
 	if len(basePolicy.Rules) > 0 || policyProvider != nil {
 		logging.Info(context.Background(), "detection.ratelimit.backend_selected",
@@ -148,8 +126,8 @@ func (s *Service) maintenanceLoop() {
 	}
 }
 
-// Close stops the maintenance goroutine and signal emitter. Safe to call
-// multiple times.
+// Close stops the maintenance goroutine and runtime infrastructure.
+// Safe to call multiple times.
 func (s *Service) Close() {
 	if s == nil {
 		return
@@ -160,31 +138,33 @@ func (s *Service) Close() {
 	default:
 		close(s.stopMaint)
 	}
-	if s.emitterCancel != nil {
-		s.emitterCancel()
-		<-s.emitter.Done()
+	s.runtime.Close()
+}
+
+// Runtime returns the detection infrastructure runtime, or nil when
+// signal storage is not enabled. Used by cmd/start for component
+// registration without type-asserting the Evaluator.
+func (s *Service) Runtime() *Runtime {
+	if s == nil {
+		return nil
 	}
-	if s.duckLakeStore != nil {
-		s.duckLakeStore.Close()
-	}
+	return s.runtime
 }
 
 // Emitter returns the signal emitter, or nil when the signal store is not
 // enabled. Middleware uses this to emit fire-and-forget signals.
 func (s *Service) Emitter() *signals.Emitter {
-	if s == nil {
-		return nil
-	}
-	return s.emitter
+	return s.runtime.Emitter()
 }
 
 // findingRecorder returns the DuckLakeStore as a FindingRecorder for async
 // LLM result persistence. Returns nil when the store is not available.
 func (s *Service) findingRecorder() FindingRecorder {
-	if s.duckLakeStore == nil {
+	dl := s.runtime.DuckLakeStore()
+	if dl == nil {
 		return nil
 	}
-	return s.duckLakeStore
+	return dl
 }
 
 // enrichBatch runs lightweight detection over a batch of fire-and-forget
@@ -242,19 +222,13 @@ func newRateLimiterStore(cfg ratelimit.Config, db *sql.DB, redisClient *redis.Cl
 // CompactionWorker returns the DuckLake compaction worker for registration
 // with the River queue, or nil when DuckLake is not enabled.
 func (s *Service) CompactionWorker() *signals.CompactionWorker {
-	if s == nil {
-		return nil
-	}
-	return s.compactionWorker
+	return s.runtime.CompactionWorker()
 }
 
 // DuckLakeStore returns the DuckLake signal store, or nil when DuckLake is
 // not enabled. Used by the Signals API for direct query access.
 func (s *Service) DuckLakeStore() *signals.DuckLakeStore {
-	if s == nil {
-		return nil
-	}
-	return s.duckLakeStore
+	return s.runtime.DuckLakeStore()
 }
 
 // CaptchaVerifier returns the captcha verifier, or nil when not configured.
@@ -318,7 +292,7 @@ func (s *Service) Evaluate(ctx context.Context, signal signals.Signal) (_ Decisi
 	if len(policy.Rules) > 0 {
 		// Expression-based rule evaluation.
 		rc := buildRiskContext(signal, snapshot)
-		ruleEvaluator := NewRuleEvaluator(policy.Rules, s.rateLimiter, s.llm, policy.Config.LLM, s.findingRecorder(), s.emitter)
+		ruleEvaluator := NewRuleEvaluator(policy.Rules, s.rateLimiter, s.llm, policy.Config.LLM, s.findingRecorder(), s.runtime.Emitter())
 		findings = ruleEvaluator.Evaluate(ctx, rc, snapshot.SessionSignals)
 	} else {
 		// Legacy hardcoded heuristics (backward-compatible fallback).
@@ -554,10 +528,11 @@ func (s *Service) evaluateLLM(ctx context.Context, signal signals.Signal, snapsh
 
 // emitLLMSignal emits a signal on the "llm" stream if the emitter is set.
 func (s *Service) emitLLMSignal(base signals.Signal, operation string, outcome signals.Outcome, payload string) {
-	if s.emitter == nil {
+	emitter := s.runtime.Emitter()
+	if emitter == nil {
 		return
 	}
-	s.emitter.Emit(signals.Signal{
+	emitter.Emit(signals.Signal{
 		InstanceID: base.InstanceID,
 		UserID:     base.UserID,
 		CallerID:   base.CallerID,

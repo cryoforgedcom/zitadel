@@ -65,6 +65,7 @@ type fakeRiskEvaluator struct {
 	findings    [][]detection.Finding
 }
 
+// Evaluator interface
 func (f *fakeRiskEvaluator) Evaluate(context.Context, detection.Signal) (detection.Decision, error) {
 	if f.evaluateErr != nil {
 		if f.failOpen {
@@ -75,12 +76,14 @@ func (f *fakeRiskEvaluator) Evaluate(context.Context, detection.Signal) (detecti
 	return f.decision, nil
 }
 
+// SignalRecorder interface
 func (f *fakeRiskEvaluator) Record(_ context.Context, signal detection.Signal, findings []detection.Finding) error {
 	f.recorded = append(f.recorded, signal)
 	f.findings = append(f.findings, append([]detection.Finding(nil), findings...))
 	return nil
 }
 
+// ChallengeVerifier interface
 func (f *fakeRiskEvaluator) VerifyCaptcha(context.Context, string, string) (bool, error) {
 	return true, nil
 }
@@ -98,7 +101,7 @@ func TestCommands_updateSession_blockedByRisk(t *testing.T) {
 			Findings: []detection.Finding{{Name: "context_drift", Block: true}},
 		},
 	}
-	c := &Commands{eventstore: expectEventstore()(t), riskEvaluator: evaluator}
+	c := &Commands{eventstore: expectEventstore()(t), detectionEvaluator: evaluator, signalRecorder: evaluator}
 
 	checks := &SessionCommands{
 		sessionWriteModel: NewSessionWriteModel("sessionID", "instance1"),
@@ -131,7 +134,7 @@ func TestCommands_updateSession_challengedByRisk(t *testing.T) {
 			Findings: []detection.Finding{{Name: "captcha_required", Challenge: true, ChallengeType: "captcha"}},
 		},
 	}
-	c := &Commands{eventstore: expectEventstore()(t), riskEvaluator: evaluator}
+	c := &Commands{eventstore: expectEventstore()(t), detectionEvaluator: evaluator, signalRecorder: evaluator}
 
 	checks := &SessionCommands{
 		sessionWriteModel: NewSessionWriteModel("sessionID", "instance1"),
@@ -170,7 +173,8 @@ func TestCommands_updateSession_riskFailOpen(t *testing.T) {
 				session.NewTokenSetEvent(context.Background(), &session.NewAggregate("sessionID", "instance1").Aggregate, "tokenID"),
 			),
 		)(t),
-		riskEvaluator: evaluator,
+		detectionEvaluator: evaluator,
+		signalRecorder:     evaluator,
 	}
 
 	checks := &SessionCommands{
@@ -221,7 +225,8 @@ func TestCommands_updateSession_recordsRiskFindingsOnSuccess(t *testing.T) {
 				session.NewTokenSetEvent(context.Background(), &session.NewAggregate("sessionID", "instance1").Aggregate, "tokenID"),
 			),
 		)(t),
-		riskEvaluator: evaluator,
+		detectionEvaluator: evaluator,
+		signalRecorder:     evaluator,
 	}
 
 	checks := &SessionCommands{
@@ -283,8 +288,9 @@ func TestCommands_updateSession_threeSessionsSameContextAllowed(t *testing.T) {
 	}
 
 	c := &Commands{
-		eventstore:    expectEventstore(expects...)(t),
-		riskEvaluator: detectionSvc,
+		eventstore:         expectEventstore(expects...)(t),
+		detectionEvaluator: detectionSvc,
+		signalRecorder:     detectionSvc,
 	}
 	ctx := authz.NewMockContext("instance1", "", "")
 
@@ -299,7 +305,7 @@ func TestCommands_updateSession_threeSessionsSameContextAllowed(t *testing.T) {
 		assert.Equalf(t, "token-"+s.id, got.NewToken, "session %d should have a token", i+1)
 
 		// Record the successful signal so subsequent sessions see the history.
-		require.NoError(t, detectionSvc.Record(ctx, checks.riskSignal(ctx, "", detection.OutcomeSuccess), nil))
+		require.NoError(t, detectionSvc.Record(ctx, checks.detectionSignal(ctx, "", detection.OutcomeSuccess), nil))
 	}
 }
 
@@ -328,8 +334,9 @@ func TestCommands_updateSession_contextDriftBlocksThirdSession(t *testing.T) {
 	}
 	// Session 3 is blocked before any Push — no extra expectation needed.
 	c := &Commands{
-		eventstore:    expectEventstore(expects...)(t),
-		riskEvaluator: detectionSvc,
+		eventstore:         expectEventstore(expects...)(t),
+		detectionEvaluator: detectionSvc,
+		signalRecorder:     detectionSvc,
 	}
 	ctx := authz.NewMockContext("instance1", "", "")
 
@@ -342,7 +349,7 @@ func TestCommands_updateSession_contextDriftBlocksThirdSession(t *testing.T) {
 		require.NoErrorf(t, err, "session %d should be allowed", i+1)
 		require.NotNil(t, got)
 
-		require.NoError(t, detectionSvc.Record(ctx, checks.riskSignal(ctx, "", detection.OutcomeSuccess), nil))
+		require.NoError(t, detectionSvc.Record(ctx, checks.detectionSignal(ctx, "", detection.OutcomeSuccess), nil))
 	}
 
 	// Session 3: different IP and user-agent → contextDrift must block.

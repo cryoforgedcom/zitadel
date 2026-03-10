@@ -469,14 +469,14 @@ func (c *Commands) enforceDetection(ctx context.Context, checks *SessionCommands
 }
 
 func (c *Commands) recordDetectionOutcome(ctx context.Context, checks *SessionCommands, outcome detection.Outcome, findings []detection.Finding) {
-	if c.detectionEvaluator == nil {
+	if c.signalRecorder == nil {
 		return
 	}
 	ctx = detectionlog.NewCtx(ctx, detectionlog.StreamRisk)
 	signal := checks.detectionSignal(ctx, c.geoCountryHeader, outcome)
 	signal.Stream = detection.StreamEvents
 	signal.CallerID = authz.GetCtxData(ctx).UserID
-	if err := c.detectionEvaluator.Record(ctx, signal, findings); err != nil {
+	if err := c.signalRecorder.Record(ctx, signal, findings); err != nil {
 		detectionlog.WithError(ctx, err).Warn("detection.record.failed",
 			slog.String("detection_user_id", checks.sessionWriteModel.UserID),
 			slog.String("detection_session_id", checks.sessionWriteModel.AggregateID),

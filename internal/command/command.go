@@ -113,6 +113,9 @@ type Commands struct {
 	defaultDetectionConfig  detection.Config
 	detectionPolicyProvider *instanceDetectionPolicyProvider
 	detectionEvaluator      detection.Evaluator
+	signalRecorder          detection.SignalRecorder
+	challengeVerifier       detection.ChallengeVerifier
+	detectionRuntime        *detection.Runtime
 	geoCountryHeader        string // proxy header name for geo-country (e.g. "CF-IPCountry")
 }
 
@@ -317,17 +320,33 @@ func StartCommands(
 
 	repo.defaultDetectionConfig = detectionConfig
 	repo.detectionPolicyProvider = newInstanceDetectionPolicyProvider(es, detectionConfig)
-	repo.detectionEvaluator, err = detection.New(detectionConfig, repo.detectionPolicyProvider, nil, detectionLLM, pgDSN, redisClient)
+	svc, err := detection.New(detectionConfig, repo.detectionPolicyProvider, nil, detectionLLM, pgDSN, redisClient)
 	if err != nil {
 		return nil, fmt.Errorf("detection evaluator: %w", err)
 	}
+	repo.detectionEvaluator = svc
+	repo.signalRecorder = svc
+	repo.challengeVerifier = svc
+	repo.detectionRuntime = svc.Runtime()
 	repo.geoCountryHeader = detectionConfig.GeoCountryHeader
 	return repo, nil
 }
 
+// DetectionRuntime returns the detection infrastructure runtime (emitter,
+// DuckLake, compaction), or nil when signal storage is not enabled.
+// Used by startup code to register signal workers and API servers.
+func (c *Commands) DetectionRuntime() *detection.Runtime {
+	if c == nil {
+		return nil
+	}
+	return c.detectionRuntime
+}
+
 // DetectionService returns the concrete detection service if available. Used
-// by the startup code to register signal workers and by middleware to access
-// the signal emitter.
+// by the startup code to access the signal emitter via backward-compatible
+// accessor. Prefer DetectionRuntime() for new code.
+//
+// Deprecated: Use DetectionRuntime() instead.
 func (c *Commands) DetectionService() *detection.Service {
 	if c == nil {
 		return nil

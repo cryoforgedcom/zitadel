@@ -356,13 +356,13 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 		return err
 	}
 
-	if detectionService := commands.DetectionService(); detectionService != nil {
+	if rt := commands.DetectionRuntime(); rt != nil {
 		// register DuckLake compaction worker
-		signals.RegisterCompactionWorker(ctx, q, detectionService.CompactionWorker())
+		signals.RegisterCompactionWorker(ctx, q, rt.CompactionWorker())
 
 		// Hook into the eventstore Push path: every committed event is
 		// emitted as a signal on the "events" stream, fire-and-forget.
-		if emitter := detectionService.Emitter(); emitter != nil {
+		if emitter := rt.Emitter(); emitter != nil {
 			esPusher.SetSignalHook(signals.NewEventSignalHook(emitter))
 		}
 	}
@@ -376,9 +376,9 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 		return err
 	}
 
-	if detectionService := commands.DetectionService(); detectionService != nil {
+	if rt := commands.DetectionRuntime(); rt != nil {
 		// start DuckLake compaction periodic job
-		signals.StartCompactionSchedule(ctx, q, detectionService.CompactionWorker())
+		signals.StartCompactionSchedule(ctx, q, rt.CompactionWorker())
 	}
 
 	router := mux.NewRouter()
@@ -490,8 +490,8 @@ func startAPIs(
 	// Resolve signal emitter and stream config for request-level signal capture.
 	var signalEmitter *signals.Emitter
 	streamsConfig := config.SystemDefaults.Risk.SignalStore.Streams
-	if detectionService := commands.DetectionService(); detectionService != nil {
-		signalEmitter = detectionService.Emitter()
+	if rt := commands.DetectionRuntime(); rt != nil {
+		signalEmitter = rt.Emitter()
 	}
 	// Apply stream defaults: if neither stream is explicitly enabled, enable all.
 	effectiveStreams := signals.StreamsConfig{API: streamsConfig.API, HTTPAccess: streamsConfig.HTTPAccess}.WithDefaults()
@@ -780,8 +780,8 @@ func startAPIs(
 		return nil, err
 	}
 	// Register Signal Service v2 when DuckLake store is available.
-	if detectionService := commands.DetectionService(); detectionService != nil {
-		if signalServer := signal_v2.CreateServer(detectionService.DuckLakeStore()); signalServer != nil {
+	if rt := commands.DetectionRuntime(); rt != nil {
+		if signalServer := signal_v2.CreateServer(rt.DuckLakeStore()); signalServer != nil {
 			if err := apis.RegisterService(ctx, signalServer); err != nil {
 				return nil, err
 			}
