@@ -1,6 +1,6 @@
 import {
-  createGrpcTransport,
-  GrpcTransportOptions,
+  ConnectTransportOptions,
+  createConnectTransport,
 } from "@connectrpc/connect-node";
 import {
   createRemoteJWKSet,
@@ -18,10 +18,15 @@ import { NewAuthorizationBearerInterceptor } from "./interceptors.js";
  */
 export function createServerTransport(
   token: string,
-  opts: GrpcTransportOptions
+  opts: Omit<
+    Extract<ConnectTransportOptions, { httpVersion: "1.1" }>,
+    "httpVersion"
+  >,
 ) {
-  return createGrpcTransport({
+  return createConnectTransport({
     ...opts,
+    // for the moment we force http 1.1 for the server transport, as we have observed memory leaks with http2.
+    httpVersion: "1.1",
     interceptors: [
       ...(opts.interceptors || []),
       NewAuthorizationBearerInterceptor(token),
@@ -66,14 +71,14 @@ export async function verifyJwt<T = JWTPayload>(
     publicHost?: string;
   },
 ): Promise<T & JWTPayload> {
-   const headers: Record<string, string> = {};
-   if (options?.instanceHost) {
-     headers["x-zitadel-instance-host"] = options.instanceHost;
-   }
-   if (options?.publicHost) {
-     headers["x-zitadel-public-host"] = options.publicHost;
-   }
-  const JWKS = createRemoteJWKSet(new URL(keysEndpoint), {headers: headers});
+  const headers: Record<string, string> = {};
+  if (options?.instanceHost) {
+    headers["x-zitadel-instance-host"] = options.instanceHost;
+  }
+  if (options?.publicHost) {
+    headers["x-zitadel-public-host"] = options.publicHost;
+  }
+  const JWKS = createRemoteJWKSet(new URL(keysEndpoint), { headers: headers });
 
   const { payload } = await jwtVerify(token, JWKS, {
     issuer: options?.issuer,
