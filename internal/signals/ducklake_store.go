@@ -500,6 +500,241 @@ func (s *DuckLakeStore) AggregateSignals(ctx context.Context, filters SignalFilt
 	return buckets, rows.Err()
 }
 
+// FindingFilters defines query filters for finding-level searches.
+type FindingFilters struct {
+	SignalFilters        // embed signal-level filters for instance isolation and time range
+	FindingName   string // exact match on finding name (e.g. "failure_burst")
+	FindingSource string // exact match on finding source (e.g. "rule:_builtin_failure_burst")
+	BlockOnly     bool   // only return blocking findings
+	ChallengeOnly bool   // only return challenge findings
+}
+
+// FindingResult is a finding with its originating signal context.
+type FindingResult struct {
+	RecordedFinding
+	// Signal context for correlation.
+	SignalTimestamp time.Time
+	UserID         string
+	SessionID      string
+	IP             string
+	Operation      string
+	Stream         SignalStream
+	Outcome        Outcome
+	TraceID        string
+}
+
+// SearchFindings queries findings across signals by unnesting the JSON
+// findings column. Results are individual findings with signal context
+// attached for correlation.
+func (s *DuckLakeStore) SearchFindings(ctx context.Context, filters FindingFilters, offset, limit int) ([]FindingResult, int64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.closed {
+		return nil, 0, fmt.Errorf("ducklake: store closed")
+	}
+
+	where, args := filters.SignalFilters.toSQL()
+
+	// Only include signals that have findings.
+	where += " AND findings != '[]' AND findings != ''"
+
+	// Base CTE that unnests findings from the JSON column.
+	cte := fmt.Sprintf(`
+		WITH finding_rows AS (
+			SELECT
+				s.created_at AS signal_timestamp,
+				s.user_id,
+				s.session_id,
+				s.ip,
+				s.operation,
+				s.stream,
+				s.outcome,
+				s.trace_id,
+				f.name,
+				f.source,
+				f.message,
+				COALESCE(f.block, false) AS block,
+				COALESCE(f.confidence, 0.0) AS confidence,
+				COALESCE(f.challenge, false) AS challenge,
+				COALESCE(f.challenge_type, '') AS challenge_type
+			FROM signals.signals s,
+				LATERAL (
+					SELECT
+						json_extract_string(j, '$.name') AS name,
+						json_extract_string(j, '$.source') AS source,
+						json_extract_string(j, '$.message') AS message,
+						CAST(json_extract(j, '$.block') AS BOOLEAN) AS block,
+						CAST(json_extract(j, '$.confidence') AS DOUBLE) AS confidence,
+						CAST(json_extract(j, '$.challenge') AS BOOLEAN) AS challenge,
+						json_extract_string(j, '$.challenge_type') AS challenge_type
+					FROM unnest(from_json(s.findings, '["json"]')) AS t(j)
+				) f
+			WHERE %s
+		)`, where)
+
+	// Build finding-level filters.
+	var findingClauses []string
+	if filters.FindingName != "" {
+		findingClauses = append(findingClauses, "name = ?")
+		args = append(args, filters.FindingName)
+	}
+	if filters.FindingSource != "" {
+		findingClauses = append(findingClauses, "source = ?")
+		args = append(args, filters.FindingSource)
+	}
+	if filters.BlockOnly {
+		findingClauses = append(findingClauses, "block = true")
+	}
+	if filters.ChallengeOnly {
+		findingClauses = append(findingClauses, "challenge = true")
+	}
+
+	findingWhere := "1=1"
+	if len(findingClauses) > 0 {
+		findingWhere = strings.Join(findingClauses, " AND ")
+	}
+
+	// Count total.
+	countQuery := fmt.Sprintf("%s SELECT COUNT(*) FROM finding_rows WHERE %s", cte, findingWhere)
+	var total int64
+	if err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("ducklake: count findings: %w", err)
+	}
+
+	// Query page.
+	query := fmt.Sprintf(`%s
+		SELECT signal_timestamp, user_id, session_id, ip, operation,
+		       stream, outcome, trace_id,
+		       name, source, message, block, confidence, challenge, challenge_type
+		FROM finding_rows
+		WHERE %s
+		ORDER BY signal_timestamp DESC
+		LIMIT ? OFFSET ?
+	`, cte, findingWhere)
+	pageArgs := make([]any, len(args))
+	copy(pageArgs, args)
+	pageArgs = append(pageArgs, limit, offset)
+
+	rows, err := s.db.QueryContext(ctx, query, pageArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("ducklake: search findings: %w", err)
+	}
+	defer rows.Close()
+
+	var results []FindingResult
+	for rows.Next() {
+		var (
+			fr     FindingResult
+			stream string
+			outcome string
+		)
+		if err := rows.Scan(
+			&fr.SignalTimestamp, &fr.UserID, &fr.SessionID, &fr.IP,
+			&fr.Operation, &stream, &outcome, &fr.TraceID,
+			&fr.Name, &fr.Source, &fr.Message, &fr.Block,
+			&fr.Confidence, &fr.Challenge, &fr.ChallengeType,
+		); err != nil {
+			return nil, 0, err
+		}
+		fr.Stream = SignalStream(stream)
+		fr.Outcome = Outcome(outcome)
+		results = append(results, fr)
+	}
+	return results, total, rows.Err()
+}
+
+// AggregateFindings runs an aggregation query over unnested findings.
+// GroupBy can be "name", "source", or "block" to group findings by those attributes.
+func (s *DuckLakeStore) AggregateFindings(ctx context.Context, filters FindingFilters, groupBy string, topN int) ([]AggregationBucket, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.closed {
+		return nil, fmt.Errorf("ducklake: store closed")
+	}
+
+	where, args := filters.SignalFilters.toSQL()
+	where += " AND findings != '[]' AND findings != ''"
+
+	// Validate groupBy to prevent SQL injection.
+	var groupExpr string
+	switch groupBy {
+	case "name":
+		groupExpr = "f_name"
+	case "source":
+		groupExpr = "f_source"
+	case "block":
+		groupExpr = "CAST(f_block AS VARCHAR)"
+	case "user_id":
+		groupExpr = "s.user_id"
+	case "session_id":
+		groupExpr = "s.session_id"
+	case "outcome":
+		groupExpr = "s.outcome"
+	default:
+		return nil, fmt.Errorf("ducklake: unsupported finding group_by: %q", groupBy)
+	}
+
+	// Build finding-level filter clauses.
+	var findingClauses []string
+	if filters.FindingName != "" {
+		findingClauses = append(findingClauses, "f_name = ?")
+		args = append(args, filters.FindingName)
+	}
+	if filters.FindingSource != "" {
+		findingClauses = append(findingClauses, "f_source = ?")
+		args = append(args, filters.FindingSource)
+	}
+	if filters.BlockOnly {
+		findingClauses = append(findingClauses, "f_block = true")
+	}
+	if filters.ChallengeOnly {
+		findingClauses = append(findingClauses, "f_challenge = true")
+	}
+
+	findingWhere := ""
+	if len(findingClauses) > 0 {
+		findingWhere = " AND " + strings.Join(findingClauses, " AND ")
+	}
+
+	if topN <= 0 {
+		topN = 100
+	}
+
+	query := fmt.Sprintf(`
+		SELECT %s AS bucket_key, COUNT(*) AS value
+		FROM signals.signals s,
+			LATERAL (
+				SELECT
+					json_extract_string(j, '$.name') AS f_name,
+					json_extract_string(j, '$.source') AS f_source,
+					CAST(json_extract(j, '$.block') AS BOOLEAN) AS f_block,
+					CAST(json_extract(j, '$.challenge') AS BOOLEAN) AS f_challenge
+				FROM unnest(from_json(s.findings, '["json"]')) AS t(j)
+			) f
+		WHERE %s%s
+		GROUP BY %s
+		ORDER BY value DESC
+		LIMIT ?
+	`, groupExpr, where, findingWhere, groupExpr)
+	args = append(args, topN)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("ducklake: aggregate findings: %w", err)
+	}
+	defer rows.Close()
+
+	var buckets []AggregationBucket
+	for rows.Next() {
+		var b AggregationBucket
+		if err := rows.Scan(&b.Key, &b.Value); err != nil {
+			return nil, err
+		}
+		buckets = append(buckets, b)
+	}
+	return buckets, rows.Err()
+}
+
 // AppendFindings merges additional findings into a signal row identified by
 // instance_id + session_id + created_at. This is used by the async LLM path
 // in observe mode: the signal is persisted before the model responds, and
