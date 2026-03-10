@@ -342,6 +342,7 @@ func (e *RuleEngine) emitLLMSignal(rc RiskContext, operation string, outcome sig
 		UserAgent:  s.UserAgent,
 		Country:    s.Country,
 		Payload:    payload,
+		TraceID:    s.TraceID,
 	})
 }
 

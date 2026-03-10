@@ -560,6 +560,7 @@ func (s *Service) emitLLMSignal(base signals.Signal, operation string, outcome s
 		UserAgent:  base.UserAgent,
 		Country:    base.Country,
 		Payload:    payload,
+		TraceID:    base.TraceID,
 	})
 }
 

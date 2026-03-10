@@ -140,7 +140,8 @@ CREATE TABLE IF NOT EXISTS signals.signals (
 	sec_fetch_site   VARCHAR NOT NULL,
 	is_https         BOOLEAN NOT NULL,
 	findings         VARCHAR NOT NULL,
-	payload          VARCHAR NOT NULL DEFAULT ''
+	payload          VARCHAR NOT NULL DEFAULT '',
+	trace_id         VARCHAR NOT NULL DEFAULT ''
 )
 `
 
@@ -184,6 +185,7 @@ func (s *DuckLakeStore) Save(ctx context.Context, signal Signal, findings []Reco
 		signal.IsHTTPS,
 		string(findingsJSON),
 		signal.Payload,
+		signal.TraceID,
 	)
 	return err
 }
@@ -193,8 +195,9 @@ INSERT INTO signals.signals (
 	instance_id, user_id, caller_id, session_id, fingerprint_id,
 	operation, stream, resource, outcome, created_at,
 	ip, user_agent, accept_language, country, forwarded_chain,
-	referer, sec_fetch_site, is_https, findings, payload
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	referer, sec_fetch_site, is_https, findings, payload,
+	trace_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 // WriteBatch inserts a batch of signals. Called by the [Emitter] debouncer.
@@ -253,6 +256,7 @@ func (s *DuckLakeStore) WriteBatch(ctx context.Context, signals []RecordedSignal
 			sig.IsHTTPS,
 			string(findingsJSON),
 			sig.Payload,
+			sig.TraceID,
 		)
 		if err != nil {
 			return fmt.Errorf("ducklake: insert: %w", err)
@@ -305,7 +309,8 @@ func (s *DuckLakeStore) querySignals(ctx context.Context, where string, limit in
 		SELECT instance_id, user_id, caller_id, session_id, fingerprint_id,
 		       operation, stream, resource, outcome, created_at,
 		       ip, user_agent, accept_language, country, forwarded_chain,
-		       referer, sec_fetch_site, is_https, findings, payload
+		       referer, sec_fetch_site, is_https, findings, payload,
+		       trace_id
 		FROM signals.signals
 		WHERE %s
 		ORDER BY created_at ASC
@@ -334,7 +339,7 @@ func (s *DuckLakeStore) querySignals(ctx context.Context, where string, limit in
 			&outcome, &rs.Timestamp, &rs.IP, &rs.UserAgent,
 			&rs.AcceptLanguage, &rs.Country, &forwardedChain,
 			&rs.Referer, &rs.SecFetchSite, &rs.IsHTTPS, &findingsJSON,
-			&rs.Payload,
+			&rs.Payload, &rs.TraceID,
 		); err != nil {
 			return nil, err
 		}
@@ -374,7 +379,8 @@ func (s *DuckLakeStore) SearchSignals(ctx context.Context, filters SignalFilters
 		SELECT instance_id, user_id, caller_id, session_id, fingerprint_id,
 		       operation, stream, resource, outcome, created_at,
 		       ip, user_agent, accept_language, country, forwarded_chain,
-		       referer, sec_fetch_site, is_https, findings, payload
+		       referer, sec_fetch_site, is_https, findings, payload,
+		       trace_id
 		FROM signals.signals
 		WHERE %s
 		ORDER BY created_at DESC
@@ -403,7 +409,7 @@ func (s *DuckLakeStore) SearchSignals(ctx context.Context, filters SignalFilters
 			&outcome, &rs.Timestamp, &rs.IP, &rs.UserAgent,
 			&rs.AcceptLanguage, &rs.Country, &forwardedChain,
 			&rs.Referer, &rs.SecFetchSite, &rs.IsHTTPS, &findingsJSON,
-			&rs.Payload,
+			&rs.Payload, &rs.TraceID,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -555,6 +561,8 @@ type SignalFilters struct {
 	Outcome    string
 	Country    string
 	Resource   string
+	Payload    string
+	TraceID    string
 	After      *time.Time
 	Before     *time.Time
 }
@@ -598,6 +606,14 @@ func (f SignalFilters) toSQL() (string, []any) {
 	if f.Resource != "" {
 		clauses = append(clauses, "resource = ?")
 		args = append(args, f.Resource)
+	}
+	if f.Payload != "" {
+		clauses = append(clauses, "payload ILIKE ?")
+		args = append(args, "%"+f.Payload+"%")
+	}
+	if f.TraceID != "" {
+		clauses = append(clauses, "trace_id = ?")
+		args = append(args, f.TraceID)
 	}
 	if f.After != nil {
 		clauses = append(clauses, "created_at >= ?")

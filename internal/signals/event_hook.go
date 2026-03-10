@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/zitadel/zitadel/internal/eventstore"
+	"github.com/zitadel/zitadel/internal/telemetry/tracing"
 )
 
 // NewEventSignalHook returns a hook function suitable for
@@ -12,7 +13,8 @@ import (
 // Signal on the "events" stream and emitted fire-and-forget through the
 // given Emitter. This replaces the old signalprojection handler.
 func NewEventSignalHook(emitter *Emitter) func(ctx context.Context, events []eventstore.Event) {
-	return func(_ context.Context, events []eventstore.Event) {
+	return func(ctx context.Context, events []eventstore.Event) {
+		traceID := tracing.TraceIDFromCtx(ctx)
 		for _, e := range events {
 			agg := e.Aggregate()
 			ts := e.CreatedAt()
@@ -36,6 +38,7 @@ func NewEventSignalHook(emitter *Emitter) func(ctx context.Context, events []eve
 				Outcome:    OutcomeSuccess,
 				Timestamp:  ts,
 				Payload:    payload,
+				TraceID:    traceID,
 			})
 		}
 	}

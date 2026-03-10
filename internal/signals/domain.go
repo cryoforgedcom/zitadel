@@ -49,6 +49,10 @@ type Signal struct {
 	// Payload carries the raw event body for event-stream signals, or LLM
 	// context for llm-stream signals. Empty for request-stream signals.
 	Payload string
+
+	// TraceID is the OpenTelemetry trace ID active when this signal was emitted.
+	// Enables cross-stream correlation (e.g. request → LLM → event).
+	TraceID string
 }
 
 type RecordedFinding struct {

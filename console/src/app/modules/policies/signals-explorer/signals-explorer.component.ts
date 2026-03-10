@@ -110,6 +110,8 @@ export class SignalsExplorerComponent implements OnInit {
     ip: [''],
     country: [''],
     user_id: [''],
+    payload: [''],
+    trace_id: [''],
   });
 
   displayedColumns = ['createdAt', 'stream', 'resource', 'operation', 'outcome', 'ip', 'userId', 'findings', 'expand'];
@@ -186,6 +188,8 @@ export class SignalsExplorerComponent implements OnInit {
     if (f.ip) filters.setIp(f.ip);
     if (f.country) filters.setCountry(f.country);
     if (f.user_id) filters.setUserId(f.user_id);
+    if (f.payload) filters.setPayload(f.payload);
+    if (f.trace_id) filters.setTraceId(f.trace_id);
     return filters;
   }
 
@@ -378,5 +382,26 @@ export class SignalsExplorerComponent implements OnInit {
 
   trackByKey(_i: number, row: BreakdownRow): string {
     return row.key;
+  }
+
+  /** Extract error message from JSON payload, if present. */
+  extractError(signal: Signal.AsObject): string | null {
+    if (!signal.payload) return null;
+    try {
+      const obj = JSON.parse(signal.payload);
+      return obj?.error || obj?.Error || obj?.message || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Correlate by trace ID: filter the explorer to show all signals sharing the same OTEL trace. */
+  correlate(signal: Signal.AsObject): void {
+    if (!signal.traceId) return;
+    this.filterForm.patchValue({ trace_id: signal.traceId, stream: '' });
+    this.activeTab = 'logs';
+    this.offset = 0;
+    this.refresh();
+    this.search();
   }
 }

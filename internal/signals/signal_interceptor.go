@@ -10,6 +10,7 @@ import (
 
 	"github.com/zitadel/zitadel/internal/api/authz"
 	http_util "github.com/zitadel/zitadel/internal/api/http"
+	"github.com/zitadel/zitadel/internal/telemetry/tracing"
 )
 
 // signalServicePrefix is the gRPC package prefix for the signal API itself.
@@ -61,6 +62,7 @@ func SignalConnectUnaryInterceptor(emitter *Emitter, geoCountryHeader string) co
 				Referer:        hctx.Referer,
 				SecFetchSite:   hctx.SecFetchSite,
 				IsHTTPS:        hctx.IsHTTPS,
+				TraceID:        tracing.TraceIDFromCtx(ctx),
 			}
 			emitter.Emit(sig)
 			return resp, handlerErr
@@ -117,6 +119,7 @@ func SignalHTTPMiddleware(emitter *Emitter, geoCountryHeader string) func(http.H
 				Referer:        hctx.Referer,
 				SecFetchSite:   hctx.SecFetchSite,
 				IsHTTPS:        hctx.IsHTTPS,
+				TraceID:        tracing.TraceIDFromCtx(ctx),
 			})
 		})
 	}

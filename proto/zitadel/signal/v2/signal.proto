@@ -35,6 +35,9 @@ message Signal {
   repeated Finding findings = 19;
   // Raw event body for event-stream signals, or LLM context for llm-stream signals.
   string payload = 20;
+  // OpenTelemetry trace ID that was active when this signal was emitted.
+  // Enables cross-stream correlation (e.g. request → LLM → event).
+  string trace_id = 21;
 }
 
 // Finding is a single detection outcome attached to a signal.
@@ -71,6 +74,10 @@ message SignalFilters {
   string country = 7;
   // Filter by resource (e.g. aggregate type for events, "llm" for LLM signals).
   string resource = 10;
+  // Substring match (ILIKE) against the payload field.
+  string payload = 11;
+  // Exact match on OpenTelemetry trace ID for cross-stream correlation.
+  string trace_id = 12;
   // Only signals recorded after this time are returned.
   optional google.protobuf.Timestamp after = 8;
   // Only signals recorded before this time are returned.
