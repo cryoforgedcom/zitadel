@@ -33,6 +33,8 @@ message Signal {
   bool is_https = 18;
   // Structured findings from detection engines (rule engine, LLM, rate limiter).
   repeated Finding findings = 19;
+  // Raw event body for event-stream signals, or LLM context for llm-stream signals.
+  string payload = 20;
 }
 
 // Finding is a single detection outcome attached to a signal.
@@ -67,6 +69,8 @@ message SignalFilters {
   string outcome = 5;
   string operation = 6;
   string country = 7;
+  // Filter by resource (e.g. aggregate type for events, "llm" for LLM signals).
+  string resource = 10;
   // Only signals recorded after this time are returned.
   optional google.protobuf.Timestamp after = 8;
   // Only signals recorded before this time are returned.

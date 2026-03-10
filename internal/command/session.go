@@ -474,7 +474,7 @@ func (c *Commands) recordSessionRisk(ctx context.Context, checks *SessionCommand
 	}
 	ctx = risklog.NewCtx(ctx, risklog.StreamRisk)
 	signal := checks.riskSignal(ctx, c.riskGeoHeader, outcome)
-	signal.Stream = detection.StreamAuth
+	signal.Stream = detection.StreamEvents
 	signal.CallerID = authz.GetCtxData(ctx).UserID
 	if err := c.riskEvaluator.Record(ctx, signal, findings); err != nil {
 		risklog.WithError(ctx, err).Warn("risk.record.failed",

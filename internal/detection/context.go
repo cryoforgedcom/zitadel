@@ -121,10 +121,10 @@ func buildRiskContext(signal signals.Signal, snapshot signals.Snapshot) RiskCont
 		}
 
 		// Cross-operation counters and flags.
-		if s.Stream == signals.StreamRequest && isAPIRead(s.Operation) {
+		if s.Stream == signals.StreamRequests && isAPIRead(s.Operation) {
 			rc.RecentAPIReads++
 		}
-		if s.Stream == signals.StreamNotification {
+		if s.Stream == signals.StreamNotifications {
 			rc.RecentNotifications++
 		}
 		op := s.Operation

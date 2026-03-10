@@ -28,6 +28,14 @@ interface TimeRange {
   bucket: string;
 }
 
+interface BreakdownRow {
+  key: string;
+  count: number;
+  pct: number;
+}
+
+type Tab = 'overview' | 'logs';
+
 @Component({
   selector: 'cnsl-signals-explorer',
   standalone: true,
@@ -60,7 +68,13 @@ export class SignalsExplorerComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly toast = inject(ToastService);
 
+  // Navigation
+  activeTab: Tab = 'overview';
+
+  // Loading
   loading = false;
+
+  // List data (logs tab)
   signals: Signal.AsObject[] = [];
   totalCount = 0;
   offset = 0;
@@ -71,14 +85,22 @@ export class SignalsExplorerComponent implements OnInit {
   chartLoading = false;
   chartPath = '';
   chartMaxCount = 0;
-  chartWidth = 800;
-  chartHeight = 120;
+  chartWidth = 960;
+  chartHeight = 160;
 
-  // Dimension aggregation (for filter chips)
+  // Summary metrics
   streamCounts: AggregationBucket.AsObject[] = [];
   outcomeCounts: AggregationBucket.AsObject[] = [];
+  streams: string[] = [];
 
-  // Expanded row (tracked by object reference, not index)
+  // Breakdown aggregations (overview tab)
+  topOperations: BreakdownRow[] = [];
+  topResources: BreakdownRow[] = [];
+  topIPs: BreakdownRow[] = [];
+  topCountries: BreakdownRow[] = [];
+  topUsers: BreakdownRow[] = [];
+
+  // Expanded row (logs tab)
   expandedSignal: Signal.AsObject | null = null;
 
   filterForm: FormGroup = this.fb.group({
@@ -90,28 +112,35 @@ export class SignalsExplorerComponent implements OnInit {
     user_id: [''],
   });
 
-  displayedColumns = ['createdAt', 'stream', 'operation', 'outcome', 'ip', 'userId', 'findings', 'expand'];
-
-  streams = ['event', 'request', 'notification'];
-  outcomes = ['success', 'failure', 'blocked', 'challenged'];
+  displayedColumns = ['createdAt', 'stream', 'resource', 'operation', 'outcome', 'ip', 'userId', 'findings', 'expand'];
 
   timeRanges: TimeRange[] = [
-    { label: '1h', value: '1 hour', bucket: '5 minutes' },
-    { label: '6h', value: '6 hours', bucket: '15 minutes' },
-    { label: '24h', value: '24 hours', bucket: '1 hour' },
-    { label: '7d', value: '7 days', bucket: '6 hours' },
-    { label: '30d', value: '30 days', bucket: '1 day' },
+    { label: '1h', value: '1 hour', bucket: '1 minute' },
+    { label: '6h', value: '6 hours', bucket: '5 minutes' },
+    { label: '24h', value: '24 hours', bucket: '30 minutes' },
+    { label: '7d', value: '7 days', bucket: '3 hours' },
+    { label: '30d', value: '30 days', bucket: '12 hours' },
   ];
-  selectedTimeRange: TimeRange = this.timeRanges[2]; // 24h default
+  selectedTimeRange: TimeRange = this.timeRanges[2];
 
   ngOnInit(): void {
     this.refresh();
   }
 
+  switchTab(tab: Tab): void {
+    this.activeTab = tab;
+    if (tab === 'logs' && this.signals.length === 0) {
+      this.search();
+    }
+  }
+
   refresh(): void {
-    this.search();
     this.loadChart();
     this.loadDimensions();
+    this.loadBreakdowns();
+    if (this.activeTab === 'logs') {
+      this.search();
+    }
   }
 
   selectTimeRange(range: TimeRange): void {
@@ -139,11 +168,17 @@ export class SignalsExplorerComponent implements OnInit {
     this.expandedSignal = this.expandedSignal === signal ? null : signal;
   }
 
-  search(): void {
-    if (!this.grpc.signal) return;
-    this.loading = true;
-    const f = this.filterForm.value;
+  drillDown(field: string, value: string): void {
+    this.filterForm.patchValue({ [field]: value });
+    this.activeTab = 'logs';
+    this.offset = 0;
+    this.refresh();
+    this.search();
+  }
 
+  // Filters helper for all aggregate calls
+  private buildFilters(): SignalFilters {
+    const f = this.filterForm.value;
     const filters = new SignalFilters();
     if (f.stream) filters.setStream(f.stream);
     if (f.outcome) filters.setOutcome(f.outcome);
@@ -151,6 +186,12 @@ export class SignalsExplorerComponent implements OnInit {
     if (f.ip) filters.setIp(f.ip);
     if (f.country) filters.setCountry(f.country);
     if (f.user_id) filters.setUserId(f.user_id);
+    return filters;
+  }
+
+  search(): void {
+    if (!this.grpc.signal) return;
+    this.loading = true;
 
     const query = new ListQuery();
     query.setOffset(this.offset);
@@ -158,7 +199,7 @@ export class SignalsExplorerComponent implements OnInit {
 
     const req = new ListSignalsRequest();
     req.setQuery(query);
-    req.setFilters(filters);
+    req.setFilters(this.buildFilters());
 
     this.grpc.signal.listSignals(req, null).then(
       (resp) => {
@@ -176,14 +217,9 @@ export class SignalsExplorerComponent implements OnInit {
   loadChart(): void {
     if (!this.grpc.signal) return;
     this.chartLoading = true;
-    const f = this.filterForm.value;
-
-    const filters = new SignalFilters();
-    if (f.stream) filters.setStream(f.stream);
-    if (f.outcome) filters.setOutcome(f.outcome);
 
     const req = new AggregateSignalsRequest();
-    req.setFilters(filters);
+    req.setFilters(this.buildFilters());
     req.setGroupBy('time_bucket');
     req.setMetric('count');
     req.setTimeBucket(this.selectedTimeRange.bucket);
@@ -203,33 +239,50 @@ export class SignalsExplorerComponent implements OnInit {
 
   loadDimensions(): void {
     if (!this.grpc.signal) return;
-    const f = this.filterForm.value;
 
-    // Load stream counts
-    const streamFilters = new SignalFilters();
-    if (f.outcome) streamFilters.setOutcome(f.outcome);
+    // Stream counts
     const streamReq = new AggregateSignalsRequest();
-    streamReq.setFilters(streamFilters);
+    streamReq.setFilters(this.buildFilters());
     streamReq.setGroupBy('stream');
     streamReq.setMetric('count');
-    this.grpc.signal.aggregateSignals(streamReq, null).then(
-      (resp) => {
-        this.streamCounts = resp.getBucketsList().map((b) => b.toObject());
-      },
-    );
+    this.grpc.signal.aggregateSignals(streamReq, null).then((resp) => {
+      this.streamCounts = resp.getBucketsList().map((b) => b.toObject());
+      this.streams = this.streamCounts.map((b) => b.key).filter((k) => k);
+    });
 
-    // Load outcome counts
-    const outcomeFilters = new SignalFilters();
-    if (f.stream) outcomeFilters.setStream(f.stream);
+    // Outcome counts
     const outcomeReq = new AggregateSignalsRequest();
-    outcomeReq.setFilters(outcomeFilters);
+    outcomeReq.setFilters(this.buildFilters());
     outcomeReq.setGroupBy('outcome');
     outcomeReq.setMetric('count');
-    this.grpc.signal.aggregateSignals(outcomeReq, null).then(
-      (resp) => {
-        this.outcomeCounts = resp.getBucketsList().map((b) => b.toObject());
-      },
-    );
+    this.grpc.signal.aggregateSignals(outcomeReq, null).then((resp) => {
+      this.outcomeCounts = resp.getBucketsList().map((b) => b.toObject());
+    });
+  }
+
+  loadBreakdowns(): void {
+    if (!this.grpc.signal) return;
+    const fields = [
+      { groupBy: 'operation', target: 'topOperations' as const },
+      { groupBy: 'resource', target: 'topResources' as const },
+      { groupBy: 'ip', target: 'topIPs' as const },
+      { groupBy: 'country', target: 'topCountries' as const },
+      { groupBy: 'user_id', target: 'topUsers' as const },
+    ];
+    for (const f of fields) {
+      const req = new AggregateSignalsRequest();
+      req.setFilters(this.buildFilters());
+      req.setGroupBy(f.groupBy);
+      req.setMetric('count');
+      this.grpc.signal.aggregateSignals(req, null).then((resp) => {
+        const buckets = resp.getBucketsList().map((b) => b.toObject());
+        const total = buckets.reduce((s, b) => s + b.count, 0) || 1;
+        this[f.target] = buckets
+          .filter((b) => b.key)
+          .slice(0, 10)
+          .map((b) => ({ key: b.key, count: b.count, pct: (b.count / total) * 100 }));
+      });
+    }
   }
 
   buildChartPath(): void {
@@ -243,13 +296,11 @@ export class SignalsExplorerComponent implements OnInit {
     const w = this.chartWidth - padding * 2;
     const h = this.chartHeight - padding * 2;
     const step = w / Math.max(this.chartBuckets.length - 1, 1);
-
     const points = this.chartBuckets.map((b, i) => {
       const x = padding + i * step;
       const y = padding + h - (b.count / this.chartMaxCount) * h;
       return `${x},${y}`;
     });
-
     this.chartPath = 'M' + points.join(' L');
   }
 
@@ -258,6 +309,25 @@ export class SignalsExplorerComponent implements OnInit {
     const padding = 8;
     const h = this.chartHeight - padding;
     return this.chartPath + ` L${this.chartWidth - padding},${h} L${padding},${h} Z`;
+  }
+
+  get metricTotal(): number {
+    return this.streamCounts.reduce((s, b) => s + b.count, 0);
+  }
+
+  get metricFailures(): number {
+    return this.outcomeCounts.find((b) => b.key === 'failure')?.count ?? 0;
+  }
+
+  get metricSuccessRate(): number {
+    const total = this.metricTotal;
+    if (total === 0) return 100;
+    const success = this.outcomeCounts.find((b) => b.key === 'success')?.count ?? 0;
+    return Math.round((success / total) * 1000) / 10;
+  }
+
+  get metricUniqueStreams(): number {
+    return this.streams.length;
   }
 
   getDimensionCount(buckets: AggregationBucket.AsObject[], key: string): number {
@@ -304,5 +374,9 @@ export class SignalsExplorerComponent implements OnInit {
 
   get totalPages(): number {
     return Math.ceil(this.totalCount / this.limit) || 1;
+  }
+
+  trackByKey(_i: number, row: BreakdownRow): string {
+    return row.key;
   }
 }

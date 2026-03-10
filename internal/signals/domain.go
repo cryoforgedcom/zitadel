@@ -7,13 +7,10 @@ type Outcome string
 type SignalStream string
 
 const (
-	StreamRequest      SignalStream = "request"
-	StreamAuth         SignalStream = "auth"
-	StreamAccount      SignalStream = "account"
-	StreamNotification SignalStream = "notification"
-	// StreamEvent is a virtual stream that matches both auth and account streams,
-	// covering all event-store-derived signals (session events + user lifecycle).
-	StreamEvent SignalStream = "event"
+	StreamRequests      SignalStream = "requests"
+	StreamEvents        SignalStream = "events"
+	StreamNotifications SignalStream = "notifications"
+	StreamLLM           SignalStream = "llm"
 )
 
 const (
@@ -48,6 +45,10 @@ type Signal struct {
 	Referer        string   // Referer header
 	SecFetchSite   string   // Sec-Fetch-Site header (e.g. "same-origin", "cross-site")
 	IsHTTPS        bool     // true if X-Forwarded-Proto is "https"
+
+	// Payload carries the raw event body for event-stream signals, or LLM
+	// context for llm-stream signals. Empty for request-stream signals.
+	Payload string
 }
 
 type RecordedFinding struct {

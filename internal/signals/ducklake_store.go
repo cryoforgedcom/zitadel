@@ -139,7 +139,8 @@ CREATE TABLE IF NOT EXISTS signals.signals (
 	referer          VARCHAR NOT NULL,
 	sec_fetch_site   VARCHAR NOT NULL,
 	is_https         BOOLEAN NOT NULL,
-	findings         VARCHAR NOT NULL
+	findings         VARCHAR NOT NULL,
+	payload          VARCHAR NOT NULL DEFAULT ''
 )
 `
 
@@ -182,6 +183,7 @@ func (s *DuckLakeStore) Save(ctx context.Context, signal Signal, findings []Reco
 		signal.SecFetchSite,
 		signal.IsHTTPS,
 		string(findingsJSON),
+		signal.Payload,
 	)
 	return err
 }
@@ -191,8 +193,8 @@ INSERT INTO signals.signals (
 	instance_id, user_id, caller_id, session_id, fingerprint_id,
 	operation, stream, resource, outcome, created_at,
 	ip, user_agent, accept_language, country, forwarded_chain,
-	referer, sec_fetch_site, is_https, findings
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	referer, sec_fetch_site, is_https, findings, payload
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 // WriteBatch inserts a batch of signals. Called by the [Emitter] debouncer.
@@ -250,6 +252,7 @@ func (s *DuckLakeStore) WriteBatch(ctx context.Context, signals []RecordedSignal
 			sig.SecFetchSite,
 			sig.IsHTTPS,
 			string(findingsJSON),
+			sig.Payload,
 		)
 		if err != nil {
 			return fmt.Errorf("ducklake: insert: %w", err)
@@ -302,7 +305,7 @@ func (s *DuckLakeStore) querySignals(ctx context.Context, where string, limit in
 		SELECT instance_id, user_id, caller_id, session_id, fingerprint_id,
 		       operation, stream, resource, outcome, created_at,
 		       ip, user_agent, accept_language, country, forwarded_chain,
-		       referer, sec_fetch_site, is_https, findings
+		       referer, sec_fetch_site, is_https, findings, payload
 		FROM signals.signals
 		WHERE %s
 		ORDER BY created_at ASC
@@ -331,6 +334,7 @@ func (s *DuckLakeStore) querySignals(ctx context.Context, where string, limit in
 			&outcome, &rs.Timestamp, &rs.IP, &rs.UserAgent,
 			&rs.AcceptLanguage, &rs.Country, &forwardedChain,
 			&rs.Referer, &rs.SecFetchSite, &rs.IsHTTPS, &findingsJSON,
+			&rs.Payload,
 		); err != nil {
 			return nil, err
 		}
@@ -370,7 +374,7 @@ func (s *DuckLakeStore) SearchSignals(ctx context.Context, filters SignalFilters
 		SELECT instance_id, user_id, caller_id, session_id, fingerprint_id,
 		       operation, stream, resource, outcome, created_at,
 		       ip, user_agent, accept_language, country, forwarded_chain,
-		       referer, sec_fetch_site, is_https, findings
+		       referer, sec_fetch_site, is_https, findings, payload
 		FROM signals.signals
 		WHERE %s
 		ORDER BY created_at DESC
@@ -399,6 +403,7 @@ func (s *DuckLakeStore) SearchSignals(ctx context.Context, filters SignalFilters
 			&outcome, &rs.Timestamp, &rs.IP, &rs.UserAgent,
 			&rs.AcceptLanguage, &rs.Country, &forwardedChain,
 			&rs.Referer, &rs.SecFetchSite, &rs.IsHTTPS, &findingsJSON,
+			&rs.Payload,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -549,6 +554,7 @@ type SignalFilters struct {
 	Stream     string
 	Outcome    string
 	Country    string
+	Resource   string
 	After      *time.Time
 	Before     *time.Time
 }
@@ -574,18 +580,12 @@ func (f SignalFilters) toSQL() (string, []any) {
 		args = append(args, f.IP)
 	}
 	if f.Operation != "" {
-		clauses = append(clauses, "operation = ?")
-		args = append(args, f.Operation)
+		clauses = append(clauses, "operation ILIKE ?")
+		args = append(args, "%"+f.Operation+"%")
 	}
 	if f.Stream != "" {
-		if f.Stream == string(StreamEvent) {
-			// "event" is a virtual stream covering auth + account (event-store signals).
-			clauses = append(clauses, "stream IN (?, ?)")
-			args = append(args, string(StreamAuth), string(StreamAccount))
-		} else {
-			clauses = append(clauses, "stream = ?")
-			args = append(args, f.Stream)
-		}
+		clauses = append(clauses, "stream = ?")
+		args = append(args, f.Stream)
 	}
 	if f.Outcome != "" {
 		clauses = append(clauses, "outcome = ?")
@@ -594,6 +594,10 @@ func (f SignalFilters) toSQL() (string, []any) {
 	if f.Country != "" {
 		clauses = append(clauses, "country = ?")
 		args = append(args, f.Country)
+	}
+	if f.Resource != "" {
+		clauses = append(clauses, "resource = ?")
+		args = append(args, f.Resource)
 	}
 	if f.After != nil {
 		clauses = append(clauses, "created_at >= ?")

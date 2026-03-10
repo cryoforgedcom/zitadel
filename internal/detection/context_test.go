@@ -267,24 +267,24 @@ func TestBuildRiskContext_CrossOperation(t *testing.T) {
 	snapshot := Snapshot{
 		UserSignals: []RecordedSignal{
 			// API read via HTTP GET
-			{Signal: Signal{Stream: StreamRequest, Operation: "GET /v2/users", Resource: "users", Timestamp: now.Add(-10 * time.Minute)}},
+			{Signal: Signal{Stream: StreamRequests, Operation: "GET /v2/users", Resource: "users", Timestamp: now.Add(-10 * time.Minute)}},
 			// API read via RPC-style GetUser
-			{Signal: Signal{Stream: StreamRequest, Operation: "zitadel.user.v2.GetUser", Resource: "users", Timestamp: now.Add(-9 * time.Minute)}},
+			{Signal: Signal{Stream: StreamRequests, Operation: "zitadel.user.v2.GetUser", Resource: "users", Timestamp: now.Add(-9 * time.Minute)}},
 			// API read via List
-			{Signal: Signal{Stream: StreamRequest, Operation: "zitadel.user.v2.ListUsers", Resource: "users.list", Timestamp: now.Add(-8 * time.Minute)}},
+			{Signal: Signal{Stream: StreamRequests, Operation: "zitadel.user.v2.ListUsers", Resource: "users.list", Timestamp: now.Add(-8 * time.Minute)}},
 			// API read via Search
-			{Signal: Signal{Stream: StreamRequest, Operation: "zitadel.session.v2.SearchSessions", Resource: "sessions", Timestamp: now.Add(-7 * time.Minute)}},
+			{Signal: Signal{Stream: StreamRequests, Operation: "zitadel.session.v2.SearchSessions", Resource: "sessions", Timestamp: now.Add(-7 * time.Minute)}},
 			// Non-read request (POST)
-			{Signal: Signal{Stream: StreamRequest, Operation: "POST /v2/users", Resource: "users", Timestamp: now.Add(-6 * time.Minute)}},
-			// Auth stream (not a request stream, should not count as API read)
-			{Signal: Signal{Stream: StreamAuth, Operation: "GET /auth", Resource: "auth", Timestamp: now.Add(-5 * time.Minute)}},
+			{Signal: Signal{Stream: StreamRequests, Operation: "POST /v2/users", Resource: "users", Timestamp: now.Add(-6 * time.Minute)}},
+			// Events stream (should not count as API read)
+			{Signal: Signal{Stream: StreamEvents, Operation: "GET /auth", Resource: "auth", Timestamp: now.Add(-5 * time.Minute)}},
 			// Password change
-			{Signal: Signal{Stream: StreamAccount, Operation: "user.password.change", Timestamp: now.Add(-4 * time.Minute)}},
+			{Signal: Signal{Stream: StreamEvents, Operation: "user.password.change", Timestamp: now.Add(-4 * time.Minute)}},
 			// MFA enrollment via OTP
-			{Signal: Signal{Stream: StreamAccount, Operation: "user.otp.verify", Timestamp: now.Add(-3 * time.Minute)}},
+			{Signal: Signal{Stream: StreamEvents, Operation: "user.otp.verify", Timestamp: now.Add(-3 * time.Minute)}},
 			// Notification
-			{Signal: Signal{Stream: StreamNotification, Operation: "email.send", Timestamp: now.Add(-2 * time.Minute)}},
-			{Signal: Signal{Stream: StreamNotification, Operation: "sms.send", Timestamp: now.Add(-1 * time.Minute)}},
+			{Signal: Signal{Stream: StreamNotifications, Operation: "email.send", Timestamp: now.Add(-2 * time.Minute)}},
+			{Signal: Signal{Stream: StreamNotifications, Operation: "sms.send", Timestamp: now.Add(-1 * time.Minute)}},
 		},
 	}
 

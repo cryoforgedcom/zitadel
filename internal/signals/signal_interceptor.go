@@ -20,7 +20,7 @@ const signalServicePrefix = "/zitadel.signal."
 // SignalConnectUnaryInterceptor returns a ConnectRPC unary interceptor that
 // emits a fire-and-forget risk signal after every call. If the emitter is nil
 // the interceptor is a no-op pass-through.
-func SignalConnectUnaryInterceptor(emitter *Emitter) connect.UnaryInterceptorFunc {
+func SignalConnectUnaryInterceptor(emitter *Emitter, geoCountryHeader string) connect.UnaryInterceptorFunc {
 	return func(handler connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 			resp, handlerErr := handler(ctx, req)
@@ -42,16 +42,27 @@ func SignalConnectUnaryInterceptor(emitter *Emitter) connect.UnaryInterceptorFun
 				outcome = OutcomeFailure
 			}
 
-			emitter.Emit(Signal{
-				InstanceID: instance.InstanceID(),
-				CallerID:   ctxData.UserID,
-				Stream:     StreamRequest,
-				Operation:  req.Spec().Procedure,
-				IP:         http_util.RemoteIPFromCtx(ctx),
-				UserAgent:  truncateString(req.Header().Get(http_util.UserAgentHeader), maxUserAgentLen),
-				Outcome:    outcome,
-				Timestamp:  time.Now().UTC(),
-			})
+			// Convert ConnectRPC headers to http.Header for extraction.
+			hctx := ExtractHTTPContext(http.Header(req.Header()), geoCountryHeader)
+
+			sig := Signal{
+				InstanceID:     instance.InstanceID(),
+				UserID:         ctxData.UserID,
+				CallerID:       ctxData.UserID,
+				Stream:         StreamRequests,
+				Operation:      req.Spec().Procedure,
+				IP:             http_util.RemoteIPFromCtx(ctx),
+				UserAgent:      truncateString(req.Header().Get(http_util.UserAgentHeader), maxUserAgentLen),
+				Outcome:        outcome,
+				Timestamp:      time.Now().UTC(),
+				AcceptLanguage: hctx.AcceptLanguage,
+				Country:        hctx.Country,
+				ForwardedChain: hctx.ForwardedChain,
+				Referer:        hctx.Referer,
+				SecFetchSite:   hctx.SecFetchSite,
+				IsHTTPS:        hctx.IsHTTPS,
+			}
+			emitter.Emit(sig)
 			return resp, handlerErr
 		}
 	}
@@ -92,8 +103,9 @@ func SignalHTTPMiddleware(emitter *Emitter, geoCountryHeader string) func(http.H
 			hctx := ExtractHTTPContext(r.Header, geoCountryHeader)
 			emitter.Emit(Signal{
 				InstanceID:     instance.InstanceID(),
+				UserID:         ctxData.UserID,
 				CallerID:       ctxData.UserID,
-				Stream:         StreamRequest,
+				Stream:         StreamRequests,
 				Operation:      r.Method + " " + r.URL.Path,
 				IP:             http_util.RemoteIPFromCtx(ctx),
 				UserAgent:      truncateString(r.Header.Get("User-Agent"), maxUserAgentLen),

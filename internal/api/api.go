@@ -61,6 +61,7 @@ type API struct {
 	connectOTELInterceptor    *otelconnect.Interceptor
 	actionV2DenyList          []denylist.AddressChecker
 	signalEmitter             *signals.Emitter
+	geoCountryHeader          string
 }
 
 func (a *API) ListGrpcServices() []string {
@@ -117,6 +118,7 @@ func New(
 	trustRemoteSpans bool,
 	deniedIPList []denylist.AddressChecker,
 	signalEmitter *signals.Emitter,
+	geoCountryHeader string,
 ) (_ *API, err error) {
 	api := &API{
 		port:                      port,
@@ -134,6 +136,7 @@ func New(
 		translator:                translator,
 		actionV2DenyList:          deniedIPList,
 		signalEmitter:             signalEmitter,
+		geoCountryHeader:          geoCountryHeader,
 	}
 
 	api.grpcServer = server.CreateServer(api.verifier, systemAuthz, authZ, queries, externalDomain, tlsConfig, accessInterceptor.AccessService(), targetEncryptionAlgorithm, api.translator, deniedIPList)
@@ -231,7 +234,7 @@ func (a *API) registerConnectServer(service server.ConnectServer) {
 		connect_middleware.ValidationHandler(),
 		connect_middleware.ServiceHandler(),
 		connect_middleware.ActivityInterceptor(),
-		signals.SignalConnectUnaryInterceptor(a.signalEmitter),
+		signals.SignalConnectUnaryInterceptor(a.signalEmitter, a.geoCountryHeader),
 	)
 	methods := service.FileDescriptor().Services().Get(0).Methods()
 	methodNames := make([]string, methods.Len())

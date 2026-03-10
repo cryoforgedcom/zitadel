@@ -96,7 +96,6 @@ import (
 	"github.com/zitadel/zitadel/internal/crypto"
 	cryptoDB "github.com/zitadel/zitadel/internal/crypto/database"
 	"github.com/zitadel/zitadel/internal/database"
-	signalprojection "github.com/zitadel/zitadel/internal/detection/signalprojection"
 	"github.com/zitadel/zitadel/internal/domain"
 	"github.com/zitadel/zitadel/internal/domain/federatedlogout"
 	"github.com/zitadel/zitadel/internal/eventstore"
@@ -114,7 +113,6 @@ import (
 	"github.com/zitadel/zitadel/internal/net"
 	"github.com/zitadel/zitadel/internal/notification"
 	"github.com/zitadel/zitadel/internal/query"
-	"github.com/zitadel/zitadel/internal/query/projection"
 	"github.com/zitadel/zitadel/internal/queue"
 	"github.com/zitadel/zitadel/internal/serviceping"
 	"github.com/zitadel/zitadel/internal/signals"
@@ -203,7 +201,8 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 		return err
 	}
 
-	config.Eventstore.Pusher = new_es.NewEventstore(dbClient, new_es.WithExecutionQueueOption(q))
+	esPusher := new_es.NewEventstore(dbClient, new_es.WithExecutionQueueOption(q))
+	config.Eventstore.Pusher = esPusher
 	config.Eventstore.Searcher = new_es.NewEventstore(dbClient, new_es.WithExecutionQueueOption(q))
 	config.Eventstore.Querier = old_es.NewPostgres(dbClient)
 	eventstoreClient := eventstore.NewEventstore(config.Eventstore)
@@ -361,15 +360,10 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 		// register DuckLake compaction worker
 		signals.RegisterCompactionWorker(ctx, q, detectionService.CompactionWorker())
 
-		// Start the event-to-signal projection that feeds domain events
-		// (session, user, OIDC session) into the signal store.
+		// Hook into the eventstore Push path: every committed event is
+		// emitted as a signal on the "events" stream, fire-and-forget.
 		if emitter := detectionService.Emitter(); emitter != nil {
-			signalProjectionHandler := signalprojection.NewHandler(
-				ctx,
-				projection.ApplyCustomConfig(config.Projections.Customizations["event_signals"]),
-				emitter,
-			)
-			signalProjectionHandler.Start(ctx)
+			esPusher.SetSignalHook(signals.NewEventSignalHook(emitter))
 		}
 	}
 
@@ -533,6 +527,7 @@ func startAPIs(
 		config.Instrumentation.Trace.TrustRemoteSpans,
 		config.Executions.DenyList,
 		apiSignalEmitter,
+		config.SystemDefaults.Risk.GeoCountryHeader,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating api %w", err)

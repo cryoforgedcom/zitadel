@@ -105,25 +105,25 @@ func (h *eventSignalHandler) Reducers() []handler.AggregateReducer {
 
 // reduceSessionEvent emits a signal for session aggregate events.
 func (h *eventSignalHandler) reduceSessionEvent(event eventstore.Event) (*handler.Statement, error) {
-	h.emitEvent(event, signals.StreamAuth, signals.OutcomeSuccess)
+	h.emitEvent(event, signals.StreamEvents, signals.OutcomeSuccess)
 	return handler.NewNoOpStatement(event), nil
 }
 
 // reduceUserEvent emits a signal for user aggregate events.
 func (h *eventSignalHandler) reduceUserEvent(event eventstore.Event) (*handler.Statement, error) {
-	h.emitEvent(event, signals.StreamAccount, signals.OutcomeSuccess)
+	h.emitEvent(event, signals.StreamEvents, signals.OutcomeSuccess)
 	return handler.NewNoOpStatement(event), nil
 }
 
 // reduceUserFailure emits a signal for user failure events (lock, failed checks).
 func (h *eventSignalHandler) reduceUserFailure(event eventstore.Event) (*handler.Statement, error) {
-	h.emitEvent(event, signals.StreamAccount, signals.OutcomeFailure)
+	h.emitEvent(event, signals.StreamEvents, signals.OutcomeFailure)
 	return handler.NewNoOpStatement(event), nil
 }
 
 // reduceOIDCSessionEvent emits a signal for OIDC session events.
 func (h *eventSignalHandler) reduceOIDCSessionEvent(event eventstore.Event) (*handler.Statement, error) {
-	h.emitEvent(event, signals.StreamAuth, signals.OutcomeSuccess)
+	h.emitEvent(event, signals.StreamEvents, signals.OutcomeSuccess)
 	return handler.NewNoOpStatement(event), nil
 }
 

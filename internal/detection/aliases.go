@@ -34,11 +34,10 @@ type CaptchaConfig = captcha.CaptchaConfig
 type CaptchaVerifier = captcha.CaptchaVerifier
 
 const (
-	StreamRequest      = signals.StreamRequest
-	StreamAuth         = signals.StreamAuth
-	StreamAccount      = signals.StreamAccount
-	StreamNotification = signals.StreamNotification
-	StreamEvent        = signals.StreamEvent
+	StreamRequests      = signals.StreamRequests
+	StreamEvents        = signals.StreamEvents
+	StreamNotifications = signals.StreamNotifications
+	StreamLLM           = signals.StreamLLM
 
 	OutcomeSuccess    = signals.OutcomeSuccess
 	OutcomeFailure    = signals.OutcomeFailure

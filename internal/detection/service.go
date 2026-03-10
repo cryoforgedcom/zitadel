@@ -307,7 +307,7 @@ func (s *Service) Evaluate(ctx context.Context, signal signals.Signal) (_ Decisi
 	if len(policy.Rules) > 0 {
 		// Expression-based rule evaluation.
 		rc := buildRiskContext(signal, snapshot)
-		ruleEngine := NewRuleEngine(policy.Rules, s.rateLimiter, s.llm, policy.Config.LLM, s.findingRecorder())
+		ruleEngine := NewRuleEngine(policy.Rules, s.rateLimiter, s.llm, policy.Config.LLM, s.findingRecorder(), s.emitter)
 		findings = ruleEngine.Evaluate(ctx, rc, snapshot.SessionSignals)
 	} else {
 		// Legacy hardcoded heuristics (backward-compatible fallback).
@@ -481,6 +481,8 @@ func (s *Service) evaluateLLM(ctx context.Context, signal signals.Signal, snapsh
 				slog.String("risk_user_id", signal.UserID),
 				slog.String("risk_session_id", signal.SessionID),
 			)
+			s.emitLLMSignal(signal, "llm.circuit_open", signals.OutcomeFailure,
+				fmt.Sprintf(`{"latency_ms":%d}`, llmElapsed.Milliseconds()))
 			if cfg.LLM.CircuitBreaker != nil && !cfg.LLM.CircuitBreaker.FailOpen {
 				return nil, err
 			}
@@ -490,6 +492,8 @@ func (s *Service) evaluateLLM(ctx context.Context, signal signals.Signal, snapsh
 			slog.String("risk_user_id", signal.UserID),
 			slog.Int64("llm_latency_ms", llmElapsed.Milliseconds()),
 		)
+		s.emitLLMSignal(signal, "llm.classify_failed", signals.OutcomeFailure,
+			fmt.Sprintf(`{"error":%q,"latency_ms":%d}`, err.Error(), llmElapsed.Milliseconds()))
 		return nil, err
 	}
 
@@ -529,7 +533,34 @@ func (s *Service) evaluateLLM(ctx context.Context, signal signals.Signal, snapsh
 	if cfg.LLM.Mode.Normalized() == llm.LLMModeEnforce && classification.HighRisk() && classification.Confidence >= cfg.LLM.HighRiskConfidence {
 		finding.Block = true
 	}
+
+	s.emitLLMSignal(signal, "llm.classified", signals.OutcomeSuccess,
+		fmt.Sprintf(`{"classification":%q,"confidence":%.2f,"reason":%q,"latency_ms":%d}`,
+			level, classification.Confidence, classification.Reason, llmElapsed.Milliseconds()))
+
 	return finding, nil
+}
+
+// emitLLMSignal emits a signal on the "llm" stream if the emitter is set.
+func (s *Service) emitLLMSignal(base signals.Signal, operation string, outcome signals.Outcome, payload string) {
+	if s.emitter == nil {
+		return
+	}
+	s.emitter.Emit(signals.Signal{
+		InstanceID: base.InstanceID,
+		UserID:     base.UserID,
+		CallerID:   base.CallerID,
+		SessionID:  base.SessionID,
+		Operation:  operation,
+		Stream:     signals.StreamLLM,
+		Resource:   "llm",
+		Outcome:    outcome,
+		Timestamp:  s.now().UTC(),
+		IP:         base.IP,
+		UserAgent:  base.UserAgent,
+		Country:    base.Country,
+		Payload:    payload,
+	})
 }
 
 func (s *Service) policy(ctx context.Context, instanceID string) (Policy, error) {

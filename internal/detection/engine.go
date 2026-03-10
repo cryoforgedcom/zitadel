@@ -19,6 +19,11 @@ type FindingRecorder interface {
 	AppendFindings(ctx context.Context, instanceID, sessionID string, createdAt time.Time, findings []signals.RecordedFinding) error
 }
 
+// signalEmitter is the interface for fire-and-forget signal emission.
+type signalEmitter interface {
+	Emit(signal signals.Signal)
+}
+
 // RuleEngine evaluates compiled rules against a RiskContext and dispatches
 // matching rules to their configured engine (block, rate_limit, llm, log).
 type RuleEngine struct {
@@ -27,10 +32,11 @@ type RuleEngine struct {
 	llm             llm.LLMClient
 	llmCfg          llm.Config
 	findingRecorder FindingRecorder
+	emitter         signalEmitter
 }
 
 // NewRuleEngine creates a rule engine with compiled rules and engine backends.
-func NewRuleEngine(rules []CompiledRule, limiter ratelimit.RateLimiterStore, llmClient llm.LLMClient, llmCfg llm.Config, findingRecorder FindingRecorder) *RuleEngine {
+func NewRuleEngine(rules []CompiledRule, limiter ratelimit.RateLimiterStore, llmClient llm.LLMClient, llmCfg llm.Config, findingRecorder FindingRecorder, emitter signalEmitter) *RuleEngine {
 	if limiter == nil {
 		limiter = ratelimit.NewMemoryRateLimiter()
 	}
@@ -40,6 +46,7 @@ func NewRuleEngine(rules []CompiledRule, limiter ratelimit.RateLimiterStore, llm
 		llm:             llmClient,
 		llmCfg:          llmCfg,
 		findingRecorder: findingRecorder,
+		emitter:         emitter,
 	}
 }
 
@@ -276,6 +283,8 @@ func (e *RuleEngine) runLLM(ctx context.Context, rule *CompiledRule, rc RiskCont
 			slog.String("risk_user_id", rc.Current.UserID),
 			slog.Int64("llm_latency_ms", llmLatencyMs),
 		)
+		e.emitLLMSignal(rc, "llm.classify_failed", signals.OutcomeFailure,
+			fmt.Sprintf(`{"rule_id":%q,"error":%q,"latency_ms":%d}`, rule.ID, err.Error(), llmLatencyMs))
 		return nil
 	}
 
@@ -294,6 +303,10 @@ func (e *RuleEngine) runLLM(ctx context.Context, rule *CompiledRule, rc RiskCont
 		slog.Int64("llm_latency_ms", llmLatencyMs),
 	)
 
+	e.emitLLMSignal(rc, "llm.classified", signals.OutcomeSuccess,
+		fmt.Sprintf(`{"rule_id":%q,"classification":%q,"confidence":%.2f,"reason":%q,"latency_ms":%d}`,
+			rule.ID, level, classification.Confidence, classification.Reason, llmLatencyMs))
+
 	finding := &Finding{
 		Name:       fmt.Sprintf("llm_%s_risk", level),
 		Source:     "rule:" + rule.ID,
@@ -307,6 +320,29 @@ func (e *RuleEngine) runLLM(ctx context.Context, rule *CompiledRule, rc RiskCont
 		finding.Block = true
 	}
 	return finding
+}
+
+// emitLLMSignal emits a signal on the "llm" stream if the emitter is set.
+func (e *RuleEngine) emitLLMSignal(rc RiskContext, operation string, outcome signals.Outcome, payload string) {
+	if e.emitter == nil {
+		return
+	}
+	s := rc.Current
+	e.emitter.Emit(signals.Signal{
+		InstanceID: s.InstanceID,
+		UserID:     s.UserID,
+		CallerID:   s.CallerID,
+		SessionID:  s.SessionID,
+		Operation:  operation,
+		Stream:     signals.StreamLLM,
+		Resource:   "llm",
+		Outcome:    outcome,
+		Timestamp:  time.Now().UTC(),
+		IP:         s.IP,
+		UserAgent:  s.UserAgent,
+		Country:    s.Country,
+		Payload:    payload,
+	})
 }
 
 func (e *RuleEngine) dispatchLog(ctx context.Context, rule *CompiledRule, rc RiskContext) *Finding {
