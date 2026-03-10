@@ -42,7 +42,7 @@ func detectionRuleToPb(rule detection.Rule, creationDate, changeDate time.Time) 
 		Id:          rule.ID,
 		Description: rule.Description,
 		Expr:        rule.Expr,
-		Engine:      detectionRuleEngineToPb(rule.Action),
+		Engine:      detectionRuleActionToPb(rule.Action),
 		Finding: &pb.DetectionRuleFinding{
 			Name:    rule.FindingCfg.Name,
 			Message: rule.FindingCfg.Message,
@@ -50,7 +50,7 @@ func detectionRuleToPb(rule detection.Rule, creationDate, changeDate time.Time) 
 		},
 		ContextTemplate: rule.ContextTemplate,
 	}
-	if rule.Action == detection.EngineRateLimit {
+	if rule.Action == detection.ActionRateLimit {
 		resp.RateLimit = &pb.DetectionRuleRateLimit{
 			Key:    rule.RateLimitCfg.KeyTemplate,
 			Window: durationpb.New(rule.RateLimitCfg.Window),
@@ -74,7 +74,7 @@ func queryDetectionRuleToPb(rule *query.DetectionRule) *pb.DetectionRule {
 		ID:          rule.ID,
 		Description: rule.Description,
 		Expr:        rule.Expr,
-		Action:      rule.Engine,
+		Action:      rule.Action,
 		Priority:    int(rule.Priority),
 		StopOnMatch: rule.StopOnMatch,
 		FindingCfg: detection.RuleFinding{
@@ -92,7 +92,7 @@ func queryDetectionRuleToPb(rule *query.DetectionRule) *pb.DetectionRule {
 }
 
 func detectionRuleToDomain(rule *pb.DetectionRule) (detection.Rule, error) {
-	engine, err := detectionRuleEngineToDomain(rule.GetEngine())
+	action, err := detectionRuleActionToDomain(rule.GetEngine())
 	if err != nil {
 		return detection.Rule{}, err
 	}
@@ -100,7 +100,7 @@ func detectionRuleToDomain(rule *pb.DetectionRule) (detection.Rule, error) {
 		ID:              rule.GetId(),
 		Description:     rule.GetDescription(),
 		Expr:            rule.GetExpr(),
-		Action:          engine,
+		Action:          action,
 		ContextTemplate: rule.GetContextTemplate(),
 	}
 	if finding := rule.GetFinding(); finding != nil {
@@ -120,35 +120,35 @@ func detectionRuleToDomain(rule *pb.DetectionRule) (detection.Rule, error) {
 	return domainRule, nil
 }
 
-func detectionRuleEngineToPb(engine detection.EngineType) pb.DetectionRuleEngine {
-	switch engine {
-	case detection.EngineBlock:
+func detectionRuleActionToPb(action detection.ActionType) pb.DetectionRuleEngine {
+	switch action {
+	case detection.ActionBlock:
 		return pb.DetectionRuleEngine_DETECTION_RULE_ENGINE_BLOCK
-	case detection.EngineRateLimit:
+	case detection.ActionRateLimit:
 		return pb.DetectionRuleEngine_DETECTION_RULE_ENGINE_RATE_LIMIT
-	case detection.EngineLLM:
+	case detection.ActionLLM:
 		return pb.DetectionRuleEngine_DETECTION_RULE_ENGINE_LLM
-	case detection.EngineLog:
+	case detection.ActionLog:
 		return pb.DetectionRuleEngine_DETECTION_RULE_ENGINE_LOG
-	case detection.EngineCaptcha:
+	case detection.ActionCaptcha:
 		return pb.DetectionRuleEngine_DETECTION_RULE_ENGINE_CAPTCHA
 	default:
 		return pb.DetectionRuleEngine_DETECTION_RULE_ENGINE_UNSPECIFIED
 	}
 }
 
-func detectionRuleEngineToDomain(engine pb.DetectionRuleEngine) (detection.EngineType, error) {
-	switch engine {
+func detectionRuleActionToDomain(action pb.DetectionRuleEngine) (detection.ActionType, error) {
+	switch action {
 	case pb.DetectionRuleEngine_DETECTION_RULE_ENGINE_BLOCK:
-		return detection.EngineBlock, nil
+		return detection.ActionBlock, nil
 	case pb.DetectionRuleEngine_DETECTION_RULE_ENGINE_RATE_LIMIT:
-		return detection.EngineRateLimit, nil
+		return detection.ActionRateLimit, nil
 	case pb.DetectionRuleEngine_DETECTION_RULE_ENGINE_LLM:
-		return detection.EngineLLM, nil
+		return detection.ActionLLM, nil
 	case pb.DetectionRuleEngine_DETECTION_RULE_ENGINE_LOG:
-		return detection.EngineLog, nil
+		return detection.ActionLog, nil
 	case pb.DetectionRuleEngine_DETECTION_RULE_ENGINE_CAPTCHA:
-		return detection.EngineCaptcha, nil
+		return detection.ActionCaptcha, nil
 	default:
 		return "", zerrors.ThrowInvalidArgument(nil, "SETT-sC7k1", "Errors.Risk.Invalid")
 	}

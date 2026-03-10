@@ -173,8 +173,8 @@
         "DESCRIPTION": "Manage the instance-scoped rules that evaluate signals, rate limits, challenges, and blocking findings."
       },
       "SIGNALS_EXPLORER": {
-        "TITLE": "Signals Explorer",
-        "DESCRIPTION": "Browse and analyze behavioral signals captured by the detection engine.",
+        "TITLE": "Identity Observability",
+        "DESCRIPTION": "Browse findings, investigate signals, and correlate behavioral data across your instance.",
         "STREAM": "Stream",
         "OUTCOME": "Outcome",
         "OPERATION": "Operation",
@@ -189,7 +189,7 @@
         "RESET": "Reset Filters",
         "RESULTS": "signals",
         "PAGE": "Page",
-        "NO_SIGNALS": "No signals found. Signals are captured when the detection engine is enabled.",
+        "NO_SIGNALS": "No signals found. Signals are captured when detection is enabled.",
         "SIGNAL_VOLUME": "Signal Volume",
         "BLOCKED": "Blocked",
         "CHALLENGED": "Challenged",
@@ -1547,7 +1547,7 @@
       "SECURITY": "Security settings",
       "DETECTION": "Detection",
       "DETECTION_RULES": "Detection Rules",
-      "SIGNALS_EXPLORER": "Signals Explorer",
+      "SIGNALS_EXPLORER": "Observability",
       "EVENTS": "Events",
       "FAILEDEVENTS": "Failed Events",
       "VIEWS": "Views",
@@ -1705,7 +1705,7 @@
       "CREATE": "Create Rule",
       "CREATE_TITLE": "Create Detection Rule",
       "EDIT_TITLE": "Edit Detection Rule",
-      "DIALOG_DESCRIPTION": "Define the expr condition, the engine to run on a match, and the resulting finding metadata.",
+      "DIALOG_DESCRIPTION": "Define the expr condition, the action to run on a match, and the resulting finding metadata.",
       "CREATED": "Detection rule created.",
       "UPDATED": "Detection rule updated.",
       "DELETED": "Detection rule deleted.",
@@ -1714,7 +1714,7 @@
       "ID": "Rule ID",
       "ID_HINT": "Use a stable identifier such as impossible-travel or signup-ip-burst.",
       "DESCRIPTION": "Description",
-      "ENGINE": "Engine",
+      "ENGINE": "Action",
       "EXPRESSION": "Expression",
       "EXPRESSION_HINT": "The expr condition is evaluated against the detection context. The rule matches when the expression returns true.",
       "FINDING_NAME": "Finding name",
@@ -1742,7 +1742,7 @@
         "LOG": "Log",
         "CAPTCHA": "CAPTCHA"
       },
-      "YAML_DESCRIPTION": "Edit the rule as YAML. Fields: id, description, expr, engine (block|rate_limit|llm|log|captcha), finding (name, message, block), rate_limit (key, window, max), context_template."
+      "YAML_DESCRIPTION": "Edit the rule as YAML. Fields: id, description, expr, action (block|rate_limit|llm|log|captcha), finding (name, message, block), rate_limit (key, window, max), context_template."
     },
     "FEATURES": {
       "LOGINDEFAULTORG": "Login Default Org",

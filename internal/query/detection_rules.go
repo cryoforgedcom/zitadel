@@ -46,7 +46,7 @@ type DetectionRule struct {
 	Sequence        uint64
 	Description     string
 	Expr            string
-	Engine          detection.EngineType
+	Action          detection.ActionType
 	Priority        int64
 	StopOnMatch     bool
 	FindingName     string
@@ -119,7 +119,7 @@ func prepareDetectionRulesQuery() (sq.SelectBuilder, func(*sql.Rows) ([]*Detecti
 					&rule.Sequence,
 					&rule.Description,
 					&rule.Expr,
-					&rule.Engine,
+					&rule.Action,
 					&rule.Priority,
 					&rule.StopOnMatch,
 					&rule.FindingName,
@@ -169,7 +169,7 @@ func prepareDetectionRuleQuery() (sq.SelectBuilder, func(*sql.Row) (*DetectionRu
 				&rule.Sequence,
 				&rule.Description,
 				&rule.Expr,
-				&rule.Engine,
+				&rule.Action,
 				&rule.Priority,
 				&rule.StopOnMatch,
 				&rule.FindingName,

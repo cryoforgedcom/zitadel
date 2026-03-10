@@ -109,7 +109,7 @@ export class DetectionRulesComponent implements OnInit {
       });
   }
 
-  protected translationKeyForEngine(engine: DetectionRuleEngine): string {
+  protected translationKeyForAction(engine: DetectionRuleEngine): string {
     switch (engine) {
       case DetectionRuleEngine.BLOCK:
         return 'SETTING.DETECTION_RULES.ENGINES.BLOCK';

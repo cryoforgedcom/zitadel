@@ -35,7 +35,7 @@ type DetectionRuleAddedEvent struct {
 	RuleID          string               `json:"rule_id"`
 	Description     string               `json:"description,omitempty"`
 	Expr            string               `json:"expr"`
-	Engine          detection.EngineType `json:"engine"`
+	Engine          detection.ActionType `json:"engine"`
 	Priority        int                  `json:"priority,omitempty"`
 	StopOnMatch     bool                 `json:"stop_on_match,omitempty"`
 	FindingName     string               `json:"finding_name,omitempty"`
@@ -84,7 +84,7 @@ type DetectionRuleChangedEvent struct {
 	RuleID          string                `json:"rule_id"`
 	Description     *string               `json:"description,omitempty"`
 	Expr            *string               `json:"expr,omitempty"`
-	Engine          *detection.EngineType `json:"engine,omitempty"`
+	Engine          *detection.ActionType `json:"engine,omitempty"`
 	Priority        *int                  `json:"priority,omitempty"`
 	StopOnMatch     *bool                 `json:"stop_on_match,omitempty"`
 	FindingName     *string               `json:"finding_name,omitempty"`
@@ -128,7 +128,7 @@ func ChangeDetectionRuleExpr(expr string) DetectionRuleChanges {
 	}
 }
 
-func ChangeDetectionRuleEngine(engine detection.EngineType) DetectionRuleChanges {
+func ChangeDetectionRuleEngine(engine detection.ActionType) DetectionRuleChanges {
 	return func(e *DetectionRuleChangedEvent) {
 		e.Engine = &engine
 	}

@@ -32,11 +32,11 @@ finding:
   name: my_finding
   message: ""
   block: false
-# rate_limit:  # uncomment when engine is rate_limit
+# rate_limit:  # uncomment when action is rate_limit
 #   key: "user:{{.Current.UserID}}"
 #   window: 5m
 #   max: 20
-# context_template: ""  # uncomment when engine is llm
+# context_template: ""  # uncomment when action is llm
 `;
 
 @Component({

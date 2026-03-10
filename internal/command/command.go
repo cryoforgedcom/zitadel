@@ -112,8 +112,8 @@ type Commands struct {
 	IPLookupFunction        internal_net.IPLookupFunc
 	defaultDetectionConfig  detection.Config
 	detectionPolicyProvider *instanceDetectionPolicyProvider
-	riskEvaluator           detection.Evaluator
-	riskGeoHeader           string // proxy header name for geo-country (e.g. "CF-IPCountry")
+	detectionEvaluator      detection.Evaluator
+	geoCountryHeader        string // proxy header name for geo-country (e.g. "CF-IPCountry")
 }
 
 //go:generate mockgen -package command -destination ./mock_login_paths.go . LoginPaths
@@ -241,7 +241,7 @@ func StartCommands(
 	}
 	repo.phoneCodeVerifier = repo.phoneCodeVerifierFromConfig
 	repo.tarpit = defaults.Tarpit.Tarpit()
-	riskConfig := detection.Config{
+	detectionConfig := detection.Config{
 		Enabled:               defaults.Risk.Enabled,
 		FailOpen:              defaults.Risk.FailOpen,
 		FailureBurstThreshold: defaults.Risk.FailureBurstThreshold,
@@ -264,7 +264,7 @@ func StartCommands(
 			LogPrompts:         defaults.Risk.LLM.LogPrompts,
 			CircuitBreaker:     llmCBConfig(defaults.Risk.LLM.CircuitBreaker),
 		},
-		Rules:            riskRules(defaults.Risk.Rules),
+		Rules:            detectionRules(defaults.Risk.Rules),
 		GeoCountryHeader: defaults.Risk.GeoCountryHeader,
 		SignalStore: detection.SignalStoreConfig{
 			Enabled:     defaults.Risk.SignalStore.Enabled,
@@ -304,9 +304,9 @@ func StartCommands(
 			Mode: detection.RateLimitMode(defaults.Risk.RateLimit.Mode),
 		},
 	}
-	var riskLLM detection.LLMClient
-	if riskConfig.LLM.Enabled() {
-		riskLLM = llm.NewOllamaClient(riskConfig.LLM, httpClient)
+	var detectionLLM detection.LLMClient
+	if detectionConfig.LLM.Enabled() {
+		detectionLLM = llm.NewOllamaClient(detectionConfig.LLM, httpClient)
 	}
 
 	// Extract Redis client from cache connectors if available.
@@ -315,13 +315,13 @@ func StartCommands(
 		redisClient = cacheConnectors.Redis.Client
 	}
 
-	repo.defaultDetectionConfig = riskConfig
-	repo.detectionPolicyProvider = newInstanceDetectionPolicyProvider(es, riskConfig)
-	repo.riskEvaluator, err = detection.New(riskConfig, repo.detectionPolicyProvider, nil, riskLLM, pgDSN, redisClient)
+	repo.defaultDetectionConfig = detectionConfig
+	repo.detectionPolicyProvider = newInstanceDetectionPolicyProvider(es, detectionConfig)
+	repo.detectionEvaluator, err = detection.New(detectionConfig, repo.detectionPolicyProvider, nil, detectionLLM, pgDSN, redisClient)
 	if err != nil {
-		return nil, fmt.Errorf("risk evaluator: %w", err)
+		return nil, fmt.Errorf("detection evaluator: %w", err)
 	}
-	repo.riskGeoHeader = riskConfig.GeoCountryHeader
+	repo.geoCountryHeader = detectionConfig.GeoCountryHeader
 	return repo, nil
 }
 
@@ -332,7 +332,7 @@ func (c *Commands) DetectionService() *detection.Service {
 	if c == nil {
 		return nil
 	}
-	svc, _ := c.riskEvaluator.(*detection.Service)
+	svc, _ := c.detectionEvaluator.(*detection.Service)
 	return svc
 }
 
@@ -503,7 +503,7 @@ func llmCBConfig(c *sd.RiskCBConfig) *llm.CBConfig {
 	}
 }
 
-func riskRules(rules []sd.RiskRuleConfig) []detection.Rule {
+func detectionRules(rules []sd.RiskRuleConfig) []detection.Rule {
 	if len(rules) == 0 {
 		return nil
 	}
@@ -513,7 +513,7 @@ func riskRules(rules []sd.RiskRuleConfig) []detection.Rule {
 			ID:          r.ID,
 			Description: r.Description,
 			Expr:        r.Expr,
-			Action:      detection.EngineType(r.Engine),
+			Action:      detection.ActionType(r.Engine),
 			FindingCfg: detection.RuleFinding{
 				Name:    r.Finding.Name,
 				Message: r.Finding.Message,
