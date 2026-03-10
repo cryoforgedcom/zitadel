@@ -5,7 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zitadel/zitadel/internal/llm"
 	"github.com/zitadel/zitadel/internal/ratelimit"
+	"github.com/zitadel/zitadel/internal/signals"
 )
 
 func TestCompileRules_Valid(t *testing.T) {
@@ -226,7 +228,7 @@ func TestCompiledRule_NilPointerAccess(t *testing.T) {
 
 	// LastSuccess is non-nil — should match.
 	matched, err = rule.Evaluate(RiskContext{
-		LastSuccess: &Signal{IP: "1.2.3.4"},
+		LastSuccess: &signals.Signal{IP: "1.2.3.4"},
 		IPChanged:   true,
 	})
 	if err != nil {
@@ -264,7 +266,7 @@ func TestRuleEvaluator_Evaluate_BlockAction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	engine := NewRuleEvaluator(rules, ratelimit.NewMemoryRateLimiter(), nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, ratelimit.NewMemoryRateLimiter(), nil, llm.Config{}, nil, nil)
 	ctx := context.Background()
 
 	// Only burst matches.
@@ -314,13 +316,13 @@ func TestRuleEvaluator_RateLimitAction(t *testing.T) {
 	}
 
 	limiter := ratelimit.NewMemoryRateLimiter()
-	engine := NewRuleEvaluator(rules, limiter, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, limiter, nil, llm.Config{}, nil, nil)
 	ctx := context.Background()
 	now := time.Now()
 
 	rc := RiskContext{
 		DistinctFingerprints: 3,
-		Current:              Signal{UserID: "u1", Timestamp: now},
+		Current:              signals.Signal{UserID: "u1", Timestamp: now},
 	}
 
 	// First two checks should pass (count 1, 2 <= max 2).
@@ -368,12 +370,12 @@ func TestRuleEvaluator_RateLimitIsolatesInstances(t *testing.T) {
 	}
 
 	limiter := ratelimit.NewMemoryRateLimiter()
-	engine := NewRuleEvaluator(rules, limiter, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, limiter, nil, llm.Config{}, nil, nil)
 	ctx := context.Background()
 
 	firstTenant := RiskContext{
 		DistinctFingerprints: 3,
-		Current: Signal{
+		Current: signals.Signal{
 			InstanceID: "inst-1",
 			UserID:     "u1",
 		},
@@ -425,11 +427,11 @@ func TestRuleEvaluator_RateLimitIsolatesRules(t *testing.T) {
 	}
 
 	limiter := ratelimit.NewMemoryRateLimiter()
-	engine := NewRuleEvaluator(rules, limiter, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, limiter, nil, llm.Config{}, nil, nil)
 	ctx := context.Background()
 
 	findings := engine.Evaluate(ctx, RiskContext{
-		Current: Signal{
+		Current: signals.Signal{
 			InstanceID: "inst-1",
 			UserID:     "u1",
 		},
@@ -455,7 +457,7 @@ func TestRuleEvaluator_LogAction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	engine := NewRuleEvaluator(rules, nil, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, nil, nil, llm.Config{}, nil, nil)
 	ctx := context.Background()
 
 	findings := engine.Evaluate(ctx, RiskContext{FailureCount: 1}, nil)
@@ -488,7 +490,7 @@ func TestRenderKeyTemplate(t *testing.T) {
 	}
 
 	key, err := rules[0].RenderKeyTemplate(RiskContext{
-		Current: Signal{IP: "10.0.0.1"},
+		Current: signals.Signal{IP: "10.0.0.1"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -553,8 +555,8 @@ func TestRenderContextTemplate(t *testing.T) {
 	}
 
 	rendered, err := rules[0].RenderContextTemplate(RiskContext{
-		Current:     Signal{IP: "5.6.7.8"},
-		LastSuccess: &Signal{IP: "1.2.3.4"},
+		Current:     signals.Signal{IP: "5.6.7.8"},
+		LastSuccess: &signals.Signal{IP: "1.2.3.4"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -634,7 +636,7 @@ func TestRuleEvaluator_CaptchaAction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	engine := NewRuleEvaluator(rules, nil, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, nil, nil, llm.Config{}, nil, nil)
 	findings := engine.Evaluate(context.Background(), RiskContext{}, nil)
 	if len(findings) != 1 {
 		t.Fatalf("len(findings) = %d, want 1", len(findings))
@@ -661,7 +663,7 @@ func TestRuleEvaluator_CaptchaAction(t *testing.T) {
 }
 
 func TestRuleEvaluator_Evaluate_NoRules(t *testing.T) {
-	engine := NewRuleEvaluator(nil, nil, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(nil, nil, nil, llm.Config{}, nil, nil)
 	findings := engine.Evaluate(context.Background(), RiskContext{}, nil)
 	if len(findings) != 0 {
 		t.Fatalf("len(findings) = %d, want 0", len(findings))
@@ -683,7 +685,7 @@ func TestRuleEvaluator_UnknownAction(t *testing.T) {
 	}
 	rules[0].Action = ActionType("mystery")
 
-	engine := NewRuleEvaluator(rules, nil, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, nil, nil, llm.Config{}, nil, nil)
 	findings := engine.Evaluate(context.Background(), RiskContext{}, nil)
 	if len(findings) != 0 {
 		t.Fatalf("len(findings) = %d, want 0 for unknown action", len(findings))
@@ -730,17 +732,17 @@ func TestRuleEvaluator_MultipleRulesAllMatch(t *testing.T) {
 	}
 
 	limiter := ratelimit.NewMemoryRateLimiter()
-	engine := NewRuleEvaluator(rules, limiter, nil, LLMConfig{}, nil, nil)
+	engine := NewRuleEvaluator(rules, limiter, nil, llm.Config{}, nil, nil)
 	ctx := context.Background()
 
 	// First evaluation: block and log fire immediately; rate_limit is within limit.
-	findings := engine.Evaluate(ctx, RiskContext{Current: Signal{UserID: "u1"}}, nil)
+	findings := engine.Evaluate(ctx, RiskContext{Current: signals.Signal{UserID: "u1"}}, nil)
 	if len(findings) != 2 {
 		t.Fatalf("first call: len(findings) = %d, want 2 (block + log)", len(findings))
 	}
 
 	// Second evaluation: rate_limit now exceeds, all three actions produce findings.
-	findings = engine.Evaluate(ctx, RiskContext{Current: Signal{UserID: "u1"}}, nil)
+	findings = engine.Evaluate(ctx, RiskContext{Current: signals.Signal{UserID: "u1"}}, nil)
 	if len(findings) != 3 {
 		t.Fatalf("second call: len(findings) = %d, want 3", len(findings))
 	}

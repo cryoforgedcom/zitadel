@@ -3,17 +3,19 @@ package detection
 import (
 	"testing"
 	"time"
+
+	"github.com/zitadel/zitadel/internal/signals"
 )
 
 func TestBuildRiskContext_Empty(t *testing.T) {
-	signal := Signal{
+	signal := signals.Signal{
 		UserID:    "u1",
 		SessionID: "s1",
 		IP:        "1.2.3.4",
 		UserAgent: "Chrome",
 		Timestamp: time.Now(),
 	}
-	snapshot := Snapshot{}
+	snapshot := signals.Snapshot{}
 
 	rc := buildRiskContext(signal, snapshot)
 
@@ -40,7 +42,7 @@ func TestBuildRiskContext_Empty(t *testing.T) {
 
 func TestBuildRiskContext_WithHistory(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	signal := Signal{
+	signal := signals.Signal{
 		UserID:        "u1",
 		SessionID:     "s1",
 		IP:            "5.6.7.8",
@@ -48,16 +50,16 @@ func TestBuildRiskContext_WithHistory(t *testing.T) {
 		FingerprintID: "fp-new",
 		Timestamp:     now,
 	}
-	snapshot := Snapshot{
-		UserSignals: []RecordedSignal{
-			{Signal: Signal{IP: "1.2.3.4", UserAgent: "Chrome", FingerprintID: "fp-old", Outcome: OutcomeSuccess, Timestamp: now.Add(-5 * time.Minute)}},
-			{Signal: Signal{IP: "1.2.3.4", UserAgent: "Chrome", FingerprintID: "fp-old", Outcome: OutcomeFailure, Timestamp: now.Add(-4 * time.Minute)}},
-			{Signal: Signal{IP: "1.2.3.4", UserAgent: "Chrome", FingerprintID: "fp-old", Outcome: OutcomeFailure, Timestamp: now.Add(-3 * time.Minute)}},
-			{Signal: Signal{IP: "9.9.9.9", UserAgent: "Safari", FingerprintID: "fp-old", Outcome: OutcomeSuccess, Timestamp: now.Add(-2 * time.Minute)}},
+	snapshot := signals.Snapshot{
+		UserSignals: []signals.RecordedSignal{
+			{Signal: signals.Signal{IP: "1.2.3.4", UserAgent: "Chrome", FingerprintID: "fp-old", Outcome: signals.OutcomeSuccess, Timestamp: now.Add(-5 * time.Minute)}},
+			{Signal: signals.Signal{IP: "1.2.3.4", UserAgent: "Chrome", FingerprintID: "fp-old", Outcome: signals.OutcomeFailure, Timestamp: now.Add(-4 * time.Minute)}},
+			{Signal: signals.Signal{IP: "1.2.3.4", UserAgent: "Chrome", FingerprintID: "fp-old", Outcome: signals.OutcomeFailure, Timestamp: now.Add(-3 * time.Minute)}},
+			{Signal: signals.Signal{IP: "9.9.9.9", UserAgent: "Safari", FingerprintID: "fp-old", Outcome: signals.OutcomeSuccess, Timestamp: now.Add(-2 * time.Minute)}},
 		},
-		SessionSignals: []RecordedSignal{
-			{Signal: Signal{Outcome: OutcomeSuccess}},
-			{Signal: Signal{Outcome: OutcomeFailure}},
+		SessionSignals: []signals.RecordedSignal{
+			{Signal: signals.Signal{Outcome: signals.OutcomeSuccess}},
+			{Signal: signals.Signal{Outcome: signals.OutcomeFailure}},
 		},
 	}
 
@@ -120,14 +122,14 @@ func TestBuildRiskContext_WithHistory(t *testing.T) {
 
 func TestBuildRiskContext_NoIPChange_SameIP(t *testing.T) {
 	now := time.Now()
-	signal := Signal{
+	signal := signals.Signal{
 		IP:        "1.2.3.4",
 		UserAgent: "Chrome",
 		Timestamp: now,
 	}
-	snapshot := Snapshot{
-		UserSignals: []RecordedSignal{
-			{Signal: Signal{IP: "1.2.3.4", UserAgent: "Chrome", Outcome: OutcomeSuccess, Timestamp: now.Add(-time.Minute)}},
+	snapshot := signals.Snapshot{
+		UserSignals: []signals.RecordedSignal{
+			{Signal: signals.Signal{IP: "1.2.3.4", UserAgent: "Chrome", Outcome: signals.OutcomeSuccess, Timestamp: now.Add(-time.Minute)}},
 		},
 	}
 
@@ -143,7 +145,7 @@ func TestBuildRiskContext_NoIPChange_SameIP(t *testing.T) {
 
 func TestBuildRiskContext_HTTPEnrichment(t *testing.T) {
 	now := time.Date(2026, 3, 7, 14, 30, 0, 0, time.UTC)
-	signal := Signal{
+	signal := signals.Signal{
 		UserID:         "u1",
 		IP:             "5.6.7.8",
 		UserAgent:      "Firefox",
@@ -152,22 +154,22 @@ func TestBuildRiskContext_HTTPEnrichment(t *testing.T) {
 		Country:        "DE",
 		ForwardedChain: []string{"5.6.7.8", "10.0.0.1", "192.168.1.1"},
 	}
-	snapshot := Snapshot{
-		UserSignals: []RecordedSignal{
-			{Signal: Signal{
+	snapshot := signals.Snapshot{
+		UserSignals: []signals.RecordedSignal{
+			{Signal: signals.Signal{
 				IP:             "1.2.3.4",
 				UserAgent:      "Chrome",
 				AcceptLanguage: "en-US",
 				Country:        "US",
-				Outcome:        OutcomeSuccess,
+				Outcome:        signals.OutcomeSuccess,
 				Timestamp:      now.Add(-30 * time.Minute),
 			}},
-			{Signal: Signal{
+			{Signal: signals.Signal{
 				IP:             "9.9.9.9",
 				UserAgent:      "Safari",
 				AcceptLanguage: "en-US",
 				Country:        "CH",
-				Outcome:        OutcomeSuccess,
+				Outcome:        signals.OutcomeSuccess,
 				Timestamp:      now.Add(-10 * time.Minute),
 			}},
 		},
@@ -218,13 +220,13 @@ func TestBuildRiskContext_HTTPEnrichment(t *testing.T) {
 
 func TestBuildRiskContext_CountryNotNew(t *testing.T) {
 	now := time.Now()
-	signal := Signal{
+	signal := signals.Signal{
 		Country:   "US",
 		Timestamp: now,
 	}
-	snapshot := Snapshot{
-		UserSignals: []RecordedSignal{
-			{Signal: Signal{Country: "US", Outcome: OutcomeSuccess, Timestamp: now.Add(-time.Hour)}},
+	snapshot := signals.Snapshot{
+		UserSignals: []signals.RecordedSignal{
+			{Signal: signals.Signal{Country: "US", Outcome: signals.OutcomeSuccess, Timestamp: now.Add(-time.Hour)}},
 		},
 	}
 
@@ -240,8 +242,8 @@ func TestBuildRiskContext_CountryNotNew(t *testing.T) {
 
 func TestBuildRiskContext_NoCountry(t *testing.T) {
 	now := time.Now()
-	signal := Signal{Timestamp: now}
-	snapshot := Snapshot{}
+	signal := signals.Signal{Timestamp: now}
+	snapshot := signals.Snapshot{}
 
 	rc := buildRiskContext(signal, snapshot)
 
@@ -258,33 +260,33 @@ func TestBuildRiskContext_NoCountry(t *testing.T) {
 
 func TestBuildRiskContext_CrossOperation(t *testing.T) {
 	now := time.Date(2026, 6, 15, 10, 0, 0, 0, time.UTC)
-	signal := Signal{
+	signal := signals.Signal{
 		UserID:    "u1",
 		IP:        "1.2.3.4",
 		Timestamp: now,
 		Resource:  "users",
 	}
-	snapshot := Snapshot{
-		UserSignals: []RecordedSignal{
+	snapshot := signals.Snapshot{
+		UserSignals: []signals.RecordedSignal{
 			// API read via HTTP GET
-			{Signal: Signal{Stream: StreamRequests, Operation: "GET /v2/users", Resource: "users", Timestamp: now.Add(-10 * time.Minute)}},
+			{Signal: signals.Signal{Stream: signals.StreamRequests, Operation: "GET /v2/users", Resource: "users", Timestamp: now.Add(-10 * time.Minute)}},
 			// API read via RPC-style GetUser
-			{Signal: Signal{Stream: StreamRequests, Operation: "zitadel.user.v2.GetUser", Resource: "users", Timestamp: now.Add(-9 * time.Minute)}},
+			{Signal: signals.Signal{Stream: signals.StreamRequests, Operation: "zitadel.user.v2.GetUser", Resource: "users", Timestamp: now.Add(-9 * time.Minute)}},
 			// API read via List
-			{Signal: Signal{Stream: StreamRequests, Operation: "zitadel.user.v2.ListUsers", Resource: "users.list", Timestamp: now.Add(-8 * time.Minute)}},
+			{Signal: signals.Signal{Stream: signals.StreamRequests, Operation: "zitadel.user.v2.ListUsers", Resource: "users.list", Timestamp: now.Add(-8 * time.Minute)}},
 			// API read via Search
-			{Signal: Signal{Stream: StreamRequests, Operation: "zitadel.session.v2.SearchSessions", Resource: "sessions", Timestamp: now.Add(-7 * time.Minute)}},
+			{Signal: signals.Signal{Stream: signals.StreamRequests, Operation: "zitadel.session.v2.SearchSessions", Resource: "sessions", Timestamp: now.Add(-7 * time.Minute)}},
 			// Non-read request (POST)
-			{Signal: Signal{Stream: StreamRequests, Operation: "POST /v2/users", Resource: "users", Timestamp: now.Add(-6 * time.Minute)}},
+			{Signal: signals.Signal{Stream: signals.StreamRequests, Operation: "POST /v2/users", Resource: "users", Timestamp: now.Add(-6 * time.Minute)}},
 			// Events stream (should not count as API read)
-			{Signal: Signal{Stream: StreamEvents, Operation: "GET /auth", Resource: "auth", Timestamp: now.Add(-5 * time.Minute)}},
+			{Signal: signals.Signal{Stream: signals.StreamEvents, Operation: "GET /auth", Resource: "auth", Timestamp: now.Add(-5 * time.Minute)}},
 			// Password change
-			{Signal: Signal{Stream: StreamEvents, Operation: "user.password.change", Timestamp: now.Add(-4 * time.Minute)}},
+			{Signal: signals.Signal{Stream: signals.StreamEvents, Operation: "user.password.change", Timestamp: now.Add(-4 * time.Minute)}},
 			// MFA enrollment via OTP
-			{Signal: Signal{Stream: StreamEvents, Operation: "user.otp.verify", Timestamp: now.Add(-3 * time.Minute)}},
+			{Signal: signals.Signal{Stream: signals.StreamEvents, Operation: "user.otp.verify", Timestamp: now.Add(-3 * time.Minute)}},
 			// Notification
-			{Signal: Signal{Stream: StreamNotifications, Operation: "email.send", Timestamp: now.Add(-2 * time.Minute)}},
-			{Signal: Signal{Stream: StreamNotifications, Operation: "sms.send", Timestamp: now.Add(-1 * time.Minute)}},
+			{Signal: signals.Signal{Stream: signals.StreamNotifications, Operation: "email.send", Timestamp: now.Add(-2 * time.Minute)}},
+			{Signal: signals.Signal{Stream: signals.StreamNotifications, Operation: "sms.send", Timestamp: now.Add(-1 * time.Minute)}},
 		},
 	}
 
@@ -321,11 +323,11 @@ func TestBuildRiskContext_CrossOperation(t *testing.T) {
 
 func TestBuildRiskContext_CrossOperation_Empty(t *testing.T) {
 	now := time.Now()
-	signal := Signal{
+	signal := signals.Signal{
 		UserID:    "u1",
 		Timestamp: now,
 	}
-	snapshot := Snapshot{}
+	snapshot := signals.Snapshot{}
 
 	rc := buildRiskContext(signal, snapshot)
 
@@ -361,10 +363,10 @@ func TestBuildRiskContext_MFAVariants(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			signal := Signal{Timestamp: now}
-			snapshot := Snapshot{
-				UserSignals: []RecordedSignal{
-					{Signal: Signal{Operation: tt.op, Timestamp: now.Add(-time.Minute)}},
+			signal := signals.Signal{Timestamp: now}
+			snapshot := signals.Snapshot{
+				UserSignals: []signals.RecordedSignal{
+					{Signal: signals.Signal{Operation: tt.op, Timestamp: now.Add(-time.Minute)}},
 				},
 			}
 			rc := buildRiskContext(signal, snapshot)
@@ -377,10 +379,10 @@ func TestBuildRiskContext_MFAVariants(t *testing.T) {
 
 func TestBuildRiskContext_PasswordSetVariant(t *testing.T) {
 	now := time.Now()
-	signal := Signal{Timestamp: now}
-	snapshot := Snapshot{
-		UserSignals: []RecordedSignal{
-			{Signal: Signal{Operation: "user.password.set", Timestamp: now.Add(-time.Minute)}},
+	signal := signals.Signal{Timestamp: now}
+	snapshot := signals.Snapshot{
+		UserSignals: []signals.RecordedSignal{
+			{Signal: signals.Signal{Operation: "user.password.set", Timestamp: now.Add(-time.Minute)}},
 		},
 	}
 

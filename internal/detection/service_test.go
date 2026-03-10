@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zitadel/zitadel/internal/llm"
 	"github.com/zitadel/zitadel/internal/ratelimit"
 	"github.com/zitadel/zitadel/internal/signals"
 )
@@ -44,15 +45,15 @@ func (m *memoryStore) Snapshot(_ context.Context, sig signals.Signal, cfg signal
 }
 
 type stubLLMClient struct {
-	classification Classification
+	classification llm.Classification
 	err            error
-	prompt         Prompt
+	prompt         llm.Prompt
 }
 
-func (s *stubLLMClient) Classify(_ context.Context, prompt Prompt) (Classification, error) {
+func (s *stubLLMClient) Classify(_ context.Context, prompt llm.Prompt) (llm.Classification, error) {
 	s.prompt = prompt
 	if s.err != nil {
-		return Classification{}, s.err
+		return llm.Classification{}, s.err
 	}
 	return s.classification, nil
 }
@@ -75,12 +76,12 @@ func TestServiceEvaluateFailureBurst(t *testing.T) {
 	}
 	base := time.Now().UTC()
 	for i := 0; i < 2; i++ {
-		if err := svc.Record(context.Background(), Signal{UserID: "user1", SessionID: "session1", Outcome: OutcomeFailure, Timestamp: base.Add(time.Duration(i) * time.Minute)}, nil); err != nil {
+		if err := svc.Record(context.Background(), signals.Signal{UserID: "user1", SessionID: "session1", Outcome: signals.OutcomeFailure, Timestamp: base.Add(time.Duration(i) * time.Minute)}, nil); err != nil {
 			t.Fatalf("record failure %d: %v", i, err)
 		}
 	}
 
-	decision, err := svc.Evaluate(context.Background(), Signal{UserID: "user1", SessionID: "session2", Outcome: OutcomeFailure, Timestamp: base.Add(3 * time.Minute)})
+	decision, err := svc.Evaluate(context.Background(), signals.Signal{UserID: "user1", SessionID: "session2", Outcome: signals.OutcomeFailure, Timestamp: base.Add(3 * time.Minute)})
 	if err != nil {
 		t.Fatalf("evaluate: %v", err)
 	}
@@ -106,11 +107,11 @@ func TestServiceEvaluateContextDrift(t *testing.T) {
 		t.Fatalf("new service: %v", err)
 	}
 	base := time.Now().UTC()
-	if err := svc.Record(context.Background(), Signal{UserID: "user1", SessionID: "session1", Outcome: OutcomeSuccess, Timestamp: base, IP: "1.1.1.1", UserAgent: "firefox"}, nil); err != nil {
+	if err := svc.Record(context.Background(), signals.Signal{UserID: "user1", SessionID: "session1", Outcome: signals.OutcomeSuccess, Timestamp: base, IP: "1.1.1.1", UserAgent: "firefox"}, nil); err != nil {
 		t.Fatalf("record success: %v", err)
 	}
 
-	decision, err := svc.Evaluate(context.Background(), Signal{UserID: "user1", SessionID: "session2", Outcome: OutcomeSuccess, Timestamp: base.Add(5 * time.Minute), IP: "2.2.2.2", UserAgent: "safari"})
+	decision, err := svc.Evaluate(context.Background(), signals.Signal{UserID: "user1", SessionID: "session2", Outcome: signals.OutcomeSuccess, Timestamp: base.Add(5 * time.Minute), IP: "2.2.2.2", UserAgent: "safari"})
 	if err != nil {
 		t.Fatalf("evaluate: %v", err)
 	}
@@ -122,8 +123,8 @@ func TestServiceEvaluateContextDrift(t *testing.T) {
 func TestServiceEvaluateLLMObserve(t *testing.T) {
 	t.Parallel()
 
-	llm := &stubLLMClient{
-		classification: Classification{
+	stub := &stubLLMClient{
+		classification: llm.Classification{
 			Classification: "high",
 			Confidence:     0.91,
 			Reason:         "rapid context change after recent login",
@@ -137,8 +138,8 @@ func TestServiceEvaluateLLMObserve(t *testing.T) {
 		ContextChangeWindow:   15 * time.Minute,
 		MaxSignalsPerUser:     20,
 		MaxSignalsPerSession:  20,
-		LLM: LLMConfig{
-			Mode:               LLMModeObserve,
+		LLM: llm.Config{
+			Mode:               llm.LLMModeObserve,
 			Endpoint:           "http://ollama:11434",
 			Model:              "phi3:mini",
 			Timeout:            time.Second,
@@ -146,16 +147,16 @@ func TestServiceEvaluateLLMObserve(t *testing.T) {
 			HighRiskConfidence: 0.85,
 		},
 	}
-	svc, err := New(cfg, nil, &memoryStore{}, llm, "", nil)
+	svc, err := New(cfg, nil, &memoryStore{}, stub, "", nil)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
 	base := time.Now().UTC()
-	if err := svc.Record(context.Background(), Signal{UserID: "user1", SessionID: "session1", Outcome: OutcomeSuccess, Timestamp: base, IP: "1.1.1.1", UserAgent: "firefox"}, nil); err != nil {
+	if err := svc.Record(context.Background(), signals.Signal{UserID: "user1", SessionID: "session1", Outcome: signals.OutcomeSuccess, Timestamp: base, IP: "1.1.1.1", UserAgent: "firefox"}, nil); err != nil {
 		t.Fatalf("record success: %v", err)
 	}
 
-	decision, err := svc.Evaluate(context.Background(), Signal{UserID: "user1", SessionID: "session2", Outcome: OutcomeSuccess, Timestamp: base.Add(5 * time.Minute), IP: "1.1.1.1", UserAgent: "firefox"})
+	decision, err := svc.Evaluate(context.Background(), signals.Signal{UserID: "user1", SessionID: "session2", Outcome: signals.OutcomeSuccess, Timestamp: base.Add(5 * time.Minute), IP: "1.1.1.1", UserAgent: "firefox"})
 	if err != nil {
 		t.Fatalf("evaluate: %v", err)
 	}
@@ -168,7 +169,7 @@ func TestServiceEvaluateLLMObserve(t *testing.T) {
 	if decision.Findings[0].Block {
 		t.Fatalf("expected llm finding to remain non-blocking in observe mode")
 	}
-	if !strings.Contains(llm.prompt.User, "\"history\"") {
+	if !strings.Contains(stub.prompt.User, "\"history\"") {
 		t.Fatalf("expected prompt to include serialized history")
 	}
 }
@@ -176,8 +177,8 @@ func TestServiceEvaluateLLMObserve(t *testing.T) {
 func TestServiceEvaluateLLMEnforce(t *testing.T) {
 	t.Parallel()
 
-	llm := &stubLLMClient{
-		classification: Classification{
+	stub := &stubLLMClient{
+		classification: llm.Classification{
 			Classification: "high",
 			Confidence:     0.95,
 			Reason:         "two distant contexts in a short window",
@@ -191,8 +192,8 @@ func TestServiceEvaluateLLMEnforce(t *testing.T) {
 		ContextChangeWindow:   15 * time.Minute,
 		MaxSignalsPerUser:     20,
 		MaxSignalsPerSession:  20,
-		LLM: LLMConfig{
-			Mode:               LLMModeEnforce,
+		LLM: llm.Config{
+			Mode:               llm.LLMModeEnforce,
 			Endpoint:           "http://ollama:11434",
 			Model:              "phi3:mini",
 			Timeout:            time.Second,
@@ -200,12 +201,12 @@ func TestServiceEvaluateLLMEnforce(t *testing.T) {
 			HighRiskConfidence: 0.85,
 		},
 	}
-	svc, err := New(cfg, nil, &memoryStore{}, llm, "", nil)
+	svc, err := New(cfg, nil, &memoryStore{}, stub, "", nil)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
 
-	decision, err := svc.Evaluate(context.Background(), Signal{UserID: "user1", SessionID: "session2", Outcome: OutcomeSuccess, Timestamp: time.Now().UTC(), IP: "2.2.2.2", UserAgent: "safari"})
+	decision, err := svc.Evaluate(context.Background(), signals.Signal{UserID: "user1", SessionID: "session2", Outcome: signals.OutcomeSuccess, Timestamp: time.Now().UTC(), IP: "2.2.2.2", UserAgent: "safari"})
 	if err != nil {
 		t.Fatalf("evaluate: %v", err)
 	}
@@ -221,9 +222,9 @@ func TestServiceEvaluateLLMCachedSession(t *testing.T) {
 	t.Parallel()
 
 	calls := 0
-	llm := &stubLLMClient{}
-	llm.classification = Classification{Classification: "low", Confidence: 0.1, Reason: "normal login"}
-	countingLLM := &countingLLMClient{inner: llm, calls: &calls}
+	stub := &stubLLMClient{}
+	stub.classification = llm.Classification{Classification: "low", Confidence: 0.1, Reason: "normal login"}
+	countingLLM := &countingLLMClient{inner: stub, calls: &calls}
 
 	cfg := Config{
 		Enabled:               true,
@@ -233,8 +234,8 @@ func TestServiceEvaluateLLMCachedSession(t *testing.T) {
 		ContextChangeWindow:   15 * time.Minute,
 		MaxSignalsPerUser:     20,
 		MaxSignalsPerSession:  20,
-		LLM: LLMConfig{
-			Mode:               LLMModeObserve,
+		LLM: llm.Config{
+			Mode:               llm.LLMModeObserve,
 			Endpoint:           "http://ollama:11434",
 			Model:              "phi3:mini",
 			Timeout:            time.Second,
@@ -249,7 +250,7 @@ func TestServiceEvaluateLLMCachedSession(t *testing.T) {
 
 	base := time.Now().UTC()
 	sessionID := "sess-cache-test"
-	sig := Signal{UserID: "user1", SessionID: sessionID, Operation: "create_session", Outcome: OutcomeSuccess, Timestamp: base, IP: "1.2.3.4", UserAgent: "chrome"}
+	sig := signals.Signal{UserID: "user1", SessionID: sessionID, Operation: "create_session", Outcome: signals.OutcomeSuccess, Timestamp: base, IP: "1.2.3.4", UserAgent: "chrome"}
 
 	// First evaluation: create_session — should call LLM.
 	dec1, err := svc.Evaluate(context.Background(), sig)
@@ -280,20 +281,20 @@ func TestServiceEvaluateLLMCachedSession(t *testing.T) {
 }
 
 type countingLLMClient struct {
-	inner LLMClient
+	inner llm.LLMClient
 	calls *int
 }
 
-func (c *countingLLMClient) Classify(ctx context.Context, prompt Prompt) (Classification, error) {
+func (c *countingLLMClient) Classify(ctx context.Context, prompt llm.Prompt) (llm.Classification, error) {
 	*c.calls++
 	return c.inner.Classify(ctx, prompt)
 }
 
 func TestRateLimitConfigValidate(t *testing.T) {
-	if err := (RateLimitConfig{Mode: "bogus"}).Validate(); err == nil {
+	if err := (ratelimit.Config{Mode: "bogus"}).Validate(); err == nil {
 		t.Fatal("expected invalid rate limit mode to fail validation")
 	}
-	if err := (RateLimitConfig{Mode: RateLimitModePG}).Validate(); err != nil {
+	if err := (ratelimit.Config{Mode: ratelimit.ModePG}).Validate(); err != nil {
 		t.Fatalf("expected pg mode to validate, got %v", err)
 	}
 }
@@ -301,19 +302,19 @@ func TestRateLimitConfigValidate(t *testing.T) {
 func TestNewRateLimiterStoreFallbacks(t *testing.T) {
 	t.Parallel()
 
-	limiter, mode := newRateLimiterStore(RateLimitConfig{Mode: RateLimitModeRedis}, nil, nil)
+	limiter, mode := newRateLimiterStore(ratelimit.Config{Mode: ratelimit.ModeRedis}, nil, nil)
 	if _, ok := limiter.(*ratelimit.MemoryRateLimiter); !ok {
 		t.Fatalf("expected redis fallback to memory, got %T", limiter)
 	}
-	if mode != RateLimitModeMemory {
-		t.Fatalf("mode = %q, want %q", mode, RateLimitModeMemory)
+	if mode != ratelimit.ModeMemory {
+		t.Fatalf("mode = %q, want %q", mode, ratelimit.ModeMemory)
 	}
 
-	limiter, mode = newRateLimiterStore(RateLimitConfig{Mode: RateLimitModePG}, nil, nil)
+	limiter, mode = newRateLimiterStore(ratelimit.Config{Mode: ratelimit.ModePG}, nil, nil)
 	if _, ok := limiter.(*ratelimit.MemoryRateLimiter); !ok {
 		t.Fatalf("expected pg fallback to memory, got %T", limiter)
 	}
-	if mode != RateLimitModeMemory {
-		t.Fatalf("mode = %q, want %q", mode, RateLimitModeMemory)
+	if mode != ratelimit.ModeMemory {
+		t.Fatalf("mode = %q, want %q", mode, ratelimit.ModeMemory)
 	}
 }
