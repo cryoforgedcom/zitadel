@@ -1841,3 +1841,67 @@ exists in `open` status, the existing alert's `metadata` is updated with the new
 finding count, but no new alert row is created and no external notification is sent.
 
 ---
+
+## 27. Implemented: FindingSink Contract
+
+### Current State (POC)
+
+The detection system produces `Finding` values during rule evaluation. Currently,
+findings flow through two internal paths:
+
+1. **FindingRecorder** — persists findings as JSON on the originating signal row
+   (via `AppendFindings` on the DuckLake store). This makes findings queryable
+   through DuckDB JSON functions.
+
+2. **Signal emission** — each non-LLM rule match emits a detection-stream signal
+   via the `signalEmitter` interface, creating cross-stream correlation entries.
+
+### FindingSink Interface
+
+For future external integrations (webhook, SIEM, OpenTelemetry), the `FindingSink`
+interface defines the forwarding contract:
+
+```go
+type FindingSink interface {
+    Forward(ctx context.Context, signal signals.Signal, findings []Finding) error
+}
+```
+
+Design constraints:
+- Sinks MUST NOT block the detection evaluation path
+- Errors are logged but do not affect the detection decision
+- `MultiSink` fans out to multiple sinks; first error is returned but all sinks run
+- The originating signal is provided for correlation context (instance, user, session, trace)
+
+### Relationship to §26 (Alert Storage)
+
+The `FindingSink` is the forwarding layer — it pushes findings outward. §26's
+proposed `Alert` model is a persistence layer — it stores findings as durable,
+lifecycle-managed entities. When §26 is implemented:
+
+- `AlertSink` would implement `FindingSink`, converting findings into alert rows
+- External sinks (webhook, SIEM) would also implement `FindingSink`
+- `MultiSink` would compose them: `NewMultiSink(alertSink, webhookSink, siemSink)`
+
+### Vocabulary Alignment
+
+| Term | Role | Layer |
+|------|------|-------|
+| **Finding** | Analytic result from a rule evaluation | Domain |
+| **FindingRecorder** | Persists findings on signal rows (internal) | Storage |
+| **FindingSink** | Forwards findings to external systems | Integration |
+| **Alert** (§26, future) | Durable, lifecycle-managed finding | Persistence |
+
+### What Actions Are NOT
+
+Actions (`block`, `rate_limit`, `llm`, `log`, `captcha`) are rule-local
+processing stages — they determine what happens when a rule matches. They are
+not sinks. The distinction:
+
+- **Action**: synchronous, inline, per-rule — "what to do when this rule fires"
+- **Sink**: asynchronous, post-evaluation, cross-cutting — "where to send all findings"
+
+This separation allows actions to focus on enforcement (block a request, rate-limit
+an IP) while sinks handle observability and integration (alert admin, push to SIEM).
+
+---
