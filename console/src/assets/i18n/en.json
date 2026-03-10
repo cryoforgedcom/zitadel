@@ -1728,6 +1728,10 @@
       "RATE_LIMIT_KEY_HINT": "Template rendered from the detection context, for example ip:{{.Current.IP}} or user:{{.Current.UserID}}.",
       "RATE_LIMIT_WINDOW": "Rate limit window (seconds)",
       "RATE_LIMIT_MAX": "Rate limit max",
+      "PRIORITY": "Priority",
+      "STOP_ON_MATCH": "Stop on match",
+      "STOP_ON_MATCH_ENABLED": "Enabled",
+      "STOP_ON_MATCH_DISABLED": "Disabled",
       "CREATED_AT": "Created",
       "UPDATED_AT": "Updated",
       "ENGINES": {
