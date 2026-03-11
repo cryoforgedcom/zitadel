@@ -12,7 +12,7 @@ import {
 import { NewAuthorizationBearerInterceptor } from "./interceptors.js";
 
 /**
- * Create a server transport using grpc with the given token and configuration options.
+ * Create a server transport using grpc web with the given token and configuration options.
  * @param token
  * @param opts
  */
