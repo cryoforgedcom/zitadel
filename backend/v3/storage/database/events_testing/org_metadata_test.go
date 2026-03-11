@@ -25,7 +25,7 @@ func TestServer_TestOrgMetadataReduces(t *testing.T) {
 		org := createTestScopedOrg(t)
 		beforeAdd := time.Now()
 		_, err := OrgClient.SetOrganizationMetadata(CTX, &v2.SetOrganizationMetadataRequest{
-			OrganizationId: org(),
+			OrganizationId: org.OrganizationId,
 			Metadata: []*v2.Metadata{
 				{
 					Key:   "test-1-bool",

@@ -44,7 +44,6 @@ import (
 	saml_pb "github.com/zitadel/zitadel/pkg/grpc/saml/v2"
 	"github.com/zitadel/zitadel/pkg/grpc/session/v2"
 	"github.com/zitadel/zitadel/pkg/grpc/settings/v2"
-	settings_v2 "github.com/zitadel/zitadel/pkg/grpc/settings/v2"
 	user_pb "github.com/zitadel/zitadel/pkg/grpc/user"
 	user_v2 "github.com/zitadel/zitadel/pkg/grpc/user/v2"
 	webkey_v2 "github.com/zitadel/zitadel/pkg/grpc/webkey/v2"
@@ -401,9 +400,9 @@ func (i *Instance) CreateOrganizationWithUserID(ctx context.Context, name, userI
 	return resp
 }
 
-func (i *Instance) SetOrganizationSettings(ctx context.Context, t *testing.T, orgID string, organizationScopedUsernames bool) *settings_v2.SetOrganizationSettingsResponse {
+func (i *Instance) SetOrganizationSettings(ctx context.Context, t *testing.T, orgID string, organizationScopedUsernames bool) *settings.SetOrganizationSettingsResponse {
 	resp, err := i.Client.SettingsV2.SetOrganizationSettings(ctx,
-		&settings_v2.SetOrganizationSettingsRequest{
+		&settings.SetOrganizationSettingsRequest{
 			OrganizationId:              orgID,
 			OrganizationScopedUsernames: gu.Ptr(organizationScopedUsernames),
 		},
@@ -412,9 +411,9 @@ func (i *Instance) SetOrganizationSettings(ctx context.Context, t *testing.T, or
 	return resp
 }
 
-func (i *Instance) DeleteOrganizationSettings(ctx context.Context, t *testing.T, orgID string) *settings_v2.DeleteOrganizationSettingsResponse {
+func (i *Instance) DeleteOrganizationSettings(ctx context.Context, t *testing.T, orgID string) *settings.DeleteOrganizationSettingsResponse {
 	resp, err := i.Client.SettingsV2.DeleteOrganizationSettings(ctx,
-		&settings_v2.DeleteOrganizationSettingsRequest{
+		&settings.DeleteOrganizationSettingsRequest{
 			OrganizationId: orgID,
 		},
 	)

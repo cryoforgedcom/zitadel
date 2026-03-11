@@ -22,7 +22,6 @@ import (
 	mgmt "github.com/zitadel/zitadel/pkg/grpc/management"
 	"github.com/zitadel/zitadel/pkg/grpc/org/v2"
 	"github.com/zitadel/zitadel/pkg/grpc/project/v2"
-
 	"github.com/zitadel/zitadel/pkg/grpc/session/v2"
 	"github.com/zitadel/zitadel/pkg/grpc/system"
 	"github.com/zitadel/zitadel/pkg/grpc/user/v2"
