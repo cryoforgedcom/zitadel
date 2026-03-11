@@ -632,6 +632,10 @@ func NewAppProjectIDSearchQuery(id string) (SearchQuery, error) {
 	return NewTextQuery(AppColumnProjectID, id, TextEquals)
 }
 
+func NewAppResourceOwnerSearchQuery(resourceOwner string) (SearchQuery, error) {
+	return NewTextQuery(AppColumnResourceOwner, resourceOwner, TextEquals)
+}
+
 func prepareAppQuery(activeOnly bool) (sq.SelectBuilder, func(*sql.Row) (*App, error)) {
 	query := sq.Select(
 		AppColumnID.identifier(),

@@ -14,7 +14,7 @@ import (
 	mgmt_pb "github.com/zitadel/zitadel/pkg/grpc/management"
 )
 
-func ListAppsRequestToModel(req *mgmt_pb.ListAppsRequest) (*query.AppSearchQueries, error) {
+func ListAppsRequestToModel(ctx context.Context, req *mgmt_pb.ListAppsRequest) (*query.AppSearchQueries, error) {
 	offset, limit, asc := object.ListQueryToModel(req.Query)
 	queries, err := app_grpc.AppQueriesToModel(req.Queries)
 	if err != nil {
@@ -24,7 +24,11 @@ func ListAppsRequestToModel(req *mgmt_pb.ListAppsRequest) (*query.AppSearchQueri
 	if err != nil {
 		return nil, err
 	}
-	queries = append(queries, projectQuery)
+	resourceOwner, err := query.NewAppResourceOwnerSearchQuery(authz.GetCtxData(ctx).OrgID)
+	if err != nil {
+		return nil, err
+	}
+	queries = append(queries, projectQuery, resourceOwner)
 	return &query.AppSearchQueries{
 		SearchRequest: query.SearchRequest{
 			Offset: offset,
