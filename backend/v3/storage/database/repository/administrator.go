@@ -7,6 +7,7 @@ import (
 
 	"github.com/zitadel/zitadel/backend/v3/domain"
 	"github.com/zitadel/zitadel/backend/v3/storage/database"
+	internaldb "github.com/zitadel/zitadel/internal/database"
 )
 
 var _ domain.AdministratorRepository = (*administrator)(nil)
@@ -49,7 +50,7 @@ func (a administrator) Get(ctx context.Context, client database.QueryExecutor, o
 	if err != nil {
 		return nil, err
 	}
-	return getOne[domain.Administrator](ctx, client, builder)
+	return scanAdministrator(ctx, client, builder)
 }
 
 func (a administrator) List(ctx context.Context, client database.QueryExecutor, opts ...database.QueryOption) ([]*domain.Administrator, error) {
@@ -57,7 +58,7 @@ func (a administrator) List(ctx context.Context, client database.QueryExecutor, 
 	if err != nil {
 		return nil, err
 	}
-	return getMany[domain.Administrator](ctx, client, builder)
+	return scanAdministrators(ctx, client, builder)
 }
 
 func (a administrator) prepareQuery(opts []database.QueryOption) (*database.StatementBuilder, error) {
@@ -308,6 +309,47 @@ func (a administrator) UpdatedAtColumn() database.Column {
 
 func (a administrator) clearUpdatedAt() database.Change {
 	return database.NewChange(a.UpdatedAtColumn(), database.NullInstruction)
+}
+
+type rawAdministrator struct {
+	domain.Administrator
+	Roles internaldb.TextArray[string] `db:"roles"`
+}
+
+func (a *rawAdministrator) toDomain() *domain.Administrator {
+	a.Administrator.Roles = []string(a.Roles)
+	return &a.Administrator
+}
+
+func scanAdministrator(ctx context.Context, client database.QueryExecutor, builder *database.StatementBuilder) (*domain.Administrator, error) {
+	rows, err := client.Query(ctx, builder.String(), builder.Args()...)
+	if err != nil {
+		return nil, err
+	}
+
+	var administrator rawAdministrator
+	if err = rows.(database.CollectableRows).CollectExactlyOneRow(&administrator); err != nil {
+		return nil, err
+	}
+	return administrator.toDomain(), nil
+}
+
+func scanAdministrators(ctx context.Context, client database.QueryExecutor, builder *database.StatementBuilder) ([]*domain.Administrator, error) {
+	rows, err := client.Query(ctx, builder.String(), builder.Args()...)
+	if err != nil {
+		return nil, err
+	}
+
+	var administrators []rawAdministrator
+	if err = rows.(database.CollectableRows).Collect(&administrators); err != nil {
+		return nil, err
+	}
+
+	result := make([]*domain.Administrator, len(administrators))
+	for i := range administrators {
+		result[i] = administrators[i].toDomain()
+	}
+	return result, nil
 }
 
 func uniqueStrings(values []string) []string {
