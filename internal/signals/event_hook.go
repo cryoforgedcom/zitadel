@@ -1,0 +1,83 @@
+package signals
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"github.com/zitadel/zitadel/internal/eventstore"
+	"github.com/zitadel/zitadel/internal/telemetry/tracing"
+)
+
+// NewEventSignalHook returns a hook function that converts every pushed
+// event into a Signal on the "events" stream. The conversion runs in a
+// background goroutine so the eventstore push path is never delayed.
+// Events are emitted fire-and-forget through the given Emitter.
+func NewEventSignalHook(emitter *Emitter) func(ctx context.Context, events []eventstore.Event) {
+	return func(ctx context.Context, events []eventstore.Event) {
+		traceID := tracing.TraceIDFromCtx(ctx)
+		spanID := spanIDFromCtx(ctx)
+
+		// Snapshot event data before spawning goroutine — Event
+		// interface values may not be safe to read after Push returns.
+		type snap struct {
+			instanceID string
+			aggID      string
+			aggType    string
+			creator    string
+			eventType  string
+			ts         time.Time
+			payload    string
+		}
+		snaps := make([]snap, len(events))
+		for i, e := range events {
+			agg := e.Aggregate()
+			ts := e.CreatedAt()
+			if ts.IsZero() {
+				ts = time.Now().UTC()
+			}
+			var payload string
+			if b := e.DataAsBytes(); len(b) > 0 {
+				payload = string(b)
+			}
+			snaps[i] = snap{
+				instanceID: agg.InstanceID,
+				aggID:      agg.ID,
+				aggType:    string(agg.Type),
+				creator:    e.Creator(),
+				eventType:  string(e.Type()),
+				ts:         ts,
+				payload:    payload,
+			}
+		}
+
+		go func() {
+			for _, s := range snaps {
+				emitter.Emit(Signal{
+					InstanceID: s.instanceID,
+					UserID:     s.aggID,
+					CallerID:   s.creator,
+					SessionID:  s.aggID,
+					Operation:  s.eventType,
+					Stream:     StreamEvents,
+					Resource:   s.aggType,
+					Outcome:    outcomeFromEventType(s.eventType),
+					Timestamp:  s.ts,
+					Payload:    s.payload,
+					TraceID:    traceID,
+					SpanID:     spanID,
+				})
+			}
+		}()
+	}
+}
+
+// outcomeFromEventType derives the outcome from an event type name.
+// Events ending in ".failed" are classified as failures; all others
+// are treated as successes.
+func outcomeFromEventType(eventType string) Outcome {
+	if strings.HasSuffix(eventType, ".failed") {
+		return OutcomeFailure
+	}
+	return OutcomeSuccess
+}

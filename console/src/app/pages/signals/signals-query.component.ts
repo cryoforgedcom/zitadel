@@ -1,0 +1,770 @@
+import { CommonModule } from '@angular/common';
+import { Component, inject, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { TranslateModule } from '@ngx-translate/core';
+import { GrpcService } from 'src/app/services/grpc.service';
+import { ToastService } from 'src/app/services/toast.service';
+
+import type { MessageInitShape } from '@bufbuild/protobuf';
+import type { AggregationBucket } from '@zitadel/proto/zitadel/signal/v2/signal_pb.js';
+import { SignalFiltersSchema } from '@zitadel/proto/zitadel/signal/v2/signal_pb.js';
+
+interface TimeRange {
+  label: string;
+  value: string;
+  bucket: string; // default resolution for this range
+}
+
+interface Resolution {
+  label: string;
+  value: string;
+  minutes: number;
+}
+
+interface BreakdownRow {
+  key: string;
+  count: number;
+  pct: number;
+}
+
+interface FilterChip {
+  key: string;
+  label: string;
+  value: string;
+}
+
+interface ChartSeries {
+  key: string;
+  color: string;
+  path: string;
+  fillPath: string;
+  bars: { x: number; y: number; w: number; h: number; idx: number }[];
+}
+
+@Component({
+  selector: 'cnsl-signals-query',
+  standalone: true,
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    TranslateModule,
+    MatButtonModule,
+    MatIconModule,
+    MatMenuModule,
+    MatProgressSpinnerModule,
+    MatTooltipModule,
+  ],
+  templateUrl: './signals-query.component.html',
+  styleUrls: ['./signals.component.scss'],
+})
+export class SignalsQueryComponent implements OnInit {
+  private readonly grpc = inject(GrpcService);
+  private readonly fb = inject(FormBuilder);
+  private readonly toast = inject(ToastService);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+
+  // X-axis timeline labels
+  xAxisLabels: { text: string; pct: number }[] = [];
+  // Y-axis tick values
+  yAxisTicks: number[] = [];
+
+  // Chart
+  chartBuckets: AggregationBucket[] = [];
+  chartLoading = false;
+  chartPath = '';
+  chartMaxCount = 0;
+  chartWidth = 960;
+  chartHeight = 200;
+  chartType: 'line' | 'bar' = 'line';
+  chartBars: { x: number; y: number; w: number; h: number; idx: number }[] = [];
+
+  // Multi-series chart
+  chartSeries: ChartSeries[] = [];
+  readonly seriesColors = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4'];
+
+  // Resolution options — each has minutes equivalent for filtering
+  readonly resolutions: Resolution[] = [
+    { label: '1 min', value: '1 minute', minutes: 1 },
+    { label: '5 min', value: '5 minutes', minutes: 5 },
+    { label: '15 min', value: '15 minutes', minutes: 15 },
+    { label: '30 min', value: '30 minutes', minutes: 30 },
+    { label: '1 hour', value: '1 hour', minutes: 60 },
+    { label: '6 hours', value: '6 hours', minutes: 360 },
+    { label: '12 hours', value: '12 hours', minutes: 720 },
+    { label: '1 day', value: '1 day', minutes: 1440 },
+  ];
+  selectedResolution: Resolution | null = null; // null = auto (from time range)
+
+  // Map time range values to total minutes
+  private readonly timeRangeMinutes: Record<string, number> = {
+    '1 hour': 60, '6 hours': 360, '24 hours': 1440,
+    '7 days': 10080, '30 days': 43200,
+  };
+
+  get availableResolutions(): Resolution[] {
+    const rangeMinutes = this.timeRangeMinutes[this.selectedTimeRange.value] ?? 1440;
+    // Only show resolutions where the range has at least 3 buckets
+    return this.resolutions.filter(r => rangeMinutes / r.minutes >= 3);
+  }
+
+  // Summary
+  streamCounts: AggregationBucket[] = [];
+  outcomeCounts: AggregationBucket[] = [];
+  streams: string[] = [];
+
+  // Data source & metric selectors
+  selectedSource = '';
+  selectedMetric = 'count';
+
+  private readonly floatMetrics = new Set(['avg', 'sum', 'p50', 'p95', 'p99']);
+
+  get isFloatMetric(): boolean {
+    return this.floatMetrics.has(this.selectedMetric);
+  }
+
+  /** Extract the numeric value from a bucket, using `value` for float metrics. */
+  bv(b: AggregationBucket): number {
+    return this.isFloatMetric ? Number(b.value ?? b.count) : Number(b.count);
+  }
+
+  readonly availableSources = [
+    { key: 'requests', label: 'Requests' },
+    { key: 'events', label: 'Events' },
+  ];
+
+  readonly metrics = [
+    { key: 'count', label: 'Count' },
+    { key: 'distinct_count', label: 'Unique Users' },
+    { key: 'avg', label: 'Avg Duration (ms)' },
+    { key: 'sum', label: 'Total Duration (ms)' },
+    { key: 'p50', label: 'p50 Latency (ms)' },
+    { key: 'p95', label: 'p95 Latency (ms)' },
+    { key: 'p99', label: 'p99 Latency (ms)' },
+  ];
+
+  // Group-by + breakdown
+  activeGroupBys: string[] = ['operation'];
+  dimensionSearch = '';
+  breakdownSearch = '';
+  breakdownPage = 0;
+  primaryBreakdown: BreakdownRow[] = [];
+  dimensionCounts: Record<string, number> = {};
+
+  readonly dimensions = [
+    { key: 'operation', label: 'Operation' },
+    { key: 'resource', label: 'Resource' },
+    { key: 'stream', label: 'Stream' },
+    { key: 'outcome', label: 'Outcome' },
+    { key: 'ip', label: 'IP Address' },
+    { key: 'country', label: 'Country' },
+    { key: 'user_id', label: 'User ID' },
+    { key: 'org_id', label: 'Organization' },
+    { key: 'project_id', label: 'Project' },
+    { key: 'client_id', label: 'Client' },
+    { key: 'user_agent', label: 'User Agent' },
+    { key: 'referer', label: 'Referer' },
+  ];
+
+  // Filters
+  filterForm: FormGroup = this.fb.group({
+    stream: [''],
+    outcome: [''],
+    operation: [''],
+    ip: [''],
+    country: [''],
+    user_id: [''],
+    org_id: [''],
+    project_id: [''],
+    client_id: [''],
+  });
+
+  pendingFilterKey = '';
+  pendingFilterLabel = '';
+  filterSuggestions: { key: string; count: number }[] = [];
+  filterSuggestionsLoading = false;
+  filterInputValue = '';
+
+  private readonly suggestableFields = new Set([
+    'operation', 'ip', 'country', 'user_id', 'org_id', 'project_id', 'client_id',
+    'outcome', 'stream', 'resource',
+  ]);
+
+  timeRanges: TimeRange[] = [
+    { label: 'Last 1h', value: '1 hour', bucket: '1 minute' },
+    { label: 'Last 6h', value: '6 hours', bucket: '5 minutes' },
+    { label: 'Last 24h', value: '24 hours', bucket: '30 minutes' },
+    { label: 'Last 7d', value: '7 days', bucket: '3 hours' },
+    { label: 'Last 30d', value: '30 days', bucket: '12 hours' },
+  ];
+  selectedTimeRange: TimeRange = this.timeRanges[2];
+
+  ngOnInit(): void {
+    this.restoreFromUrl();
+    this.refresh();
+  }
+
+  refresh(): void {
+    this.syncUrl();
+    this.loadChart();
+    this.loadDimensions();
+    this.loadBreakdowns();
+  }
+
+  // --- Selectors ---
+
+  get selectedSourceLabel(): string {
+    if (!this.selectedSource) return 'All Signals';
+    return this.availableSources.find(s => s.key === this.selectedSource)?.label ?? this.selectedSource;
+  }
+
+  get selectedMetricLabel(): string {
+    return this.metrics.find(m => m.key === this.selectedMetric)?.label ?? this.selectedMetric;
+  }
+
+  get selectedGroupBy(): string {
+    return this.activeGroupBys[0] || 'operation';
+  }
+
+  get selectedGroupLabel(): string {
+    return this.dimensionLabel(this.selectedGroupBy);
+  }
+
+  selectSource(key: string): void {
+    this.selectedSource = key;
+    this.filterForm.patchValue({ stream: key });
+    this.refresh();
+  }
+
+  selectMetric(key: string): void {
+    this.selectedMetric = key;
+    this.refresh();
+  }
+
+  selectTimeRange(range: TimeRange): void {
+    this.selectedTimeRange = range;
+    this.selectedResolution = null; // reset to auto
+    this.refresh();
+  }
+
+  get activeResolution(): Resolution {
+    if (this.selectedResolution) return this.selectedResolution;
+    return this.resolutions.find(r => r.value === this.selectedTimeRange.bucket) ?? { label: this.selectedTimeRange.bucket, value: this.selectedTimeRange.bucket, minutes: 0 };
+  }
+
+  get activeResolutionLabel(): string {
+    return this.activeResolution.label;
+  }
+
+  selectResolution(res: Resolution): void {
+    this.selectedResolution = res;
+    this.loadChart();
+  }
+
+  // --- Group-by ---
+
+  dimensionLabel(key: string): string {
+    return this.dimensions.find(d => d.key === key)?.label ?? key;
+  }
+
+  filteredDimensions() {
+    const search = this.dimensionSearch.toLowerCase();
+    return this.dimensions
+      .filter(d => !this.activeGroupBys.includes(d.key))
+      .filter(d => !search || d.label.toLowerCase().includes(search) || d.key.includes(search));
+  }
+
+  addGroupBy(key: string): void {
+    if (!this.activeGroupBys.includes(key)) {
+      this.activeGroupBys = [key];
+      this.breakdownPage = 0;
+      this.loadBreakdowns();
+      this.loadChart();
+    }
+  }
+
+  removeGroupBy(key: string): void {
+    this.activeGroupBys = this.activeGroupBys.filter(k => k !== key);
+    this.primaryBreakdown = [];
+    this.loadChart();
+  }
+
+  // --- Filters ---
+
+  activeFilterChips(): FilterChip[] {
+    const chips: FilterChip[] = [];
+    const vals = this.filterForm.value;
+    const filterFields: { key: string; label: string }[] = [
+      { key: 'outcome', label: 'Outcome' },
+      { key: 'operation', label: 'Operation' },
+      { key: 'ip', label: 'IP' },
+      { key: 'country', label: 'Country' },
+      { key: 'user_id', label: 'User' },
+      { key: 'org_id', label: 'Org' },
+      { key: 'project_id', label: 'Project' },
+      { key: 'client_id', label: 'Client' },
+    ];
+    for (const f of filterFields) {
+      if (vals[f.key]) {
+        chips.push({ key: f.key, label: f.label, value: vals[f.key] });
+      }
+    }
+    return chips;
+  }
+
+  openFilterInput(key: string): void {
+    this.pendingFilterKey = key;
+    this.pendingFilterLabel = this.dimensions.find(d => d.key === key)?.label ?? key;
+    this.filterSuggestions = [];
+    this.filterInputValue = '';
+    if (this.suggestableFields.has(key)) {
+      this.loadFilterSuggestions(key);
+    }
+  }
+
+  applyPendingFilter(value: string): void {
+    if (value && this.pendingFilterKey) {
+      this.filterForm.patchValue({ [this.pendingFilterKey]: value.trim() });
+      this.pendingFilterKey = '';
+      this.pendingFilterLabel = '';
+      this.filterSuggestions = [];
+      this.filterInputValue = '';
+      this.refresh();
+    }
+  }
+
+  cancelPendingFilter(): void {
+    this.pendingFilterKey = '';
+    this.pendingFilterLabel = '';
+    this.filterSuggestions = [];
+    this.filterInputValue = '';
+  }
+
+  loadFilterSuggestions(field: string): void {
+    if (!this.grpc.signal) return;
+    this.filterSuggestionsLoading = true;
+    this.grpc.signal
+      .aggregateSignals({
+        filters: this.buildFilters(field),
+        groupBy: field,
+        metric: 'count',
+        timeBucket: '',
+      })
+      .then(
+        (resp) => {
+          this.filterSuggestions = (resp.buckets ?? [])
+            .filter(b => b.key)
+            .map(b => ({ key: b.key, count: Number(b.count) }))
+            .slice(0, 50);
+          this.filterSuggestionsLoading = false;
+        },
+        () => {
+          this.filterSuggestionsLoading = false;
+        },
+      );
+  }
+
+  filteredSuggestions(): { key: string; count: number }[] {
+    if (!this.filterInputValue) return this.filterSuggestions;
+    const search = this.filterInputValue.toLowerCase();
+    return this.filterSuggestions.filter(s => s.key.toLowerCase().includes(search));
+  }
+
+  selectFilterSuggestion(value: string): void {
+    if (this.pendingFilterKey) {
+      this.filterForm.patchValue({ [this.pendingFilterKey]: value });
+      this.pendingFilterKey = '';
+      this.pendingFilterLabel = '';
+      this.filterSuggestions = [];
+      this.filterInputValue = '';
+      this.refresh();
+    }
+  }
+
+  clearFilter(key: string): void {
+    this.filterForm.patchValue({ [key]: '' });
+    this.refresh();
+  }
+
+  // --- Breakdown search & pagination ---
+
+  filteredBreakdown(): BreakdownRow[] {
+    let rows = this.primaryBreakdown;
+    if (this.breakdownSearch) {
+      const s = this.breakdownSearch.toLowerCase();
+      rows = rows.filter(r => r.key.toLowerCase().includes(s));
+    }
+    const pageSize = 10;
+    const start = this.breakdownPage * pageSize;
+    return rows.slice(start, start + pageSize);
+  }
+
+  get breakdownTotalPages(): number {
+    return Math.ceil(this.primaryBreakdown.length / 10);
+  }
+
+  breakdownPrev(): void {
+    if (this.breakdownPage > 0) this.breakdownPage--;
+  }
+
+  breakdownNext(): void {
+    if (this.breakdownPage < this.breakdownTotalPages - 1) this.breakdownPage++;
+  }
+
+  // --- Navigation ---
+
+  drillDownToLogs(field: string, value: string): void {
+    this.router.navigate(['/signals/logs'], { queryParams: { [field]: value } });
+  }
+
+  trackByKey(_i: number, row: BreakdownRow): string {
+    return row.key;
+  }
+
+  // --- Data loading ---
+
+  private restoreFromUrl(): void {
+    const p = this.route.snapshot.queryParams;
+    // Source / metric
+    if (p['source'] && this.availableSources.some(s => s.key === p['source'])) {
+      this.selectedSource = p['source'];
+    }
+    if (p['metric'] && this.metrics.some(m => m.key === p['metric'])) {
+      this.selectedMetric = p['metric'];
+    }
+    // Group by
+    if (p['groupBy'] && this.dimensions.some(d => d.key === p['groupBy'])) {
+      this.activeGroupBys = [p['groupBy']];
+    }
+    // Time range
+    if (p['time']) {
+      const tr = this.timeRanges.find(r => r.value === p['time']);
+      if (tr) this.selectedTimeRange = tr;
+    }
+    // Filters
+    const patchable: Record<string, string> = {};
+    for (const key of Object.keys(this.filterForm.controls)) {
+      if (p[key]) patchable[key] = p[key];
+    }
+    if (this.selectedSource) patchable['stream'] = this.selectedSource;
+    if (Object.keys(patchable).length) {
+      this.filterForm.patchValue(patchable);
+    }
+  }
+
+  private syncUrl(): void {
+    const params: Record<string, string> = {};
+    if (this.selectedSource) params['source'] = this.selectedSource;
+    if (this.selectedMetric !== 'count') params['metric'] = this.selectedMetric;
+    if (this.activeGroupBys.length && this.activeGroupBys[0] !== 'operation') params['groupBy'] = this.activeGroupBys[0];
+    if (this.selectedTimeRange !== this.timeRanges[2]) params['time'] = this.selectedTimeRange.value;
+    const f = this.filterForm.value;
+    for (const [key, val] of Object.entries(f)) {
+      if (val && key !== 'stream') params[key] = val as string;
+    }
+    this.router.navigate([], { queryParams: params, queryParamsHandling: 'replace', replaceUrl: true });
+  }
+
+  private buildFilters(excludeField?: string): MessageInitShape<typeof SignalFiltersSchema> {
+    const f = this.filterForm.value;
+    const filters: Record<string, string> = {};
+    if (f.stream && excludeField !== 'stream') filters['stream'] = f.stream;
+    if (f.outcome && excludeField !== 'outcome') filters['outcome'] = f.outcome;
+    if (f.operation && excludeField !== 'operation') filters['operation'] = f.operation;
+    if (f.ip && excludeField !== 'ip') filters['ip'] = f.ip;
+    if (f.country && excludeField !== 'country') filters['country'] = f.country;
+    if (f.user_id && excludeField !== 'user_id') filters['userId'] = f.user_id;
+    if (f.org_id && excludeField !== 'org_id') filters['orgId'] = f.org_id;
+    if (f.project_id && excludeField !== 'project_id') filters['projectId'] = f.project_id;
+    if (f.client_id && excludeField !== 'client_id') filters['clientId'] = f.client_id;
+    return filters;
+  }
+
+  loadChart(): void {
+    if (!this.grpc.signal) return;
+    this.chartLoading = true;
+    const secondaryGroupBy = this.activeGroupBys.length > 0 ? this.activeGroupBys[0] : '';
+    this.grpc.signal
+      .aggregateSignals({
+        filters: this.buildFilters(),
+        groupBy: 'time_bucket',
+        metric: this.selectedMetric,
+        timeBucket: this.activeResolution.value,
+        secondaryGroupBy,
+        limit: 5,
+      })
+      .then(
+        (resp) => {
+          this.chartBuckets = resp.buckets ?? [];
+          this.buildChartPath();
+          this.chartLoading = false;
+        },
+        (err) => {
+          this.toast.showError(err);
+          this.chartLoading = false;
+        },
+      );
+  }
+
+  loadDimensions(): void {
+    if (!this.grpc.signal) return;
+    this.grpc.signal
+      .aggregateSignals({ filters: this.buildFilters(), groupBy: 'stream', metric: 'count', timeBucket: '' })
+      .then((resp) => {
+        this.streamCounts = resp.buckets ?? [];
+        this.streams = this.streamCounts.map((b) => b.key).filter((k) => k);
+      });
+    this.grpc.signal
+      .aggregateSignals({ filters: this.buildFilters(), groupBy: 'outcome', metric: 'count', timeBucket: '' })
+      .then((resp) => {
+        this.outcomeCounts = resp.buckets ?? [];
+      });
+    // Load distinct value counts for each dimension
+    for (const dim of this.dimensions) {
+      this.grpc.signal
+        .aggregateSignals({ filters: this.buildFilters(), groupBy: dim.key, metric: 'count', timeBucket: '' })
+        .then((resp) => {
+          const buckets = (resp.buckets ?? []).filter(b => b.key);
+          this.dimensionCounts[dim.key] = buckets.length;
+        })
+        .catch(() => {});
+    }
+  }
+
+  loadBreakdowns(): void {
+    if (!this.grpc.signal || this.activeGroupBys.length === 0) {
+      this.primaryBreakdown = [];
+      return;
+    }
+    const groupBy = this.activeGroupBys[0];
+    this.grpc.signal
+      .aggregateSignals({ filters: this.buildFilters(), groupBy, metric: this.selectedMetric, timeBucket: '' })
+      .then((resp) => {
+        const buckets = resp.buckets ?? [];
+        const total = buckets.reduce((s, b) => s + this.bv(b), 0) || 1;
+        this.primaryBreakdown = buckets
+          .filter((b) => b.key)
+          .map((b) => ({ key: b.key, count: this.bv(b), pct: (this.bv(b) / total) * 100 }));
+        this.breakdownPage = 0;
+      });
+  }
+
+  buildChartPath(): void {
+    if (this.chartBuckets.length === 0) {
+      this.chartPath = '';
+      this.chartMaxCount = 0;
+      this.chartBars = [];
+      this.chartSeries = [];
+      this.xAxisLabels = [];
+      this.yAxisTicks = [];
+      return;
+    }
+
+    // Check if we have multi-series data (buckets with non-empty series field)
+    const hasSeries = this.chartBuckets.some(b => b.series);
+
+    if (hasSeries) {
+      this.buildMultiSeriesChart();
+    } else {
+      this.buildSingleSeriesChart();
+    }
+    this.buildXAxisLabels();
+    this.buildYAxisTicks();
+  }
+
+  private buildSingleSeriesChart(): void {
+    this.chartSeries = [];
+    this.chartMaxCount = Math.max(...this.chartBuckets.map((b) => this.bv(b)), 1);
+    const padding = 8;
+    const w = this.chartWidth - padding * 2;
+    const h = this.chartHeight - padding * 2;
+    const step = w / Math.max(this.chartBuckets.length - 1, 1);
+    const points = this.chartBuckets.map((b, i) => {
+      const x = padding + i * step;
+      const y = padding + h - (this.bv(b) / this.chartMaxCount) * h;
+      return `${x},${y}`;
+    });
+    this.chartPath = 'M' + points.join(' L');
+
+    const barGap = 1;
+    const barW = Math.max((w / this.chartBuckets.length) - barGap, 1);
+    this.chartBars = this.chartBuckets.map((b, i) => {
+      const val = this.bv(b);
+      const barH = (val / this.chartMaxCount) * h;
+      return {
+        x: padding + i * (barW + barGap),
+        y: padding + h - barH,
+        w: barW,
+        h: barH,
+        idx: i,
+      };
+    });
+  }
+
+  private buildMultiSeriesChart(): void {
+    this.chartPath = '';
+    this.chartBars = [];
+
+    // Group buckets by series key
+    const seriesMap = new Map<string, AggregationBucket[]>();
+    for (const b of this.chartBuckets) {
+      const key = b.series || '(other)';
+      if (!seriesMap.has(key)) seriesMap.set(key, []);
+      seriesMap.get(key)!.push(b);
+    }
+
+    // Collect all unique time keys — sort chronologically
+    const allKeys = [...new Set(this.chartBuckets.map(b => b.key))];
+    allKeys.sort((a, b) => {
+      const ta = new Date(a).getTime();
+      const tb = new Date(b).getTime();
+      if (!isNaN(ta) && !isNaN(tb)) return ta - tb;
+      return a < b ? -1 : a > b ? 1 : 0;
+    });
+
+    if (allKeys.length === 0) {
+      this.chartSeries = [];
+      return;
+    }
+
+    // Find global max across all series
+    this.chartMaxCount = Math.max(...this.chartBuckets.map(b => this.bv(b)), 1);
+
+    const padding = 8;
+    const w = this.chartWidth - padding * 2;
+    const h = this.chartHeight - padding * 2;
+    const seriesCount = seriesMap.size;
+
+    this.chartSeries = [];
+    let seriesIdx = 0;
+    for (const [key, buckets] of seriesMap) {
+      const color = this.seriesColors[seriesIdx % this.seriesColors.length];
+
+      // Map this series' buckets by time key for fast lookup
+      const byKey = new Map(buckets.map(b => [b.key, this.bv(b)]));
+
+      // Line path
+      const step = w / Math.max(allKeys.length - 1, 1);
+      const points = allKeys.map((tk, i) => {
+        const val = byKey.get(tk) ?? 0;
+        const x = padding + i * step;
+        const y = padding + h - (val / this.chartMaxCount) * h;
+        return `${x},${y}`;
+      });
+      const path = 'M' + points.join(' L');
+      const fillPath = path + ` L${padding + (allKeys.length - 1) * step},${padding + h} L${padding},${padding + h} Z`;
+
+      // Bar data — subdivide each time slot by series
+      const barGap = 1;
+      const slotW = Math.max((w / allKeys.length) - barGap, 1);
+      const subBarW = Math.max(slotW / seriesCount - 1, 1);
+      const bars = allKeys.map((tk, i) => {
+        const val = byKey.get(tk) ?? 0;
+        const barH = (val / this.chartMaxCount) * h;
+        return {
+          x: padding + i * (slotW + barGap) + seriesIdx * (subBarW + 1),
+          y: padding + h - barH,
+          w: subBarW,
+          h: barH,
+          idx: i,
+        };
+      });
+
+      this.chartSeries.push({ key, color, path, fillPath, bars });
+      seriesIdx++;
+    }
+  }
+
+  trackByBar(_i: number, bar: { idx: number }): number {
+    return bar.idx;
+  }
+
+  getChartFillPath(): string {
+    if (!this.chartPath || this.chartSeries.length > 0) return '';
+    const padding = 8;
+    const h = this.chartHeight - padding;
+    return this.chartPath + ` L${this.chartWidth - padding},${h} L${padding},${h} Z`;
+  }
+
+  get isMultiSeries(): boolean {
+    return this.chartSeries.length > 0;
+  }
+
+  get metricTotal(): number {
+    return this.streamCounts.reduce((s, b) => s + Number(b.count), 0);
+  }
+
+  toNumber(val: bigint | number | string): number {
+    return Number(val);
+  }
+
+  getDimensionCount(buckets: AggregationBucket[], key: string): number {
+    return Number(buckets.find((b) => b.key === key)?.count ?? 0);
+  }
+
+  /** Shorten a fully-qualified operation name like /zitadel.user.v2.UserService/ListUsers → ListUsers */
+  shortName(name: string): string {
+    if (!name) return '';
+    // gRPC style: /package.Service/Method
+    const slashParts = name.split('/');
+    if (slashParts.length >= 3) return slashParts[slashParts.length - 1];
+    // Dot-separated event type: user.human.password.check.failed → password.check.failed (last 3)
+    const dotParts = name.split('.');
+    if (dotParts.length > 3) return dotParts.slice(-3).join('.');
+    return name;
+  }
+
+  private buildXAxisLabels(): void {
+    const keys = this.isMultiSeries
+      ? [...new Set(this.chartBuckets.map(b => b.key))]
+      : this.chartBuckets.map(b => b.key);
+    if (keys.length < 2) {
+      this.xAxisLabels = [];
+      return;
+    }
+    // Parse as dates
+    const dates = keys.map(k => new Date(k)).filter(d => !isNaN(d.getTime()));
+    if (dates.length < 2) {
+      this.xAxisLabels = [];
+      return;
+    }
+    dates.sort((a, b) => a.getTime() - b.getTime());
+    const rangeMs = dates[dates.length - 1].getTime() - dates[0].getTime();
+    // Pick ~5-8 evenly spaced labels
+    const targetLabels = Math.min(dates.length, 7);
+    const step = Math.max(Math.floor(dates.length / targetLabels), 1);
+    const showDate = rangeMs > 24 * 60 * 60 * 1000;
+    this.xAxisLabels = [];
+    for (let i = 0; i < dates.length; i += step) {
+      const d = dates[i];
+      const pct = ((d.getTime() - dates[0].getTime()) / rangeMs) * 100;
+      const text = showDate
+        ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+        : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      this.xAxisLabels.push({ text, pct });
+    }
+  }
+
+  private buildYAxisTicks(): void {
+    if (this.chartMaxCount <= 0) {
+      this.yAxisTicks = [];
+      return;
+    }
+    // Nice round ticks
+    const max = this.chartMaxCount;
+    const tickCount = 4;
+    const rawStep = max / tickCount;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const niceStep = Math.ceil(rawStep / magnitude) * magnitude;
+    this.yAxisTicks = [];
+    for (let v = niceStep * tickCount; v >= 0; v -= niceStep) {
+      this.yAxisTicks.push(v);
+    }
+  }
+}

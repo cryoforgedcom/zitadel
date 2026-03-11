@@ -1,0 +1,326 @@
+import { animate, state, style, transition, trigger } from '@angular/animations';
+import { CommonModule } from '@angular/common';
+import { Component, inject, OnInit } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { TranslateModule } from '@ngx-translate/core';
+import { GrpcService } from 'src/app/services/grpc.service';
+import { ToastService } from 'src/app/services/toast.service';
+
+import type { Signal, AggregationBucket } from '@zitadel/proto/zitadel/signal/v2/signal_pb.js';
+
+interface TimeRange {
+  label: string;
+  value: string;
+  bucket: string;
+}
+
+interface TimelineEntry {
+  signal: Signal;
+  timeLabel: string;
+  isFirstInGroup: boolean;
+  groupLabel: string;
+}
+
+@Component({
+  selector: 'cnsl-signals-activity',
+  standalone: true,
+  imports: [
+    CommonModule,
+    TranslateModule,
+    MatButtonModule,
+    MatIconModule,
+    MatMenuModule,
+    MatProgressSpinnerModule,
+    MatTooltipModule,
+  ],
+  templateUrl: './signals-activity.component.html',
+  styleUrls: ['./signals.component.scss'],
+  animations: [
+    trigger('detailExpand', [
+      state('void', style({ height: '0', opacity: '0', overflow: 'hidden' })),
+      state('*', style({ height: '*', opacity: '1' })),
+      transition('void <=> *', animate('200ms ease-in-out')),
+    ]),
+  ],
+})
+export class SignalsActivityComponent implements OnInit {
+  private readonly grpc = inject(GrpcService);
+  private readonly toast = inject(ToastService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+
+  loading = false;
+  signals: Signal[] = [];
+  totalCount = 0;
+  offset = 0;
+  limit = 100;
+
+  // The entity being traced
+  entityType: 'user_id' | 'client_id' | 'org_id' | 'trace_id' = 'user_id';
+  entityValue = '';
+  searchInput = '';
+
+  // Stats
+  operationCounts: AggregationBucket[] = [];
+  outcomeCounts: AggregationBucket[] = [];
+
+  // Timeline groups
+  timeline: TimelineEntry[] = [];
+  expandedSignals = new Set<Signal>();
+
+  // Entity type display
+  readonly entityTypes: { key: string; label: string; icon: string }[] = [
+    { key: 'user_id', label: 'User', icon: 'person' },
+    { key: 'client_id', label: 'Client', icon: 'devices' },
+    { key: 'org_id', label: 'Organization', icon: 'business' },
+    { key: 'trace_id', label: 'Trace', icon: 'link' },
+  ];
+
+  timeRanges: TimeRange[] = [
+    { label: 'Last 1h', value: '1 hour', bucket: '1 minute' },
+    { label: 'Last 6h', value: '6 hours', bucket: '5 minutes' },
+    { label: 'Last 24h', value: '24 hours', bucket: '30 minutes' },
+    { label: 'Last 7d', value: '7 days', bucket: '3 hours' },
+    { label: 'Last 30d', value: '30 days', bucket: '12 hours' },
+  ];
+  selectedTimeRange: TimeRange = this.timeRanges[2];
+
+  ngOnInit(): void {
+    const params = this.route.snapshot.queryParams;
+    // Detect entity type from query params
+    for (const et of this.entityTypes) {
+      if (params[et.key]) {
+        this.entityType = et.key as any;
+        this.entityValue = params[et.key];
+        this.searchInput = params[et.key];
+        break;
+      }
+    }
+    // Restore time range
+    if (params['time']) {
+      const tr = this.timeRanges.find(r => r.value === params['time']);
+      if (tr) this.selectedTimeRange = tr;
+    }
+    if (this.entityValue) {
+      this.refresh();
+    }
+  }
+
+  get entityLabel(): string {
+    return this.entityTypes.find(e => e.key === this.entityType)?.label ?? this.entityType;
+  }
+
+  get entityIcon(): string {
+    return this.entityTypes.find(e => e.key === this.entityType)?.icon ?? 'person';
+  }
+
+  selectEntityType(key: string): void {
+    this.entityType = key as any;
+  }
+
+  searchEntity(): void {
+    const val = this.searchInput.trim();
+    if (!val) return;
+    this.entityValue = val;
+    this.offset = 0;
+    this.expandedSignals.clear();
+    this.syncUrl();
+    this.refresh();
+  }
+
+  selectTimeRange(range: TimeRange): void {
+    this.selectedTimeRange = range;
+    this.offset = 0;
+    this.syncUrl();
+    this.refresh();
+  }
+
+  private syncUrl(): void {
+    const params: Record<string, string> = {};
+    if (this.entityValue) params[this.entityType] = this.entityValue;
+    if (this.selectedTimeRange !== this.timeRanges[2]) params['time'] = this.selectedTimeRange.value;
+    this.router.navigate([], { queryParams: params, queryParamsHandling: 'replace', replaceUrl: true });
+  }
+
+  refresh(): void {
+    this.loadTimeline();
+    this.loadStats();
+  }
+
+  loadTimeline(): void {
+    if (!this.grpc.signal || !this.entityValue) return;
+    this.loading = true;
+
+    const filterKey = this.entityType === 'user_id' ? 'userId'
+      : this.entityType === 'client_id' ? 'clientId'
+      : this.entityType === 'org_id' ? 'orgId'
+      : 'traceId';
+
+    this.grpc.signal
+      .listSignals({
+        query: { offset: BigInt(this.offset), limit: this.limit, asc: false },
+        filters: { [filterKey]: this.entityValue },
+      })
+      .then(
+        (resp) => {
+          this.signals = resp.signals ?? [];
+          this.totalCount = Number(resp.details?.totalResult ?? 0);
+          this.buildTimeline();
+          this.loading = false;
+        },
+        (err) => {
+          this.toast.showError(err);
+          this.loading = false;
+        },
+      );
+  }
+
+  loadStats(): void {
+    if (!this.grpc.signal || !this.entityValue) return;
+
+    const filterKey = this.entityType === 'user_id' ? 'userId'
+      : this.entityType === 'client_id' ? 'clientId'
+      : this.entityType === 'org_id' ? 'orgId'
+      : 'traceId';
+
+    const filters = { [filterKey]: this.entityValue };
+
+    this.grpc.signal
+      .aggregateSignals({ filters, groupBy: 'operation', metric: 'count', timeBucket: '' })
+      .then((resp) => {
+        this.operationCounts = resp.buckets ?? [];
+      });
+
+    this.grpc.signal
+      .aggregateSignals({ filters, groupBy: 'outcome', metric: 'count', timeBucket: '' })
+      .then((resp) => {
+        this.outcomeCounts = resp.buckets ?? [];
+      });
+  }
+
+  private buildTimeline(): void {
+    this.timeline = [];
+    let lastGroup = '';
+
+    for (const s of this.signals) {
+      const ts = this.toMillis(s.createdAt);
+      const d = ts ? new Date(ts) : null;
+      const timeLabel = d ? this.formatTime(d) : '—';
+      const groupLabel = d ? this.formatDateGroup(d) : '—';
+      const isFirstInGroup = groupLabel !== lastGroup;
+      lastGroup = groupLabel;
+
+      this.timeline.push({ signal: s, timeLabel, isFirstInGroup, groupLabel });
+    }
+  }
+
+  private formatTime(d: Date): string {
+    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  private formatDateGroup(d: Date): string {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.floor((today.getTime() - target.getTime()) / 86400000);
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+
+  toggleEntry(signal: Signal): void {
+    if (this.expandedSignals.has(signal)) {
+      this.expandedSignals.delete(signal);
+    } else {
+      this.expandedSignals.add(signal);
+    }
+  }
+
+  copyToClipboard(value: string, event: MouseEvent): void {
+    event.stopPropagation();
+    if (!value || value === '—') return;
+    navigator.clipboard.writeText(value).then(() => {
+      this.toast.showInfo('Copied to clipboard');
+    });
+  }
+
+  openInLogs(): void {
+    this.router.navigate(['/signals/logs'], { queryParams: { [this.entityType]: this.entityValue } });
+  }
+
+  viewSignalInLogs(signal: Signal): void {
+    const params: Record<string, string> = {};
+    if (signal.traceId) params['trace_id'] = signal.traceId;
+    else if (signal.operation) params['operation'] = signal.operation;
+    this.router.navigate(['/signals/logs'], { queryParams: params });
+  }
+
+  openInExplorer(): void {
+    this.router.navigate(['/signals/explore'], { queryParams: { [this.entityType]: this.entityValue } });
+  }
+
+  toMillis(ts: any): number | null {
+    if (!ts?.seconds) return null;
+    return Number(ts.seconds) * 1000;
+  }
+
+  get totalSignals(): number {
+    return this.totalCount;
+  }
+
+  get successCount(): number {
+    return Number(this.outcomeCounts.find(b => b.key === 'success')?.count ?? 0);
+  }
+
+  get failureCount(): number {
+    return Number(this.outcomeCounts.find(b => b.key === 'failure')?.count ?? 0);
+  }
+
+  get topOperations(): { key: string; count: number }[] {
+    return this.operationCounts
+      .filter(b => b.key)
+      .slice(0, 5)
+      .map(b => ({ key: b.key, count: Number(b.count) }));
+  }
+
+  nextPage(): void {
+    this.offset += this.limit;
+    this.loadTimeline();
+  }
+
+  prevPage(): void {
+    this.offset = Math.max(0, this.offset - this.limit);
+    this.loadTimeline();
+  }
+
+  get hasNextPage(): boolean {
+    return this.offset + this.limit < this.totalCount;
+  }
+
+  get hasPrevPage(): boolean {
+    return this.offset > 0;
+  }
+
+  get currentPage(): number {
+    return Math.floor(this.offset / this.limit) + 1;
+  }
+
+  get totalPages(): number {
+    return Math.ceil(this.totalCount / this.limit) || 1;
+  }
+
+  shortName(name: string): string {
+    if (!name) return '';
+    const slashParts = name.split('/');
+    if (slashParts.length >= 3) return slashParts[slashParts.length - 1];
+    const dotParts = name.split('.');
+    if (dotParts.length > 3) return dotParts.slice(-3).join('.');
+    return name;
+  }
+}

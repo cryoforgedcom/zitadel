@@ -1,0 +1,148 @@
+<div class="signals-page">
+  <!-- Time range header -->
+  <div class="query-bar">
+    <div class="query-left">
+      <span class="page-title">Dashboard</span>
+    </div>
+    <div class="query-right">
+      <button class="time-btn" [matMenuTriggerFor]="timeMenu">
+        <mat-icon>schedule</mat-icon> {{ selectedTimeRange.label }}
+        <mat-icon>arrow_drop_down</mat-icon>
+      </button>
+      <mat-menu #timeMenu="matMenu">
+        <button mat-menu-item *ngFor="let r of timeRanges" (click)="selectTimeRange(r)">
+          {{ r.label }}
+        </button>
+      </mat-menu>
+    </div>
+  </div>
+
+  <!-- Stat cards -->
+  <div class="stat-row">
+    <div class="stat-card">
+      <span class="stat-value">{{ metricTotal | number }}</span>
+      <span class="stat-label">Total Signals</span>
+    </div>
+    <div class="stat-card" *ngFor="let s of streams">
+      <span class="stat-value">{{ getDimensionCount(streamCounts, s) | number }}</span>
+      <span class="stat-label">{{ s | titlecase }}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value stat-success">{{ successRate }}%</span>
+      <span class="stat-label">Success Rate</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value stat-failure">{{ getDimensionCount(outcomeCounts, 'failure') | number }}</span>
+      <span class="stat-label">Failures</span>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <div class="chart-total">
+        <span class="chart-total-value">{{ metricTotal | number }}</span>
+        <span class="chart-total-label">signals</span>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <mat-spinner *ngIf="chartLoading" diameter="20"></mat-spinner>
+      <svg
+        *ngIf="!chartLoading && chartBuckets.length > 0"
+        [attr.viewBox]="'0 0 ' + chartWidth + ' ' + chartHeight"
+        class="area-chart"
+        preserveAspectRatio="none"
+      >
+        <defs>
+          <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.15" />
+            <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
+          </linearGradient>
+        </defs>
+        <path [attr.d]="getChartFillPath()" fill="url(#areaGrad)" />
+        <path [attr.d]="chartPath" fill="none" stroke="var(--accent)" stroke-width="1.5" vector-effect="non-scaling-stroke" />
+      </svg>
+      <div *ngIf="!chartLoading && chartBuckets.length === 0" class="chart-empty">No data in range</div>
+    </div>
+    <div class="chart-y-axis" *ngIf="!chartLoading && chartBuckets.length > 0">
+      <span>{{ chartMaxCount | number }}</span>
+      <span>{{ chartMaxCount / 2 | number:'1.0-0' }}</span>
+      <span>0</span>
+    </div>
+  </div>
+
+  <!-- Overview panels -->
+  <div class="overview-grid">
+    <!-- Top Operations -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Top Operations</span>
+        <button class="panel-link" (click)="drillDown('operation', '')">View all →</button>
+      </div>
+      <div class="breakdown-table" *ngIf="topOperations.length > 0">
+        <div class="breakdown-row" *ngFor="let row of topOperations; trackBy: trackByKey" (click)="drillDown('operation', row.key)">
+          <span class="br-key mono" [matTooltip]="row.key">{{ shortName(row.key) }}</span>
+          <span class="br-count">{{ row.count | number }}</span>
+          <div class="br-bar-wrap">
+            <div class="br-bar" [style.width.%]="row.pct"></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-empty" *ngIf="topOperations.length === 0">No operations recorded</div>
+    </div>
+
+    <!-- Top Users -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Top Users</span>
+        <button class="panel-link" (click)="drillDown('user_id', '')">View all →</button>
+      </div>
+      <div class="breakdown-table" *ngIf="topUsers.length > 0">
+        <div class="breakdown-row" *ngFor="let row of topUsers; trackBy: trackByKey" (click)="viewUserActivity(row.key)">
+          <span class="br-key mono" [matTooltip]="row.key">{{ row.key }}</span>
+          <span class="br-count">{{ row.count | number }}</span>
+          <div class="br-bar-wrap">
+            <div class="br-bar" [style.width.%]="row.pct"></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-empty" *ngIf="topUsers.length === 0">No user activity recorded</div>
+    </div>
+
+    <!-- Top IPs -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Top IPs</span>
+        <button class="panel-link" (click)="drillDown('ip', '')">View all →</button>
+      </div>
+      <div class="breakdown-table" *ngIf="topIPs.length > 0">
+        <div class="breakdown-row" *ngFor="let row of topIPs; trackBy: trackByKey" (click)="drillDown('ip', row.key)">
+          <span class="br-key mono" [matTooltip]="row.key">{{ row.key }}</span>
+          <span class="br-count">{{ row.count | number }}</span>
+          <div class="br-bar-wrap">
+            <div class="br-bar" [style.width.%]="row.pct"></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-empty" *ngIf="topIPs.length === 0">No IP data recorded</div>
+    </div>
+
+    <!-- Top Countries -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Top Countries</span>
+        <button class="panel-link" (click)="drillDown('country', '')">View all →</button>
+      </div>
+      <div class="breakdown-table" *ngIf="topCountries.length > 0">
+        <div class="breakdown-row" *ngFor="let row of topCountries; trackBy: trackByKey" (click)="drillDown('country', row.key)">
+          <span class="br-key mono" [matTooltip]="row.key">{{ row.key }}</span>
+          <span class="br-count">{{ row.count | number }}</span>
+          <div class="br-bar-wrap">
+            <div class="br-bar" [style.width.%]="row.pct"></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-empty" *ngIf="topCountries.length === 0">No country data recorded</div>
+    </div>
+  </div>
+</div>
