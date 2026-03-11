@@ -86,7 +86,7 @@ service SignalService {
     };
     option (zitadel.protoc_gen_zitadel.v2.options) = {
       auth_option: {
-        permission: "authenticated"
+        permission: "iam.read"
       }
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
@@ -104,7 +104,7 @@ service SignalService {
     };
     option (zitadel.protoc_gen_zitadel.v2.options) = {
       auth_option: {
-        permission: "authenticated"
+        permission: "iam.read"
       }
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {

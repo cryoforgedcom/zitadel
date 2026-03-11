@@ -40,7 +40,13 @@ func (e *Emitter) Emit(signal Signal) {
 	select {
 	case e.ch <- signal:
 	default:
-		e.dropped.Add(1)
+		count := e.dropped.Add(1)
+		if count%1000 == 0 {
+			slog.Warn("identity_signals.channel_full",
+				slog.Int64("total_dropped", count),
+				slog.Int("channel_cap", cap(e.ch)),
+			)
+		}
 	}
 }
 

@@ -58,12 +58,7 @@ func (w *CompactionWorker) run(ctx context.Context) {
 		return
 	}
 
-	db := w.store.DB()
-	if db == nil {
-		return
-	}
-
-	compacted, err := runCompaction(ctx, db)
+	compacted, err := w.store.Compact(ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, "identity_signals.compaction_failed",
 			slog.String("error", err.Error()),
@@ -78,40 +73,7 @@ func (w *CompactionWorker) run(ctx context.Context) {
 	}
 }
 
-func runCompaction(ctx context.Context, db *sql.DB) (int, error) {
-	var fileCount int
-	err := db.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM ducklake_data_files('signals', 'signals')",
-	).Scan(&fileCount)
-	if err != nil {
-		slog.WarnContext(ctx, "identity_signals.compaction_skip",
-			slog.String("reason", "cannot query data files"),
-			slog.String("error", err.Error()),
-		)
-		return 0, nil
-	}
-
-	if fileCount < 10 {
-		return 0, nil
-	}
-
-	_, err = db.ExecContext(ctx, `
-		CREATE OR REPLACE TABLE signals.signals_compacted AS 
-		SELECT * FROM signals.signals
-	`)
-	if err != nil {
-		return 0, fmt.Errorf("create compacted table: %w", err)
-	}
-
-	_, err = db.ExecContext(ctx, "DROP TABLE IF EXISTS signals.signals")
-	if err != nil {
-		return 0, fmt.Errorf("drop original table: %w", err)
-	}
-
-	_, err = db.ExecContext(ctx, "ALTER TABLE signals.signals_compacted RENAME TO signals")
-	if err != nil {
-		return 0, fmt.Errorf("rename compacted table: %w", err)
-	}
-
-	return fileCount, nil
+func runCompaction(_ context.Context, _ *sql.DB) (int, error) {
+	// Deprecated: use DuckLakeStore.Compact() instead.
+	return 0, fmt.Errorf("use DuckLakeStore.Compact()")
 }

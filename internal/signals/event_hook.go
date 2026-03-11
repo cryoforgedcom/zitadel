@@ -53,14 +53,26 @@ func NewEventSignalHook(emitter *Emitter) func(ctx context.Context, events []eve
 
 		go func() {
 			for _, s := range snaps {
+				// Only set UserID/SessionID when the aggregate
+				// actually represents a user or session. For other
+				// aggregate types the ID is a resource identifier,
+				// not a user/session.
+				var userID, sessionID string
+				switch {
+				case strings.HasPrefix(s.aggType, "user"):
+					userID = s.aggID
+				case strings.HasPrefix(s.aggType, "session"):
+					sessionID = s.aggID
+				}
+
 				emitter.Emit(Signal{
 					InstanceID: s.instanceID,
-					UserID:     s.aggID,
+					UserID:     userID,
 					CallerID:   s.creator,
-					SessionID:  s.aggID,
+					SessionID:  sessionID,
 					Operation:  s.eventType,
 					Stream:     StreamEvents,
-					Resource:   s.aggType,
+					Resource:   s.aggType + "/" + s.aggID,
 					Outcome:    outcomeFromEventType(s.eventType),
 					Timestamp:  s.ts,
 					Payload:    s.payload,

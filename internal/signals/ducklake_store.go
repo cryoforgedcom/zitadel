@@ -195,8 +195,8 @@ func (s *DuckLakeStore) WriteBatch(ctx context.Context, signals []RecordedSignal
 	if len(signals) == 0 {
 		return nil
 	}
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.closed {
 		return fmt.Errorf("ducklake: store closed")
 	}
@@ -518,7 +518,55 @@ func (s *DuckLakeStore) PruneStream(ctx context.Context, instanceID string, stre
 	return result.RowsAffected()
 }
 
-// DB returns the underlying DuckDB connection for compaction/admin queries.
+// Compact merges small Parquet files into larger ones. It holds an
+// exclusive lock to prevent concurrent reads/writes during the table
+// swap. The operation runs inside a single DuckDB transaction so a
+// crash mid-compaction cannot lose data.
+func (s *DuckLakeStore) Compact(ctx context.Context) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return 0, fmt.Errorf("ducklake: store closed")
+	}
+
+	var fileCount int
+	err := s.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM ducklake_data_files('signals', 'signals')",
+	).Scan(&fileCount)
+	if err != nil {
+		return 0, nil // not critical — skip this cycle
+	}
+	if fileCount < 10 {
+		return 0, nil
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("ducklake: compact begin tx: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err = tx.ExecContext(ctx, `CREATE OR REPLACE TABLE signals.signals_compacted AS SELECT * FROM signals.signals`); err != nil {
+		return 0, fmt.Errorf("compact: create compacted table: %w", err)
+	}
+	if _, err = tx.ExecContext(ctx, "DROP TABLE IF EXISTS signals.signals"); err != nil {
+		return 0, fmt.Errorf("compact: drop original table: %w", err)
+	}
+	if _, err = tx.ExecContext(ctx, "ALTER TABLE signals.signals_compacted RENAME TO signals"); err != nil {
+		return 0, fmt.Errorf("compact: rename compacted table: %w", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return 0, fmt.Errorf("compact: commit: %w", err)
+	}
+	return fileCount, nil
+}
+
+// DB returns the underlying DuckDB connection for admin queries.
 func (s *DuckLakeStore) DB() *sql.DB {
 	return s.db
 }

@@ -58,7 +58,7 @@ func SignalConnectUnaryInterceptor(emitter *Emitter, geoCountryHeader string) co
 				IP:             stripPort(http_util.RemoteIPFromCtx(ctx)),
 				UserAgent:      truncateString(req.Header().Get(http_util.UserAgentHeader), maxUserAgentLen),
 				Outcome:        outcome,
-				Timestamp:      time.Now().UTC(),
+				Timestamp:      start.UTC(),
 				DurationMs:     time.Since(start).Milliseconds(),
 				AcceptLanguage: hctx.AcceptLanguage,
 				Country:        hctx.Country,
@@ -90,7 +90,9 @@ func SignalHTTPMiddleware(emitter *Emitter, geoCountryHeader string) func(http.H
 			rw := &statusCapture{ResponseWriter: w, status: http.StatusOK}
 			next.ServeHTTP(rw, r)
 
-			if strings.HasPrefix(r.URL.Path, "/zitadel.signal.") || strings.HasPrefix(r.URL.Path, "/api/v2/signals") {
+			if strings.HasPrefix(r.URL.Path, "/zitadel.signal.") ||
+				strings.HasPrefix(r.URL.Path, "/v2/signals") ||
+				strings.HasPrefix(r.URL.Path, "/api/v2/signals") {
 				return
 			}
 
@@ -116,7 +118,7 @@ func SignalHTTPMiddleware(emitter *Emitter, geoCountryHeader string) func(http.H
 				IP:             stripPort(http_util.RemoteIPFromCtx(ctx)),
 				UserAgent:      truncateString(r.Header.Get("User-Agent"), maxUserAgentLen),
 				Outcome:        outcome,
-				Timestamp:      time.Now().UTC(),
+				Timestamp:      start.UTC(),
 				DurationMs:     time.Since(start).Milliseconds(),
 				AcceptLanguage: hctx.AcceptLanguage,
 				Country:        hctx.Country,

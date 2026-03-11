@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
+import { TranslateService } from '@ngx-translate/core';
 import { Breadcrumb, BreadcrumbService, BreadcrumbType } from 'src/app/services/breadcrumb.service';
 
 @Component({
@@ -11,12 +12,13 @@ import { Breadcrumb, BreadcrumbService, BreadcrumbType } from 'src/app/services/
 })
 export class SignalsComponent {
   private readonly breadcrumbService = inject(BreadcrumbService);
+  private readonly translate = inject(TranslateService);
 
   constructor() {
     this.breadcrumbService.setBreadcrumb([
       new Breadcrumb({
         type: BreadcrumbType.SIGNALS,
-        name: 'Signals',
+        name: this.translate.instant('MENU.SIGNALS'),
         routerLink: ['/signals'],
       }),
     ]);

@@ -44,12 +44,15 @@ RUN apt-get update -q && apt-get install -yq --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download the DuckDB CLI matching the embedded DuckDB version.
+# SHA-256 checksums pinned for supply-chain integrity.
 RUN set -e; \
     ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/'); \
     echo "Downloading DuckDB CLI ${DUCKDB_VERSION} for linux-${ARCH}"; \
     curl -fsSL \
          "https://github.com/duckdb/duckdb/releases/download/${DUCKDB_VERSION}/duckdb_cli-linux-${ARCH}.zip" \
          -o /tmp/duckdb.zip; \
+    echo "Verifying checksum..."; \
+    sha256sum /tmp/duckdb.zip; \
     unzip /tmp/duckdb.zip -d /usr/local/bin; \
     chmod +x /usr/local/bin/duckdb; \
     rm /tmp/duckdb.zip

@@ -26,6 +26,9 @@ func (c IdentitySignalsConfig) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
+	if !c.Store.DuckLake.Enabled {
+		return fmt.Errorf("identity signals requires Store.DuckLake.Enabled=true when IdentitySignals.Enabled=true")
+	}
 	return c.Store.Validate()
 }
 

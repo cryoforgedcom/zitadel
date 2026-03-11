@@ -391,17 +391,21 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 		}
 		signalStore.LogInfo(ctx)
 		signalReader = signalStore
+		defer signalStore.Close()
 
 		signalEmitter = signals.NewEmitter(config.IdentitySignals.Store, signalStore)
 		go signalEmitter.Start(ctx)
+		defer func() { <-signalEmitter.Done() }()
 
 		eventstoreClient.SetSignalHook(signals.NewEventSignalHook(signalEmitter))
 
 		retentionWorker := signals.NewRetentionWorker(signalStore, config.IdentitySignals.Streams, config.IdentitySignals.Retention)
 		go retentionWorker.Start(ctx)
+		defer func() { <-retentionWorker.Done() }()
 
 		compactionWorker := signals.NewCompactionWorker(signalStore, config.IdentitySignals.Store.DuckLake.CompactionInterval)
 		go compactionWorker.Start(ctx)
+		defer func() { <-compactionWorker.Done() }()
 	}
 
 	api, err := startAPIs(

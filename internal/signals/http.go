@@ -44,9 +44,24 @@ func ExtractHTTPContext(headers http.Header, geoCountryHeader string) HTTPContex
 		ForwardedChain: parseForwardedChain(headers.Get("X-Forwarded-For")),
 	}
 	if geoCountryHeader != "" {
-		ctx.Country = strings.ToUpper(strings.TrimSpace(headers.Get(geoCountryHeader)))
+		country := strings.ToUpper(strings.TrimSpace(headers.Get(geoCountryHeader)))
+		// Validate ISO 3166-1 alpha-2 format (2 uppercase letters) and
+		// truncate to prevent storage inflation from user-controlled headers.
+		if len(country) >= 2 && len(country) <= 3 && isAlpha(country) {
+			ctx.Country = country
+		}
 	}
 	return ctx
+}
+
+// isAlpha returns true if s contains only ASCII letters.
+func isAlpha(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if (s[i] < 'A' || s[i] > 'Z') && (s[i] < 'a' || s[i] > 'z') {
+			return false
+		}
+	}
+	return true
 }
 
 // parseForwardedChain splits X-Forwarded-For into individual IPs,
