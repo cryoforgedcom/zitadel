@@ -1,6 +1,6 @@
 import {
-  ConnectTransportOptions,
-  createConnectTransport,
+  createGrpcWebTransport,
+  GrpcWebTransportOptions,
 } from "@connectrpc/connect-node";
 import {
   createRemoteJWKSet,
@@ -19,11 +19,11 @@ import { NewAuthorizationBearerInterceptor } from "./interceptors.js";
 export function createServerTransport(
   token: string,
   opts: Omit<
-    Extract<ConnectTransportOptions, { httpVersion: "1.1" }>,
+    Extract<GrpcWebTransportOptions, { httpVersion: "1.1" }>,
     "httpVersion"
   >,
 ) {
-  return createConnectTransport({
+  return createGrpcWebTransport({
     ...opts,
     // for the moment we force http 1.1 for the server transport, as we have observed memory leaks with http2.
     httpVersion: "1.1",
