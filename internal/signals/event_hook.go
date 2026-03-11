@@ -57,26 +57,6 @@ func NewEventSignalHook(emitter *Emitter) func(ctx context.Context, events []eve
 			}
 		}
 
-		// Synchronously extract the target user ID from the first event
-		// that carries one. This lets the request interceptor (which
-		// injected a signalUserHolder into the context) know which end
-		// user this request is actually acting on — important for flows
-		// like CreateSession where the authenticated caller is a service
-		// user, not the person logging in.
-		if holder := signalUserHolderFromCtx(ctx); holder != nil {
-			for _, s := range snaps {
-				ids := extractIDs(s.aggType, s.aggID, s.payload)
-				uid := ids.userID
-				if uid == "" && isRealUser(s.creator) {
-					uid = s.creator
-				}
-				if uid != "" {
-					holder.userID = uid
-					break
-				}
-			}
-		}
-
 		go func() {
 			for _, s := range snaps {
 				ids := extractIDs(s.aggType, s.aggID, s.payload)
