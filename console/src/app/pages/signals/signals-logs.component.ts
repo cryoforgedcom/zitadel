@@ -462,6 +462,7 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
 
   shortName(name: string): string {
     if (!name) return '';
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(name) || name.includes(':')) return name;
     const slashParts = name.split('/');
     if (slashParts.length >= 3) return slashParts[slashParts.length - 1];
     const dotParts = name.split('.');

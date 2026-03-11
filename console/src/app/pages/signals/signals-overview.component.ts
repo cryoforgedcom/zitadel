@@ -45,6 +45,8 @@ export class SignalsOverviewComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
 
+  activeTab: 'signals' | 'stats' = 'signals';
+
   // Chart
   chartBuckets: AggregationBucket[] = [];
   chartLoading = false;
@@ -74,25 +76,37 @@ export class SignalsOverviewComponent implements OnInit {
   ];
   selectedTimeRange: TimeRange = this.timeRanges[2];
 
-  // Store health
+  // Store health (Stats tab)
   storeHealthLoading = false;
   ingestRate5m = 0;
   ingestRate1h = 0;
+  totalSignalsStored = 0;
+  estimatedStorageMB = 0;
   storageByStream: { stream: string; count: number; pct: number }[] = [];
+
+  private static readonly AVG_ROW_BYTES = 512;
 
   ngOnInit(): void {
     this.refresh();
   }
 
+  switchTab(tab: 'signals' | 'stats'): void {
+    this.activeTab = tab;
+    this.refresh();
+  }
+
   refresh(): void {
-    this.loadChart();
     this.loadDimensions();
-    this.loadTopOperations();
-    this.loadTopUsers();
-    this.loadTopIPs();
-    this.loadTopCountries();
-    this.loadRecentFailures();
-    this.loadStoreHealth();
+    if (this.activeTab === 'signals') {
+      this.loadChart();
+      this.loadTopOperations();
+      this.loadTopUsers();
+      this.loadTopIPs();
+      this.loadTopCountries();
+      this.loadRecentFailures();
+    } else {
+      this.loadStoreHealth();
+    }
   }
 
   selectTimeRange(range: TimeRange): void {
@@ -154,11 +168,11 @@ export class SignalsOverviewComponent implements OnInit {
       .aggregateSignals({ filters: {}, groupBy: 'operation', metric: 'count', timeBucket: '' })
       .then((resp) => {
         const buckets = resp.buckets ?? [];
-        const total = buckets.reduce((s, b) => s + Number(b.count), 0) || 1;
+        const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
         this.topOperations = buckets
           .filter((b) => b.key)
           .slice(0, 10)
-          .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / total) * 100 }));
+          .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
       });
   }
 
@@ -168,11 +182,11 @@ export class SignalsOverviewComponent implements OnInit {
       .aggregateSignals({ filters: {}, groupBy: 'user_id', metric: 'count', timeBucket: '' })
       .then((resp) => {
         const buckets = resp.buckets ?? [];
-        const total = buckets.reduce((s, b) => s + Number(b.count), 0) || 1;
+        const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
         this.topUsers = buckets
           .filter((b) => b.key)
           .slice(0, 10)
-          .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / total) * 100 }));
+          .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
       });
   }
 
@@ -182,11 +196,11 @@ export class SignalsOverviewComponent implements OnInit {
       .aggregateSignals({ filters: {}, groupBy: 'ip', metric: 'count', timeBucket: '' })
       .then((resp) => {
         const buckets = resp.buckets ?? [];
-        const total = buckets.reduce((s, b) => s + Number(b.count), 0) || 1;
+        const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
         this.topIPs = buckets
           .filter((b) => b.key)
           .slice(0, 10)
-          .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / total) * 100 }));
+          .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
       });
   }
 
@@ -196,11 +210,11 @@ export class SignalsOverviewComponent implements OnInit {
       .aggregateSignals({ filters: {}, groupBy: 'country', metric: 'count', timeBucket: '' })
       .then((resp) => {
         const buckets = resp.buckets ?? [];
-        const total = buckets.reduce((s, b) => s + Number(b.count), 0) || 1;
+        const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
         this.topCountries = buckets
           .filter((b) => b.key)
           .slice(0, 10)
-          .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / total) * 100 }));
+          .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
       });
   }
 
@@ -268,6 +282,7 @@ export class SignalsOverviewComponent implements OnInit {
 
   shortName(name: string): string {
     if (!name) return '';
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(name) || name.includes(':')) return name;
     const slashParts = name.split('/');
     if (slashParts.length >= 3) return slashParts[slashParts.length - 1];
     const dotParts = name.split('.');
@@ -307,13 +322,16 @@ export class SignalsOverviewComponent implements OnInit {
     Promise.all([streamReq, rate5mReq, rate1hReq]).then(
       ([streamResp, rate5mResp, rate1hResp]) => {
         const buckets = streamResp.buckets ?? [];
-        const total = buckets.reduce((s, b) => s + Number(b.count), 0) || 1;
+        const total = buckets.reduce((s, b) => s + Number(b.count), 0);
+        this.totalSignalsStored = total;
+        this.estimatedStorageMB = Math.round((total * SignalsOverviewComponent.AVG_ROW_BYTES) / (1024 * 1024) * 10) / 10;
+        const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
         this.storageByStream = buckets
           .filter((b) => b.key)
           .map((b) => ({
             stream: b.key,
             count: Number(b.count),
-            pct: (Number(b.count) / total) * 100,
+            pct: (Number(b.count) / maxCount) * 100,
           }));
 
         const sum5m = (rate5mResp.buckets ?? []).reduce((s, b) => s + Number(b.count), 0);

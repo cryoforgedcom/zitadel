@@ -241,10 +241,11 @@
   &:hover { opacity: 1; }
 }
 
-/* Store Health */
-.store-health-section { border: 1px solid var(--border); border-radius: var(--r); background: var(--bg); padding: 16px 20px; margin-bottom: 16px; }
-.section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.store-health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
-.health-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; }
-.health-card-wide { grid-column: 1 / -1; }
-.health-stream-row { display: grid; grid-template-columns: 1fr auto 120px; align-items: center; gap: 8px; padding: 4px 0; }
+/* Dashboard tabs */
+.dash-tabs { display: flex; gap: 2px; }
+.dash-tab { padding: 6px 14px; font-size: 13px; font-weight: 500; background: none; border: 1px solid transparent; border-radius: 6px; color: var(--t2); cursor: pointer; }
+.dash-tab:hover { color: var(--t1); }
+.dash-tab.active { background: var(--bg2); border-color: var(--border); color: var(--t1); }
+.otel-metric-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.otel-metric { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.otel-type { font-size: 11px; padding: 1px 6px; border-radius: 3px; background: var(--bg2); color: var(--t3); }

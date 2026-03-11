@@ -118,11 +118,11 @@
             <span class="badge" [ngClass]="{ 'badge-ok': entry.signal.outcome === 'success', 'badge-fail': entry.signal.outcome === 'failure' }">
               {{ entry.signal.outcome }}
             </span>
-            <!-- Trace badge — click to view all signals in this trace -->
-            <button class="trace-badge" *ngIf="entry.traceColor"
-                    [style.background]="entry.traceColor + '18'"
-                    [style.color]="entry.traceColor"
-                    [style.border-color]="entry.traceColor + '40'"
+            <!-- Trace badge — always shown when signal has a trace_id -->
+            <button class="trace-badge" *ngIf="entry.hasTrace"
+                    [style.background]="entry.traceColor ? entry.traceColor + '18' : '#9ca3af18'"
+                    [style.color]="entry.traceColor || '#6b7280'"
+                    [style.border-color]="entry.traceColor ? entry.traceColor + '40' : '#9ca3af40'"
                     (click)="viewTrace(entry.signal.traceId); $event.stopPropagation()"
                     [matTooltip]="'View trace ' + entry.signal.traceId">
               <mat-icon class="trace-badge-icon">account_tree</mat-icon>

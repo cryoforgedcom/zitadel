@@ -24,7 +24,8 @@ interface TimelineEntry {
   timeLabel: string;
   isFirstInGroup: boolean;
   groupLabel: string;
-  traceColor: string; // color assigned to this trace (empty if no trace)
+  traceColor: string; // color assigned to this trace (empty if singleton or no trace)
+  hasTrace: boolean;  // true if signal has a valid (non-zero) trace_id
 }
 
 @Component({
@@ -250,8 +251,9 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
       const isFirstInGroup = groupLabel !== lastGroup;
       lastGroup = groupLabel;
       const traceColor = (s.traceId && s.traceId !== zeroTrace) ? (traceColorMap.get(s.traceId) ?? '') : '';
+      const hasTrace = !!(s.traceId && s.traceId !== zeroTrace);
 
-      this.timeline.push({ signal: s, timeLabel, isFirstInGroup, groupLabel, traceColor });
+      this.timeline.push({ signal: s, timeLabel, isFirstInGroup, groupLabel, traceColor, hasTrace });
     }
   }
 
@@ -377,6 +379,7 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
 
   shortName(name: string): string {
     if (!name) return '';
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(name) || name.includes(':')) return name;
     const slashParts = name.split('/');
     if (slashParts.length >= 3) return slashParts[slashParts.length - 1];
     const dotParts = name.split('.');

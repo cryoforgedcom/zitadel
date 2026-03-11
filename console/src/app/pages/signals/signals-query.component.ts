@@ -805,10 +805,9 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
   /** Shorten a fully-qualified operation name like /zitadel.user.v2.UserService/ListUsers → ListUsers */
   shortName(name: string): string {
     if (!name) return '';
-    // gRPC style: /package.Service/Method
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(name) || name.includes(':')) return name;
     const slashParts = name.split('/');
     if (slashParts.length >= 3) return slashParts[slashParts.length - 1];
-    // Dot-separated event type: user.human.password.check.failed → password.check.failed (last 3)
     const dotParts = name.split('.');
     if (dotParts.length > 3) return dotParts.slice(-3).join('.');
     return name;
