@@ -28,6 +28,26 @@ interface TimelineEntry {
   hasTrace: boolean; // true if signal has a valid (non-zero) trace_id
 }
 
+interface TraceGroup {
+  traceId: string;
+  traceColor: string;
+  signals: TimelineEntry[];
+  shared: {
+    userId?: string;
+    orgId?: string;
+    clientId?: string;
+    sessionId?: string;
+    projectId?: string;
+    ip?: string;
+    country?: string;
+    userAgent?: string;
+  };
+}
+
+type TimelineItem =
+  | { type: 'signal'; entry: TimelineEntry; dateGroup: string; isFirstInGroup: boolean }
+  | { type: 'trace'; group: TraceGroup; dateGroup: string; isFirstInGroup: boolean };
+
 @Component({
   selector: 'cnsl-signals-activity',
   standalone: true,
@@ -76,7 +96,9 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
 
   // Chronological timeline with trace color hints
   timeline: TimelineEntry[] = [];
+  timelineItems: TimelineItem[] = [];
   expandedSignals = new Set<Signal>();
+  expandedTraces = new Set<string>();
 
   // Trace color palette for grouping signals visually
   private readonly traceColors = ['#6366f1', '#22c55e', '#f59e0b', '#06b6d4', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
@@ -141,6 +163,7 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
     this.entityValue = val;
     this.offset = 0;
     this.expandedSignals.clear();
+    this.expandedTraces.clear();
     this.syncUrl();
     this.refresh();
   }
@@ -265,6 +288,82 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
 
       this.timeline.push({ signal: s, timeLabel, isFirstInGroup, groupLabel, traceColor, hasTrace });
     }
+
+    // Second pass: build timelineItems with trace grouping
+    this.buildTimelineItems(traceColorMap);
+  }
+
+  private buildTimelineItems(traceColorMap: Map<string, string>): void {
+    this.timelineItems = [];
+
+    // Group timeline entries by traceId for multi-signal traces
+    const traceEntries = new Map<string, TimelineEntry[]>();
+    const zeroTrace = '00000000000000000000000000000000';
+
+    for (const entry of this.timeline) {
+      const tid = entry.signal.traceId;
+      if (tid && tid !== zeroTrace && traceColorMap.has(tid)) {
+        if (!traceEntries.has(tid)) {
+          traceEntries.set(tid, []);
+        }
+        traceEntries.get(tid)!.push(entry);
+      }
+    }
+
+    // Track which traces we've already emitted
+    const emittedTraces = new Set<string>();
+    let lastDateGroup = '';
+
+    for (const entry of this.timeline) {
+      const tid = entry.signal.traceId;
+      const isMultiTrace = tid && tid !== zeroTrace && traceColorMap.has(tid);
+
+      if (isMultiTrace) {
+        if (emittedTraces.has(tid)) {
+          // Skip — already emitted as part of a trace group
+          continue;
+        }
+        emittedTraces.add(tid);
+
+        const signals = traceEntries.get(tid)!;
+        const traceColor = traceColorMap.get(tid) ?? '';
+        const shared = this.computeShared(signals.map(e => e.signal));
+
+        const dateGroup = entry.groupLabel;
+        const isFirstInGroup = dateGroup !== lastDateGroup;
+        lastDateGroup = dateGroup;
+
+        this.timelineItems.push({
+          type: 'trace',
+          group: { traceId: tid, traceColor, signals, shared },
+          dateGroup,
+          isFirstInGroup,
+        });
+      } else {
+        const dateGroup = entry.groupLabel;
+        const isFirstInGroup = dateGroup !== lastDateGroup;
+        lastDateGroup = dateGroup;
+
+        this.timelineItems.push({
+          type: 'signal',
+          entry,
+          dateGroup,
+          isFirstInGroup,
+        });
+      }
+    }
+  }
+
+  private computeShared(signals: Signal[]): TraceGroup['shared'] {
+    const shared: TraceGroup['shared'] = {};
+    const fields = ['userId', 'orgId', 'clientId', 'sessionId', 'projectId', 'ip', 'country', 'userAgent'] as const;
+    for (const field of fields) {
+      const values = signals.map(s => (s as any)[field]).filter((v: any) => v);
+      if (values.length > 0 && values.every((v: any) => v === values[0])) {
+        (shared as any)[field] = values[0];
+      }
+    }
+    return shared;
   }
 
   /** Navigate to Activity filtered by a trace ID */
@@ -274,6 +373,7 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
     this.searchInput = traceId;
     this.offset = 0;
     this.expandedSignals.clear();
+    this.expandedTraces.clear();
     this.syncUrl();
     this.refresh();
   }
@@ -299,6 +399,18 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
     } else {
       this.expandedSignals.add(signal);
     }
+  }
+
+  toggleTrace(traceId: string): void {
+    if (this.expandedTraces.has(traceId)) {
+      this.expandedTraces.delete(traceId);
+    } else {
+      this.expandedTraces.add(traceId);
+    }
+  }
+
+  hasAnyShared(shared: TraceGroup['shared']): boolean {
+    return !!(shared.userId || shared.orgId || shared.clientId || shared.sessionId || shared.projectId || shared.ip);
   }
 
   copyToClipboard(value: string, event: MouseEvent): void {

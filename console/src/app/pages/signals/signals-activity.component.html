@@ -122,270 +122,372 @@
     <mat-spinner *ngIf="loading" diameter="24" class="center-spinner"></mat-spinner>
 
     <!-- Timeline -->
-    <div class="activity-timeline" *ngIf="!loading && timeline.length > 0">
-      <ng-container *ngFor="let entry of timeline; let i = index">
+    <div class="activity-timeline" *ngIf="!loading && timelineItems.length > 0">
+      <ng-container *ngFor="let item of timelineItems; let i = index">
+
         <!-- Date group separator -->
-        <div class="timeline-group-header" *ngIf="entry.isFirstInGroup">
-          <span class="timeline-group-label">{{ entry.groupLabel }}</span>
+        <div class="timeline-group-header" *ngIf="item.isFirstInGroup">
+          <span class="timeline-group-label">{{ item.dateGroup }}</span>
         </div>
 
-        <!-- Timeline entry — colored left border when part of a multi-signal trace -->
-        <div
-          class="timeline-entry"
-          [class.entry-failure]="entry.signal.outcome === 'failure'"
-          [style.border-left]="entry.traceColor ? '3px solid ' + entry.traceColor : '3px solid transparent'"
-          (click)="toggleEntry(entry.signal)"
-        >
-          <div class="timeline-rail">
-            <div
-              class="timeline-dot"
-              [class.dot-success]="entry.signal.outcome === 'success'"
-              [class.dot-failure]="entry.signal.outcome === 'failure'"
-            ></div>
-            <div class="timeline-line" *ngIf="i < timeline.length - 1"></div>
-          </div>
-
-          <div class="timeline-content">
-            <div class="timeline-row-main">
-              <span class="timeline-time mono">{{ entry.timeLabel }}</span>
-              <span class="badge badge-stream">{{ entry.signal.stream }}</span>
-              <span class="timeline-operation mono" [matTooltip]="entry.signal.operation">{{
-                shortName(entry.signal.operation)
-              }}</span>
-              <span
-                class="badge"
-                [ngClass]="{
-                  'badge-ok': entry.signal.outcome === 'success',
-                  'badge-fail': entry.signal.outcome === 'failure',
-                }"
-              >
-                {{ entry.signal.outcome }}
-              </span>
-              <!-- Trace badge — always shown when signal has a trace_id -->
-              <button
-                class="trace-badge"
-                *ngIf="entry.hasTrace"
-                [style.background]="entry.traceColor ? entry.traceColor + '18' : '#9ca3af18'"
-                [style.color]="entry.traceColor || '#6b7280'"
-                [style.border-color]="entry.traceColor ? entry.traceColor + '40' : '#9ca3af40'"
-                (click)="viewTrace(entry.signal.traceId); $event.stopPropagation()"
-                [matTooltip]="'View trace ' + entry.signal.traceId"
-              >
-                <mat-icon class="trace-badge-icon">account_tree</mat-icon>
-                {{ entry.signal.traceId | slice: 0 : 8 }}
-              </button>
+        <!-- Standalone signal entry -->
+        <ng-container *ngIf="item.type === 'signal'">
+          <div
+            class="timeline-entry"
+            [class.entry-failure]="$any(item).entry.signal.outcome === 'failure'"
+            [style.border-left]="$any(item).entry.traceColor ? '3px solid ' + $any(item).entry.traceColor : '3px solid transparent'"
+            (click)="toggleEntry($any(item).entry.signal)"
+          >
+            <div class="timeline-rail">
+              <div
+                class="timeline-dot"
+                [class.dot-success]="$any(item).entry.signal.outcome === 'success'"
+                [class.dot-failure]="$any(item).entry.signal.outcome === 'failure'"
+              ></div>
+              <div class="timeline-line" *ngIf="i < timelineItems.length - 1"></div>
             </div>
 
-            <div class="timeline-row-meta">
-              <span class="timeline-meta" *ngIf="entry.signal.ip">
-                <mat-icon class="meta-icon">language</mat-icon>
-                {{ entry.signal.ip }}
-                <span *ngIf="entry.signal.country"> · {{ entry.signal.country }}</span>
-              </span>
-              <span class="timeline-meta" *ngIf="entry.signal.clientId">
-                <mat-icon class="meta-icon">devices</mat-icon>
-                {{ entry.signal.clientId | slice: 0 : 20 }}
-              </span>
-              <span class="timeline-meta" *ngIf="entry.signal.resource">
-                <mat-icon class="meta-icon">folder</mat-icon>
-                {{ entry.signal.resource | slice: 0 : 30 }}
-              </span>
-            </div>
-
-            <!-- Expanded detail -->
-            <div class="timeline-detail" *ngIf="expandedSignals.has(entry.signal)" @detailExpand>
-              <div class="detail-kv-grid">
-                <div class="kv">
-                  <span class="kv-label">Operation</span
-                  ><span class="kv-val mono kv-copiable"
-                    >{{ entry.signal.operation || '—'
-                    }}<mat-icon
-                      class="kv-copy"
-                      *ngIf="entry.signal.operation"
-                      (click)="copyToClipboard(entry.signal.operation, $event)"
-                      matTooltip="Copy"
-                      >content_copy</mat-icon
-                    ></span
-                  >
-                </div>
-                <div class="kv">
-                  <span class="kv-label">User ID</span
-                  ><span class="kv-val mono kv-copiable"
-                    >{{ entry.signal.userId || '—'
-                    }}<mat-icon
-                      class="kv-copy"
-                      *ngIf="entry.signal.userId"
-                      (click)="copyToClipboard(entry.signal.userId, $event)"
-                      matTooltip="Copy"
-                      >content_copy</mat-icon
-                    ><mat-icon
-                      class="kv-link-icon"
-                      *ngIf="entry.signal.userId"
-                      (click)="navigateToEntity('user', entry.signal.userId); $event.stopPropagation()"
-                      matTooltip="Open user"
-                      >open_in_new</mat-icon
-                    ></span
-                  >
-                </div>
-                <div class="kv">
-                  <span class="kv-label">Organization</span
-                  ><span class="kv-val mono kv-copiable"
-                    >{{ entry.signal.orgId || '—'
-                    }}<mat-icon
-                      class="kv-copy"
-                      *ngIf="entry.signal.orgId"
-                      (click)="copyToClipboard(entry.signal.orgId, $event)"
-                      matTooltip="Copy"
-                      >content_copy</mat-icon
-                    ><mat-icon
-                      class="kv-link-icon"
-                      *ngIf="entry.signal.orgId"
-                      (click)="navigateToEntity('org', entry.signal.orgId); $event.stopPropagation()"
-                      matTooltip="Open organization"
-                      >open_in_new</mat-icon
-                    ></span
-                  >
-                </div>
-                <div class="kv">
-                  <span class="kv-label">Client</span
-                  ><span class="kv-val mono kv-copiable"
-                    >{{ entry.signal.clientId || '—'
-                    }}<mat-icon
-                      class="kv-copy"
-                      *ngIf="entry.signal.clientId"
-                      (click)="copyToClipboard(entry.signal.clientId, $event)"
-                      matTooltip="Copy"
-                      >content_copy</mat-icon
-                    ></span
-                  >
-                </div>
-                <div class="kv">
-                  <span class="kv-label">Session</span
-                  ><span class="kv-val mono kv-copiable"
-                    >{{ entry.signal.sessionId || '—'
-                    }}<mat-icon
-                      class="kv-copy"
-                      *ngIf="entry.signal.sessionId"
-                      (click)="copyToClipboard(entry.signal.sessionId, $event)"
-                      matTooltip="Copy"
-                      >content_copy</mat-icon
-                    ></span
-                  >
-                </div>
-                <div class="kv">
-                  <span class="kv-label">Project</span
-                  ><span class="kv-val mono kv-copiable"
-                    >{{ entry.signal.projectId || '—'
-                    }}<mat-icon
-                      class="kv-copy"
-                      *ngIf="entry.signal.projectId"
-                      (click)="copyToClipboard(entry.signal.projectId, $event)"
-                      matTooltip="Copy"
-                      >content_copy</mat-icon
-                    ><mat-icon
-                      class="kv-link-icon"
-                      *ngIf="entry.signal.projectId"
-                      (click)="navigateToEntity('project', entry.signal.projectId); $event.stopPropagation()"
-                      matTooltip="Open project"
-                      >open_in_new</mat-icon
-                    ></span
-                  >
-                </div>
-                <div class="kv">
-                  <span class="kv-label">IP</span
-                  ><span class="kv-val mono kv-copiable"
-                    >{{ entry.signal.ip || '—'
-                    }}<mat-icon
-                      class="kv-copy"
-                      *ngIf="entry.signal.ip"
-                      (click)="copyToClipboard(entry.signal.ip, $event)"
-                      matTooltip="Copy"
-                      >content_copy</mat-icon
-                    ></span
-                  >
-                </div>
-                <div class="kv">
-                  <span class="kv-label">Country</span
-                  ><span class="kv-val kv-copiable"
-                    >{{ entry.signal.country || '—'
-                    }}<mat-icon
-                      class="kv-copy"
-                      *ngIf="entry.signal.country"
-                      (click)="copyToClipboard(entry.signal.country, $event)"
-                      matTooltip="Copy"
-                      >content_copy</mat-icon
-                    ></span
-                  >
-                </div>
-                <div class="kv">
-                  <span class="kv-label">User Agent</span
-                  ><span class="kv-val mono kv-copiable"
-                    >{{ entry.signal.userAgent || '—'
-                    }}<mat-icon
-                      class="kv-copy"
-                      *ngIf="entry.signal.userAgent"
-                      (click)="copyToClipboard(entry.signal.userAgent, $event)"
-                      matTooltip="Copy"
-                      >content_copy</mat-icon
-                    ></span
-                  >
-                </div>
-                <div class="kv">
-                  <span class="kv-label">Trace ID</span
-                  ><span class="kv-val mono kv-copiable"
-                    >{{ entry.signal.traceId || '—'
-                    }}<mat-icon
-                      class="kv-copy"
-                      *ngIf="entry.signal.traceId"
-                      (click)="copyToClipboard(entry.signal.traceId, $event)"
-                      matTooltip="Copy"
-                      >content_copy</mat-icon
-                    ></span
-                  >
-                </div>
-                <div class="kv">
-                  <span class="kv-label">Span ID</span
-                  ><span class="kv-val mono kv-copiable"
-                    >{{ entry.signal.spanId || '—'
-                    }}<mat-icon
-                      class="kv-copy"
-                      *ngIf="entry.signal.spanId"
-                      (click)="copyToClipboard(entry.signal.spanId, $event)"
-                      matTooltip="Copy"
-                      >content_copy</mat-icon
-                    ></span
-                  >
-                </div>
-              </div>
-              <div class="detail-actions">
-                <button
-                  class="correlate-btn"
-                  (click)="viewSignalInLogs(entry.signal); $event.stopPropagation()"
-                  matTooltip="View this signal in Logs with full payload"
+            <div class="timeline-content">
+              <div class="timeline-row-main">
+                <span class="timeline-time mono">{{ $any(item).entry.timeLabel }}</span>
+                <span class="badge badge-stream">{{ $any(item).entry.signal.stream }}</span>
+                <span class="timeline-operation mono" [matTooltip]="$any(item).entry.signal.operation">{{
+                  shortName($any(item).entry.signal.operation)
+                }}</span>
+                <span
+                  class="badge"
+                  [ngClass]="{
+                    'badge-ok': $any(item).entry.signal.outcome === 'success',
+                    'badge-fail': $any(item).entry.signal.outcome === 'failure',
+                  }"
                 >
-                  <mat-icon>list_alt</mat-icon> View in Logs
-                </button>
+                  {{ $any(item).entry.signal.outcome }}
+                </span>
+                <!-- Trace badge — always shown when signal has a trace_id -->
                 <button
-                  class="correlate-btn"
-                  *ngIf="entry.signal.traceId"
-                  (click)="viewTrace(entry.signal.traceId); $event.stopPropagation()"
-                  matTooltip="View all signals in this trace"
+                  class="trace-badge"
+                  *ngIf="$any(item).entry.hasTrace"
+                  [style.background]="$any(item).entry.traceColor ? $any(item).entry.traceColor + '18' : '#9ca3af18'"
+                  [style.color]="$any(item).entry.traceColor || '#6b7280'"
+                  [style.border-color]="$any(item).entry.traceColor ? $any(item).entry.traceColor + '40' : '#9ca3af40'"
+                  (click)="viewTrace($any(item).entry.signal.traceId); $event.stopPropagation()"
+                  [matTooltip]="'View trace ' + $any(item).entry.signal.traceId"
                 >
-                  <mat-icon>account_tree</mat-icon> View trace
+                  <mat-icon class="trace-badge-icon">account_tree</mat-icon>
+                  {{ $any(item).entry.signal.traceId | slice: 0 : 8 }}
                 </button>
               </div>
+
+              <div class="timeline-row-meta">
+                <span class="timeline-meta" *ngIf="$any(item).entry.signal.ip">
+                  <mat-icon class="meta-icon">language</mat-icon>
+                  {{ $any(item).entry.signal.ip }}
+                  <span *ngIf="$any(item).entry.signal.country"> · {{ $any(item).entry.signal.country }}</span>
+                </span>
+                <span class="timeline-meta" *ngIf="$any(item).entry.signal.clientId">
+                  <mat-icon class="meta-icon">devices</mat-icon>
+                  {{ $any(item).entry.signal.clientId | slice: 0 : 20 }}
+                </span>
+                <span class="timeline-meta" *ngIf="$any(item).entry.signal.resource">
+                  <mat-icon class="meta-icon">folder</mat-icon>
+                  {{ $any(item).entry.signal.resource | slice: 0 : 30 }}
+                </span>
+              </div>
+
+              <!-- Expanded detail -->
+              <div class="timeline-detail" *ngIf="expandedSignals.has($any(item).entry.signal)" @detailExpand>
+                <div class="detail-kv-grid">
+                  <div class="kv">
+                    <span class="kv-label">Operation</span
+                    ><span class="kv-val mono kv-copiable"
+                      >{{ $any(item).entry.signal.operation || '—'
+                      }}<mat-icon
+                        class="kv-copy"
+                        *ngIf="$any(item).entry.signal.operation"
+                        (click)="copyToClipboard($any(item).entry.signal.operation, $event)"
+                        matTooltip="Copy"
+                        >content_copy</mat-icon
+                      ></span
+                    >
+                  </div>
+                  <div class="kv" *ngIf="$any(item).entry.signal.userId">
+                    <span class="kv-label">User ID</span
+                    ><span class="kv-val mono kv-copiable"
+                      >{{ $any(item).entry.signal.userId
+                      }}<mat-icon
+                        class="kv-copy"
+                        *ngIf="$any(item).entry.signal.userId"
+                        (click)="copyToClipboard($any(item).entry.signal.userId, $event)"
+                        matTooltip="Copy"
+                        >content_copy</mat-icon
+                      ><mat-icon
+                        class="kv-link-icon"
+                        *ngIf="$any(item).entry.signal.userId"
+                        (click)="navigateToEntity('user', $any(item).entry.signal.userId); $event.stopPropagation()"
+                        matTooltip="Open user"
+                        >open_in_new</mat-icon
+                      ></span
+                    >
+                  </div>
+                  <div class="kv" *ngIf="$any(item).entry.signal.orgId">
+                    <span class="kv-label">Organization</span
+                    ><span class="kv-val mono kv-copiable"
+                      >{{ $any(item).entry.signal.orgId
+                      }}<mat-icon
+                        class="kv-copy"
+                        *ngIf="$any(item).entry.signal.orgId"
+                        (click)="copyToClipboard($any(item).entry.signal.orgId, $event)"
+                        matTooltip="Copy"
+                        >content_copy</mat-icon
+                      ><mat-icon
+                        class="kv-link-icon"
+                        *ngIf="$any(item).entry.signal.orgId"
+                        (click)="navigateToEntity('org', $any(item).entry.signal.orgId); $event.stopPropagation()"
+                        matTooltip="Open organization"
+                        >open_in_new</mat-icon
+                      ></span
+                    >
+                  </div>
+                  <div class="kv" *ngIf="$any(item).entry.signal.clientId">
+                    <span class="kv-label">Client</span
+                    ><span class="kv-val mono kv-copiable"
+                      >{{ $any(item).entry.signal.clientId
+                      }}<mat-icon
+                        class="kv-copy"
+                        *ngIf="$any(item).entry.signal.clientId"
+                        (click)="copyToClipboard($any(item).entry.signal.clientId, $event)"
+                        matTooltip="Copy"
+                        >content_copy</mat-icon
+                      ></span
+                    >
+                  </div>
+                  <div class="kv" *ngIf="$any(item).entry.signal.sessionId">
+                    <span class="kv-label">Session</span
+                    ><span class="kv-val mono kv-copiable"
+                      >{{ $any(item).entry.signal.sessionId
+                      }}<mat-icon
+                        class="kv-copy"
+                        *ngIf="$any(item).entry.signal.sessionId"
+                        (click)="copyToClipboard($any(item).entry.signal.sessionId, $event)"
+                        matTooltip="Copy"
+                        >content_copy</mat-icon
+                      ></span
+                    >
+                  </div>
+                  <div class="kv" *ngIf="$any(item).entry.signal.projectId">
+                    <span class="kv-label">Project</span
+                    ><span class="kv-val mono kv-copiable"
+                      >{{ $any(item).entry.signal.projectId
+                      }}<mat-icon
+                        class="kv-copy"
+                        *ngIf="$any(item).entry.signal.projectId"
+                        (click)="copyToClipboard($any(item).entry.signal.projectId, $event)"
+                        matTooltip="Copy"
+                        >content_copy</mat-icon
+                      ><mat-icon
+                        class="kv-link-icon"
+                        *ngIf="$any(item).entry.signal.projectId"
+                        (click)="navigateToEntity('project', $any(item).entry.signal.projectId); $event.stopPropagation()"
+                        matTooltip="Open project"
+                        >open_in_new</mat-icon
+                      ></span
+                    >
+                  </div>
+                  <div class="kv">
+                    <span class="kv-label">IP</span
+                    ><span class="kv-val mono kv-copiable"
+                      >{{ $any(item).entry.signal.ip || '—'
+                      }}<mat-icon
+                        class="kv-copy"
+                        *ngIf="$any(item).entry.signal.ip"
+                        (click)="copyToClipboard($any(item).entry.signal.ip, $event)"
+                        matTooltip="Copy"
+                        >content_copy</mat-icon
+                      ></span
+                    >
+                  </div>
+                  <div class="kv" *ngIf="$any(item).entry.signal.country">
+                    <span class="kv-label">Country</span
+                    ><span class="kv-val kv-copiable"
+                      >{{ $any(item).entry.signal.country
+                      }}<mat-icon
+                        class="kv-copy"
+                        *ngIf="$any(item).entry.signal.country"
+                        (click)="copyToClipboard($any(item).entry.signal.country, $event)"
+                        matTooltip="Copy"
+                        >content_copy</mat-icon
+                      ></span
+                    >
+                  </div>
+                  <div class="kv" *ngIf="$any(item).entry.signal.userAgent">
+                    <span class="kv-label">User Agent</span
+                    ><span class="kv-val mono kv-copiable"
+                      >{{ $any(item).entry.signal.userAgent
+                      }}<mat-icon
+                        class="kv-copy"
+                        *ngIf="$any(item).entry.signal.userAgent"
+                        (click)="copyToClipboard($any(item).entry.signal.userAgent, $event)"
+                        matTooltip="Copy"
+                        >content_copy</mat-icon
+                      ></span
+                    >
+                  </div>
+                  <div class="kv">
+                    <span class="kv-label">Trace ID</span
+                    ><span class="kv-val mono kv-copiable"
+                      >{{ $any(item).entry.signal.traceId || '—'
+                      }}<mat-icon
+                        class="kv-copy"
+                        *ngIf="$any(item).entry.signal.traceId"
+                        (click)="copyToClipboard($any(item).entry.signal.traceId, $event)"
+                        matTooltip="Copy"
+                        >content_copy</mat-icon
+                      ></span
+                    >
+                  </div>
+                  <div class="kv">
+                    <span class="kv-label">Span ID</span
+                    ><span class="kv-val mono kv-copiable"
+                      >{{ $any(item).entry.signal.spanId || '—'
+                      }}<mat-icon
+                        class="kv-copy"
+                        *ngIf="$any(item).entry.signal.spanId"
+                        (click)="copyToClipboard($any(item).entry.signal.spanId, $event)"
+                        matTooltip="Copy"
+                        >content_copy</mat-icon
+                      ></span
+                    >
+                  </div>
+                </div>
+                <div class="detail-actions">
+                  <button
+                    class="correlate-btn"
+                    (click)="viewSignalInLogs($any(item).entry.signal); $event.stopPropagation()"
+                    matTooltip="View this signal in Logs with full payload"
+                  >
+                    <mat-icon>list_alt</mat-icon> View in Logs
+                  </button>
+                  <button
+                    class="correlate-btn"
+                    *ngIf="$any(item).entry.signal.traceId"
+                    (click)="viewTrace($any(item).entry.signal.traceId); $event.stopPropagation()"
+                    matTooltip="View all signals in this trace"
+                  >
+                    <mat-icon>account_tree</mat-icon> View trace
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <mat-icon class="timeline-expand-icon">{{
+              expandedSignals.has($any(item).entry.signal) ? 'expand_less' : 'expand_more'
+            }}</mat-icon>
+          </div>
+        </ng-container>
+
+        <!-- Trace group -->
+        <ng-container *ngIf="item.type === 'trace'">
+          <div class="trace-group" [style.border-left]="'3px solid ' + $any(item).group.traceColor">
+            <div class="trace-header" (click)="toggleTrace($any(item).group.traceId)">
+              <div class="trace-header-left">
+                <mat-icon class="trace-toggle-icon">{{ expandedTraces.has($any(item).group.traceId) ? 'expand_less' : 'expand_more' }}</mat-icon>
+                <mat-icon class="trace-icon" [style.color]="$any(item).group.traceColor">account_tree</mat-icon>
+                <span class="trace-label">Trace</span>
+                <span class="mono trace-id">{{ $any(item).group.traceId | slice:0:12 }}</span>
+                <span class="badge badge-stream">{{ $any(item).group.signals.length }} signals</span>
+              </div>
+              <div class="trace-header-right">
+                <span class="timeline-time mono">{{ $any(item).group.signals[0].timeLabel }}</span>
+              </div>
+            </div>
+
+            <!-- Shared context -->
+            <div class="trace-shared" *ngIf="hasAnyShared($any(item).group.shared)">
+              <span class="trace-shared-field" *ngIf="$any(item).group.shared.userId">
+                <mat-icon class="meta-icon">person</mat-icon> {{ $any(item).group.shared.userId | slice:0:20 }}
+                <mat-icon class="kv-link-icon inline-link" (click)="navigateToEntity('user', $any(item).group.shared.userId); $event.stopPropagation()" matTooltip="Open user">open_in_new</mat-icon>
+              </span>
+              <span class="trace-shared-field" *ngIf="$any(item).group.shared.orgId">
+                <mat-icon class="meta-icon">business</mat-icon> {{ $any(item).group.shared.orgId | slice:0:20 }}
+              </span>
+              <span class="trace-shared-field" *ngIf="$any(item).group.shared.clientId">
+                <mat-icon class="meta-icon">devices</mat-icon> {{ $any(item).group.shared.clientId | slice:0:20 }}
+              </span>
+              <span class="trace-shared-field" *ngIf="$any(item).group.shared.sessionId">
+                <mat-icon class="meta-icon">key</mat-icon> {{ $any(item).group.shared.sessionId | slice:0:20 }}
+              </span>
+              <span class="trace-shared-field" *ngIf="$any(item).group.shared.ip">
+                <mat-icon class="meta-icon">language</mat-icon> {{ $any(item).group.shared.ip }}
+                <span *ngIf="$any(item).group.shared.country"> · {{ $any(item).group.shared.country }}</span>
+              </span>
+            </div>
+
+            <!-- Expanded child entries -->
+            <div class="trace-children" *ngIf="expandedTraces.has($any(item).group.traceId)" @detailExpand>
+              <div class="trace-child" *ngFor="let child of $any(item).group.signals; let ci = index"
+                   [class.entry-failure]="child.signal.outcome === 'failure'"
+                   (click)="toggleEntry(child.signal)">
+                <div class="trace-child-rail">
+                  <div class="timeline-dot" [class.dot-success]="child.signal.outcome === 'success'" [class.dot-failure]="child.signal.outcome === 'failure'"></div>
+                  <div class="timeline-line" *ngIf="ci < $any(item).group.signals.length - 1"></div>
+                </div>
+                <div class="trace-child-content">
+                  <div class="timeline-row-main">
+                    <span class="timeline-time mono">{{ child.timeLabel }}</span>
+                    <span class="badge badge-stream">{{ child.signal.stream }}</span>
+                    <span class="timeline-operation mono" [matTooltip]="child.signal.operation">{{ shortName(child.signal.operation) }}</span>
+                    <span class="badge" [ngClass]="{ 'badge-ok': child.signal.outcome === 'success', 'badge-fail': child.signal.outcome === 'failure' }">{{ child.signal.outcome }}</span>
+                  </div>
+                  <!-- Only show fields that differ from shared context -->
+                  <div class="timeline-row-meta">
+                    <span class="timeline-meta" *ngIf="child.signal.userId && child.signal.userId !== $any(item).group.shared.userId">
+                      <mat-icon class="meta-icon">person</mat-icon> {{ child.signal.userId | slice:0:20 }}
+                    </span>
+                    <span class="timeline-meta" *ngIf="child.signal.ip && child.signal.ip !== $any(item).group.shared.ip">
+                      <mat-icon class="meta-icon">language</mat-icon> {{ child.signal.ip }}
+                    </span>
+                    <span class="timeline-meta" *ngIf="child.signal.clientId && child.signal.clientId !== $any(item).group.shared.clientId">
+                      <mat-icon class="meta-icon">devices</mat-icon> {{ child.signal.clientId | slice:0:20 }}
+                    </span>
+                    <span class="timeline-meta" *ngIf="child.signal.resource">
+                      <mat-icon class="meta-icon">folder</mat-icon> {{ child.signal.resource | slice:0:30 }}
+                    </span>
+                  </div>
+                  <!-- Expanded detail — show ONLY fields that differ from shared -->
+                  <div class="timeline-detail" *ngIf="expandedSignals.has(child.signal)" @detailExpand>
+                    <div class="detail-kv-grid">
+                      <div class="kv">
+                        <span class="kv-label">Operation</span><span class="kv-val mono kv-copiable">{{ child.signal.operation || '—' }}<mat-icon class="kv-copy" *ngIf="child.signal.operation" (click)="copyToClipboard(child.signal.operation, $event)" matTooltip="Copy">content_copy</mat-icon></span>
+                      </div>
+                      <div class="kv" *ngIf="child.signal.userId && child.signal.userId !== $any(item).group.shared.userId">
+                        <span class="kv-label">User ID</span><span class="kv-val mono kv-copiable">{{ child.signal.userId }}<mat-icon class="kv-copy" (click)="copyToClipboard(child.signal.userId, $event)" matTooltip="Copy">content_copy</mat-icon><mat-icon class="kv-link-icon" (click)="navigateToEntity('user', child.signal.userId); $event.stopPropagation()" matTooltip="Open user">open_in_new</mat-icon></span>
+                      </div>
+                      <div class="kv" *ngIf="child.signal.orgId && child.signal.orgId !== $any(item).group.shared.orgId">
+                        <span class="kv-label">Organization</span><span class="kv-val mono kv-copiable">{{ child.signal.orgId }}<mat-icon class="kv-copy" (click)="copyToClipboard(child.signal.orgId, $event)" matTooltip="Copy">content_copy</mat-icon></span>
+                      </div>
+                      <div class="kv" *ngIf="child.signal.ip && child.signal.ip !== $any(item).group.shared.ip">
+                        <span class="kv-label">IP</span><span class="kv-val mono kv-copiable">{{ child.signal.ip }}<mat-icon class="kv-copy" (click)="copyToClipboard(child.signal.ip, $event)" matTooltip="Copy">content_copy</mat-icon></span>
+                      </div>
+                      <div class="kv">
+                        <span class="kv-label">Span ID</span><span class="kv-val mono kv-copiable">{{ child.signal.spanId || '—' }}<mat-icon class="kv-copy" *ngIf="child.signal.spanId" (click)="copyToClipboard(child.signal.spanId, $event)" matTooltip="Copy">content_copy</mat-icon></span>
+                      </div>
+                    </div>
+                    <div class="detail-actions">
+                      <button class="correlate-btn" (click)="viewSignalInLogs(child.signal); $event.stopPropagation()" matTooltip="View in Logs"><mat-icon>list_alt</mat-icon> View in Logs</button>
+                    </div>
+                  </div>
+                </div>
+                <mat-icon class="timeline-expand-icon">{{ expandedSignals.has(child.signal) ? 'expand_less' : 'expand_more' }}</mat-icon>
+              </div>
             </div>
           </div>
+        </ng-container>
 
-          <mat-icon class="timeline-expand-icon">{{
-            expandedSignals.has(entry.signal) ? 'expand_less' : 'expand_more'
-          }}</mat-icon>
-        </div>
       </ng-container>
     </div>
 
     <!-- Empty state after search -->
-    <div *ngIf="!loading && entityValue && timeline.length === 0" class="empty">
+    <div *ngIf="!loading && entityValue && timelineItems.length === 0" class="empty">
       <mat-icon>search_off</mat-icon>
       <p>No activity found for this {{ entityLabel }}</p>
     </div>

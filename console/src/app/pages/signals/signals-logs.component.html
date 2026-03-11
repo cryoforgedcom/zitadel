@@ -298,10 +298,10 @@
                 >
               </div>
               <!-- Identity -->
-              <div class="kv">
+              <div class="kv" *ngIf="s.userId">
                 <span class="kv-label">User ID</span
                 ><span class="kv-val mono kv-copiable" [class.kv-link]="s.userId" (click)="addFilter('user_id', s.userId)"
-                  >{{ s.userId || '—'
+                  >{{ s.userId
                   }}<mat-icon class="kv-copy" *ngIf="s.userId" (click)="copyToClipboard(s.userId, $event)" matTooltip="Copy"
                     >content_copy</mat-icon
                   ><mat-icon
@@ -320,10 +320,10 @@
                   <mat-icon>timeline</mat-icon>
                 </button>
               </div>
-              <div class="kv">
+              <div class="kv" *ngIf="s.callerId">
                 <span class="kv-label">Caller ID</span
                 ><span class="kv-val mono kv-copiable"
-                  >{{ s.callerId || '—'
+                  >{{ s.callerId
                   }}<mat-icon
                     class="kv-copy"
                     *ngIf="s.callerId"
@@ -333,10 +333,10 @@
                   ></span
                 >
               </div>
-              <div class="kv">
+              <div class="kv" *ngIf="s.sessionId">
                 <span class="kv-label">Session</span
                 ><span class="kv-val mono kv-copiable"
-                  >{{ s.sessionId || '—'
+                  >{{ s.sessionId
                   }}<mat-icon
                     class="kv-copy"
                     *ngIf="s.sessionId"
@@ -346,10 +346,10 @@
                   ></span
                 >
               </div>
-              <div class="kv">
+              <div class="kv" *ngIf="s.fingerprintId">
                 <span class="kv-label">Fingerprint</span
                 ><span class="kv-val mono kv-copiable"
-                  >{{ s.fingerprintId || '—'
+                  >{{ s.fingerprintId
                   }}<mat-icon
                     class="kv-copy"
                     *ngIf="s.fingerprintId"
@@ -360,10 +360,10 @@
                 >
               </div>
               <!-- Organization -->
-              <div class="kv">
+              <div class="kv" *ngIf="s.orgId">
                 <span class="kv-label">Organization</span
                 ><span class="kv-val mono kv-copiable" [class.kv-link]="s.orgId" (click)="addFilter('org_id', s.orgId)"
-                  >{{ s.orgId || '—'
+                  >{{ s.orgId
                   }}<mat-icon class="kv-copy" *ngIf="s.orgId" (click)="copyToClipboard(s.orgId, $event)" matTooltip="Copy"
                     >content_copy</mat-icon
                   ><mat-icon
@@ -375,13 +375,13 @@
                   ></span
                 >
               </div>
-              <div class="kv">
+              <div class="kv" *ngIf="s.projectId">
                 <span class="kv-label">Project</span
                 ><span
                   class="kv-val mono kv-copiable"
                   [class.kv-link]="s.projectId"
                   (click)="addFilter('project_id', s.projectId)"
-                  >{{ s.projectId || '—'
+                  >{{ s.projectId
                   }}<mat-icon
                     class="kv-copy"
                     *ngIf="s.projectId"
@@ -397,13 +397,13 @@
                   ></span
                 >
               </div>
-              <div class="kv">
+              <div class="kv" *ngIf="s.clientId">
                 <span class="kv-label">Client</span
                 ><span
                   class="kv-val mono kv-copiable"
                   [class.kv-link]="s.clientId"
                   (click)="addFilter('client_id', s.clientId)"
-                  >{{ s.clientId || '—'
+                  >{{ s.clientId
                   }}<mat-icon
                     class="kv-copy"
                     *ngIf="s.clientId"
@@ -430,10 +430,10 @@
                   ></span
                 >
               </div>
-              <div class="kv">
+              <div class="kv" *ngIf="s.country">
                 <span class="kv-label">Country</span
                 ><span class="kv-val kv-copiable" [class.kv-link]="s.country" (click)="addFilter('country', s.country)"
-                  >{{ s.country || '—'
+                  >{{ s.country
                   }}<mat-icon
                     class="kv-copy"
                     *ngIf="s.country"
@@ -443,10 +443,10 @@
                   ></span
                 >
               </div>
-              <div class="kv">
+              <div class="kv" *ngIf="s.forwardedChain">
                 <span class="kv-label">Forwarded Chain</span
                 ><span class="kv-val mono kv-copiable"
-                  >{{ s.forwardedChain || '—'
+                  >{{ s.forwardedChain
                   }}<mat-icon
                     class="kv-copy"
                     *ngIf="s.forwardedChain"
@@ -460,10 +460,10 @@
                 <span class="kv-label">HTTPS</span><span class="kv-val">{{ s.isHttps ? 'Yes' : 'No' }}</span>
               </div>
               <!-- HTTP Headers -->
-              <div class="kv">
+              <div class="kv" *ngIf="s.userAgent">
                 <span class="kv-label">User Agent</span
                 ><span class="kv-val mono kv-copiable"
-                  >{{ s.userAgent || '—'
+                  >{{ s.userAgent
                   }}<mat-icon
                     class="kv-copy"
                     *ngIf="s.userAgent"
@@ -473,10 +473,10 @@
                   ></span
                 >
               </div>
-              <div class="kv">
+              <div class="kv" *ngIf="s.acceptLanguage">
                 <span class="kv-label">Accept-Language</span
                 ><span class="kv-val kv-copiable"
-                  >{{ s.acceptLanguage || '—'
+                  >{{ s.acceptLanguage
                   }}<mat-icon
                     class="kv-copy"
                     *ngIf="s.acceptLanguage"
@@ -486,10 +486,10 @@
                   ></span
                 >
               </div>
-              <div class="kv">
+              <div class="kv" *ngIf="s.referer">
                 <span class="kv-label">Referer</span
                 ><span class="kv-val mono kv-copiable"
-                  >{{ s.referer || '—'
+                  >{{ s.referer
                   }}<mat-icon
                     class="kv-copy"
                     *ngIf="s.referer"
@@ -499,10 +499,10 @@
                   ></span
                 >
               </div>
-              <div class="kv">
+              <div class="kv" *ngIf="s.secFetchSite">
                 <span class="kv-label">Sec-Fetch-Site</span
                 ><span class="kv-val kv-copiable"
-                  >{{ s.secFetchSite || '—'
+                  >{{ s.secFetchSite
                   }}<mat-icon
                     class="kv-copy"
                     *ngIf="s.secFetchSite"
