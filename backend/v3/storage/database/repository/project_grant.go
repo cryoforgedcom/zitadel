@@ -309,6 +309,9 @@ func (p projectGrant) prepareQuery(opts []database.QueryOption) (*database.State
 	return builder, nil
 }
 
+// rawProjectGrant is used for query collection because ARRAY_AGG role keys cannot be
+// scanned directly into the domain model's []string field when the client is backed
+// by [database/sql]. The intermediate TextArray field works with both [database/sql] and pgx.
 type rawProjectGrant struct {
 	domain.ProjectGrant
 	RoleKeys internaldb.TextArray[string] `db:"role_keys"`

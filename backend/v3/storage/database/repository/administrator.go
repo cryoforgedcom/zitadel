@@ -311,6 +311,9 @@ func (a administrator) clearUpdatedAt() database.Change {
 	return database.NewChange(a.UpdatedAtColumn(), database.NullInstruction)
 }
 
+// rawAdministrator is used for query collection because ARRAY_AGG roles cannot be
+// scanned directly into the domain model's []string field when the client is backed
+// by [database/sql]. The intermediate TextArray field works with both [database/sql] and pgx.
 type rawAdministrator struct {
 	domain.Administrator
 	Roles internaldb.TextArray[string] `db:"roles"`

@@ -197,6 +197,9 @@ func (a authorization) Delete(ctx context.Context, client database.QueryExecutor
 	return client.Exec(ctx, builder.String(), builder.Args()...)
 }
 
+// rawAuthorization is used for query collection because ARRAY_AGG roles cannot be
+// scanned directly into the domain model's []string field when the client is backed
+// by [database/sql]. The intermediate TextArray field works with both [database/sql] and pgx.
 type rawAuthorization struct {
 	domain.Authorization
 	Roles internaldb.TextArray[string] `db:"roles"`
