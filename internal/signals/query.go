@@ -163,7 +163,7 @@ func traceCorrelationClause(field, value, instanceID string, after, before *time
 	subWhere := strings.Join(subClauses, " AND ")
 	clause := fmt.Sprintf(
 		"(%s = ? OR (trace_id != '' AND trace_id IN ("+
-			"SELECT DISTINCT trace_id FROM signals "+
+			"SELECT DISTINCT trace_id FROM signals.signals "+
 			"WHERE %s"+
 			")))",
 		field, subWhere,

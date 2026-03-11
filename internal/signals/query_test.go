@@ -150,7 +150,7 @@ func TestFiltersToSQL_TraceCorrelation(t *testing.T) {
 			if !strings.Contains(where, tt.field+" = ?") {
 				t.Errorf("should include direct %s match", tt.field)
 			}
-			if !strings.Contains(where, "trace_id IN (SELECT DISTINCT trace_id FROM signals") {
+			if !strings.Contains(where, "trace_id IN (SELECT DISTINCT trace_id FROM signals.signals") {
 				t.Error("should include trace_id subquery for correlation")
 			}
 			if len(args) != tt.wantArgs {
