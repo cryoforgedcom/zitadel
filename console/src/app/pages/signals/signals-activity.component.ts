@@ -32,6 +32,7 @@ interface TraceGroup {
   traceId: string;
   traceColor: string;
   signals: TimelineEntry[];
+  // Shared context computed from all signals in the trace
   shared: {
     userId?: string;
     orgId?: string;
@@ -42,6 +43,14 @@ interface TraceGroup {
     country?: string;
     userAgent?: string;
   };
+  // Trace summary
+  operations: string[];
+  streams: string[];
+  successCount: number;
+  failureCount: number;
+  firstTime: string;
+  lastTime: string;
+  durationMs: number | null;
 }
 
 type TimelineItem =
@@ -329,13 +338,41 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
         const traceColor = traceColorMap.get(tid) ?? '';
         const shared = this.computeShared(signals.map(e => e.signal));
 
+        // Compute trace summary
+        const ops = new Set<string>();
+        const streams = new Set<string>();
+        let successCount = 0;
+        let failureCount = 0;
+        let firstMs: number | null = null;
+        let lastMs: number | null = null;
+        for (const e of signals) {
+          if (e.signal.operation) ops.add(this.shortName(e.signal.operation));
+          if (e.signal.stream) streams.add(e.signal.stream);
+          if (e.signal.outcome === 'success') successCount++;
+          if (e.signal.outcome === 'failure') failureCount++;
+          const ms = this.toMillis(e.signal.createdAt);
+          if (ms !== null) {
+            if (firstMs === null || ms < firstMs) firstMs = ms;
+            if (lastMs === null || ms > lastMs) lastMs = ms;
+          }
+        }
+        const durationMs = firstMs !== null && lastMs !== null ? lastMs - firstMs : null;
+        const firstTime = signals[signals.length - 1]?.timeLabel ?? '';
+        const lastTime = signals[0]?.timeLabel ?? '';
+
         const dateGroup = entry.groupLabel;
         const isFirstInGroup = dateGroup !== lastDateGroup;
         lastDateGroup = dateGroup;
 
         this.timelineItems.push({
           type: 'trace',
-          group: { traceId: tid, traceColor, signals, shared },
+          group: {
+            traceId: tid, traceColor, signals, shared,
+            operations: Array.from(ops),
+            streams: Array.from(streams),
+            successCount, failureCount,
+            firstTime, lastTime, durationMs,
+          },
           dateGroup,
           isFirstInGroup,
         });
@@ -364,6 +401,14 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
       }
     }
     return shared;
+  }
+
+  formatDuration(ms: number | null): string {
+    if (ms === null) return '';
+    if (ms < 1000) return ms + 'ms';
+    if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+    if (ms < 3600000) return Math.floor(ms / 60000) + 'm ' + Math.floor((ms % 60000) / 1000) + 's';
+    return Math.floor(ms / 3600000) + 'h ' + Math.floor((ms % 3600000) / 60000) + 'm';
   }
 
   /** Navigate to Activity filtered by a trace ID */

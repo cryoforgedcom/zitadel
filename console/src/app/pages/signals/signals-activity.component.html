@@ -395,9 +395,30 @@
                 <span class="trace-label">Trace</span>
                 <span class="mono trace-id">{{ $any(item).group.traceId | slice:0:12 }}</span>
                 <span class="badge badge-stream">{{ $any(item).group.signals.length }} signals</span>
+                <span class="badge badge-ok" *ngIf="$any(item).group.successCount">{{ $any(item).group.successCount }} ok</span>
+                <span class="badge badge-fail" *ngIf="$any(item).group.failureCount">{{ $any(item).group.failureCount }} fail</span>
               </div>
               <div class="trace-header-right">
-                <span class="timeline-time mono">{{ $any(item).group.signals[0].timeLabel }}</span>
+                <span class="trace-duration" *ngIf="$any(item).group.durationMs !== null">
+                  <mat-icon class="meta-icon">timer</mat-icon>{{ formatDuration($any(item).group.durationMs) }}
+                </span>
+                <span class="timeline-time mono">{{ $any(item).group.firstTime }}<span *ngIf="$any(item).group.firstTime !== $any(item).group.lastTime"> → {{ $any(item).group.lastTime }}</span></span>
+              </div>
+            </div>
+
+            <!-- Trace summary row: operations + streams + shared context -->
+            <div class="trace-summary">
+              <div class="trace-summary-row">
+                <span class="trace-summary-label">Operations</span>
+                <span class="trace-ops">
+                  <span class="trace-op mono" *ngFor="let op of $any(item).group.operations">{{ op }}</span>
+                </span>
+              </div>
+              <div class="trace-summary-row" *ngIf="$any(item).group.streams.length > 0">
+                <span class="trace-summary-label">Streams</span>
+                <span class="trace-ops">
+                  <span class="badge badge-stream" *ngFor="let st of $any(item).group.streams">{{ st }}</span>
+                </span>
               </div>
             </div>
 

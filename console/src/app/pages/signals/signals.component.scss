@@ -270,6 +270,12 @@
 .trace-icon { font-size: 18px !important; width: 18px !important; height: 18px !important; }
 .trace-label { font-size: 13px; font-weight: 600; color: var(--t2); }
 .trace-id { font-size: 12px; color: var(--t3); }
+.trace-duration { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; color: var(--t2); font-weight: 500; mat-icon { font-size: 14px !important; width: 14px !important; height: 14px !important; } }
+.trace-summary { padding: 4px 16px 2px 48px; }
+.trace-summary-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 12px; }
+.trace-summary-label { color: var(--t3); font-weight: 500; min-width: 70px; }
+.trace-ops { display: flex; flex-wrap: wrap; gap: 4px; }
+.trace-op { background: var(--bg2); padding: 1px 8px; border-radius: 4px; color: var(--t1); font-size: 11px; }
 .trace-shared { display: flex; flex-wrap: wrap; gap: 12px; padding: 6px 16px 10px 48px; font-size: 12px; color: var(--t2); }
 .trace-shared-field { display: inline-flex; align-items: center; gap: 4px; }
 .trace-children { border-top: 1px solid var(--border); }
