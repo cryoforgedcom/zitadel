@@ -54,8 +54,17 @@ func filtersToSQL(f SignalFilters) (string, []any) {
 	args = append(args, f.InstanceID)
 
 	if f.UserID != "" {
-		clauses = append(clauses, "user_id = ?")
-		args = append(args, f.UserID)
+		// Include signals that belong to this user directly, plus any
+		// signals sharing a trace_id with the user's signals. This
+		// correlates request signals (e.g. CreateSession made by a
+		// service user) with the event signals they produced for the
+		// actual end user (e.g. password.check.failed).
+		clauses = append(clauses,
+			"(user_id = ? OR (trace_id != '' AND trace_id IN ("+
+				"SELECT DISTINCT trace_id FROM signals "+
+				"WHERE instance_id = ? AND user_id = ? AND trace_id != ''"+
+				")))")
+		args = append(args, f.UserID, f.InstanceID, f.UserID)
 	}
 	if f.SessionID != "" {
 		clauses = append(clauses, "session_id = ?")

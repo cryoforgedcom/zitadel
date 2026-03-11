@@ -59,13 +59,11 @@ func TestFiltersToSQL_AllFields(t *testing.T) {
 	}
 	where, args := filtersToSQL(f)
 
-	// Should have 17 clauses (all fields)
-	clauseCount := strings.Count(where, " AND ") + 1
-	if clauseCount != 17 {
-		t.Errorf("expected 17 clauses, got %d: %s", clauseCount, where)
-	}
-	if len(args) != 17 {
-		t.Errorf("expected 17 args, got %d", len(args))
+	// Should have 17 top-level filter fields. The user_id filter uses a
+	// compound clause with a subquery, adding 2 extra args (instance_id
+	// and user_id repeated for the IN subquery).
+	if len(args) != 19 {
+		t.Errorf("expected 19 args, got %d", len(args))
 	}
 
 	// Verify parameterized queries (no string interpolation)
@@ -96,6 +94,27 @@ func TestFiltersToSQL_OperationUsesILIKE(t *testing.T) {
 				t.Errorf("operation arg should be wrapped with %%, got %q", s)
 			}
 		}
+	}
+}
+
+// TestFiltersToSQL_UserIDTraceCorrelation verifies that filtering by
+// user_id uses a subquery to also include signals sharing a trace_id.
+func TestFiltersToSQL_UserIDTraceCorrelation(t *testing.T) {
+	f := SignalFilters{
+		InstanceID: "inst-1",
+		UserID:     "user-42",
+	}
+	where, args := filtersToSQL(f)
+
+	if !strings.Contains(where, "user_id = ?") {
+		t.Error("should include direct user_id match")
+	}
+	if !strings.Contains(where, "trace_id IN (SELECT DISTINCT trace_id FROM signals") {
+		t.Error("should include trace_id subquery for correlation")
+	}
+	// 1 (instance_id) + 3 (user_id compound: user_id, instance_id, user_id)
+	if len(args) != 4 {
+		t.Errorf("expected 4 args, got %d", len(args))
 	}
 }
 
