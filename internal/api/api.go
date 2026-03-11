@@ -160,6 +160,12 @@ func New(
 	}
 	api.registerHealthServer()
 
+	// Wire HTTP signal middleware for non-ConnectRPC paths (OIDC, SAML, login UI).
+	// ConnectRPC services are covered by SignalConnectUnaryInterceptor instead.
+	if signalEmitter != nil {
+		api.router.Use(signals.SignalHTTPMiddleware(signalEmitter, geoCountryHeader))
+	}
+
 	api.RegisterHandlerOnPrefix("/debug", api.healthHandler())
 	api.router.Handle("/", http.RedirectHandler(login.HandlerPrefix, http.StatusFound))
 

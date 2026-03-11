@@ -59,11 +59,12 @@ func TestFiltersToSQL_AllFields(t *testing.T) {
 	}
 	where, args := filtersToSQL(f)
 
-	// Should have 17 top-level filter fields. The user_id filter uses a
-	// compound clause with a subquery, adding 2 extra args (instance_id
-	// and user_id repeated for the IN subquery).
-	if len(args) != 19 {
-		t.Errorf("expected 19 args, got %d", len(args))
+	// With trace correlation on user_id, session_id, org_id, and client_id:
+	// Each correlated field adds 5 args (1 outer + 2 subquery + 2 time bounds).
+	// Non-correlated fields add 1 arg each (13 fields).
+	// Total: 4*5 + 13 = 33 args.
+	if len(args) != 33 {
+		t.Errorf("expected 33 args, got %d", len(args))
 	}
 
 	// Verify parameterized queries (no string interpolation)
@@ -97,24 +98,74 @@ func TestFiltersToSQL_OperationUsesILIKE(t *testing.T) {
 	}
 }
 
-// TestFiltersToSQL_UserIDTraceCorrelation verifies that filtering by
-// user_id uses a subquery to also include signals sharing a trace_id.
-func TestFiltersToSQL_UserIDTraceCorrelation(t *testing.T) {
-	f := SignalFilters{
-		InstanceID: "inst-1",
-		UserID:     "user-42",
-	}
-	where, args := filtersToSQL(f)
+// TestFiltersToSQL_TraceCorrelation verifies that entity filters
+// (user_id, session_id, org_id, client_id) use trace_id subqueries
+// and that time bounds are propagated into the subquery.
+func TestFiltersToSQL_TraceCorrelation(t *testing.T) {
+	now := time.Now().UTC()
+	later := now.Add(time.Hour)
 
-	if !strings.Contains(where, "user_id = ?") {
-		t.Error("should include direct user_id match")
+	tests := []struct {
+		name     string
+		filters  SignalFilters
+		field    string
+		wantArgs int // total expected args
+	}{
+		{
+			name:     "user_id without time bounds",
+			filters:  SignalFilters{InstanceID: "inst-1", UserID: "user-42"},
+			field:    "user_id",
+			wantArgs: 4, // 1 instance_id + 3 (outer + subquery instance_id + subquery user_id)
+		},
+		{
+			name:     "session_id without time bounds",
+			filters:  SignalFilters{InstanceID: "inst-1", SessionID: "sess-99"},
+			field:    "session_id",
+			wantArgs: 4,
+		},
+		{
+			name:     "org_id without time bounds",
+			filters:  SignalFilters{InstanceID: "inst-1", OrgID: "org-7"},
+			field:    "org_id",
+			wantArgs: 4,
+		},
+		{
+			name:     "client_id without time bounds",
+			filters:  SignalFilters{InstanceID: "inst-1", ClientID: "client-3"},
+			field:    "client_id",
+			wantArgs: 4,
+		},
+		{
+			name:     "user_id with time bounds in subquery",
+			filters:  SignalFilters{InstanceID: "inst-1", UserID: "user-42", After: &now, Before: &later},
+			field:    "user_id",
+			wantArgs: 8, // 1 instance_id + 5 (outer + subquery instance_id + subquery user_id + after + before) + 2 (outer after + before)
+		},
 	}
-	if !strings.Contains(where, "trace_id IN (SELECT DISTINCT trace_id FROM signals") {
-		t.Error("should include trace_id subquery for correlation")
-	}
-	// 1 (instance_id) + 3 (user_id compound: user_id, instance_id, user_id)
-	if len(args) != 4 {
-		t.Errorf("expected 4 args, got %d", len(args))
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			where, args := filtersToSQL(tt.filters)
+
+			if !strings.Contains(where, tt.field+" = ?") {
+				t.Errorf("should include direct %s match", tt.field)
+			}
+			if !strings.Contains(where, "trace_id IN (SELECT DISTINCT trace_id FROM signals") {
+				t.Error("should include trace_id subquery for correlation")
+			}
+			if len(args) != tt.wantArgs {
+				t.Errorf("expected %d args, got %d", tt.wantArgs, len(args))
+			}
+
+			// Time bounds in subquery check
+			if tt.filters.After != nil {
+				subqueryIdx := strings.Index(where, "SELECT DISTINCT")
+				afterInSubquery := strings.Index(where[subqueryIdx:], "created_at >= ?")
+				if afterInSubquery == -1 {
+					t.Error("subquery should include created_at >= ? time bound")
+				}
+			}
+		})
 	}
 }
 

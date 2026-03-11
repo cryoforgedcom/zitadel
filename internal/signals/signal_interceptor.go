@@ -99,6 +99,13 @@ func SignalHTTPMiddleware(emitter *Emitter, geoCountryHeader string) func(http.H
 				return
 			}
 
+			// Skip ConnectRPC and gRPC requests — covered by SignalConnectUnaryInterceptor.
+			ct := r.Header.Get("Content-Type")
+			if strings.HasPrefix(ct, "application/connect+") ||
+				strings.HasPrefix(ct, "application/grpc") {
+				return
+			}
+
 			ctx := r.Context()
 			instance := authz.GetInstance(ctx)
 			ctxData := authz.GetCtxData(ctx)

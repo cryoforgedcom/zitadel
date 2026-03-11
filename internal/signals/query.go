@@ -3,6 +3,7 @@ package signals
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // allowedGroupByFields maps API group_by values to SQL column names.
@@ -53,22 +54,20 @@ func filtersToSQL(f SignalFilters) (string, []any) {
 	clauses = append(clauses, "instance_id = ?")
 	args = append(args, f.InstanceID)
 
+	// Entity filters use trace correlation: include signals that belong
+	// to the entity directly, plus any signals sharing a trace_id with
+	// the entity's signals. This correlates request signals (e.g.
+	// CreateSession made by a service user) with the event signals they
+	// produced for the actual end user.
 	if f.UserID != "" {
-		// Include signals that belong to this user directly, plus any
-		// signals sharing a trace_id with the user's signals. This
-		// correlates request signals (e.g. CreateSession made by a
-		// service user) with the event signals they produced for the
-		// actual end user (e.g. password.check.failed).
-		clauses = append(clauses,
-			"(user_id = ? OR (trace_id != '' AND trace_id IN ("+
-				"SELECT DISTINCT trace_id FROM signals "+
-				"WHERE instance_id = ? AND user_id = ? AND trace_id != ''"+
-				")))")
-		args = append(args, f.UserID, f.InstanceID, f.UserID)
+		c, a := traceCorrelationClause("user_id", f.UserID, f.InstanceID, f.After, f.Before)
+		clauses = append(clauses, c)
+		args = append(args, a...)
 	}
 	if f.SessionID != "" {
-		clauses = append(clauses, "session_id = ?")
-		args = append(args, f.SessionID)
+		c, a := traceCorrelationClause("session_id", f.SessionID, f.InstanceID, f.After, f.Before)
+		clauses = append(clauses, c)
+		args = append(args, a...)
 	}
 	if f.IP != "" {
 		clauses = append(clauses, "ip = ?")
@@ -95,16 +94,18 @@ func filtersToSQL(f SignalFilters) (string, []any) {
 		args = append(args, f.Resource)
 	}
 	if f.OrgID != "" {
-		clauses = append(clauses, "org_id = ?")
-		args = append(args, f.OrgID)
+		c, a := traceCorrelationClause("org_id", f.OrgID, f.InstanceID, f.After, f.Before)
+		clauses = append(clauses, c)
+		args = append(args, a...)
 	}
 	if f.ProjectID != "" {
 		clauses = append(clauses, "project_id = ?")
 		args = append(args, f.ProjectID)
 	}
 	if f.ClientID != "" {
-		clauses = append(clauses, "client_id = ?")
-		args = append(args, f.ClientID)
+		c, a := traceCorrelationClause("client_id", f.ClientID, f.InstanceID, f.After, f.Before)
+		clauses = append(clauses, c)
+		args = append(args, a...)
 	}
 	if f.Payload != "" {
 		clauses = append(clauses, "payload ILIKE ?")
@@ -128,6 +129,49 @@ func filtersToSQL(f SignalFilters) (string, []any) {
 	}
 
 	return strings.Join(clauses, " AND "), args
+}
+
+// traceCorrelationClause builds a compound filter that matches a field
+// directly OR via trace_id correlation. The subquery finds trace_ids
+// associated with the entity and the outer clause includes any signal
+// sharing one of those trace_ids.
+//
+// Time bounds are passed into the subquery to prevent full table scans.
+func traceCorrelationClause(field, value, instanceID string, after, before *time.Time) (string, []any) {
+	// Args for the outer clause: (field = ? OR ...)
+	// followed by args for the subquery: instance_id = ? AND field = ? [AND time bounds]
+	var subClauses []string
+	var subArgs []any
+
+	subClauses = append(subClauses, "instance_id = ?")
+	subArgs = append(subArgs, instanceID)
+
+	subClauses = append(subClauses, field+" = ?")
+	subArgs = append(subArgs, value)
+
+	subClauses = append(subClauses, "trace_id != ''")
+
+	if after != nil {
+		subClauses = append(subClauses, "created_at >= ?")
+		subArgs = append(subArgs, after.UTC())
+	}
+	if before != nil {
+		subClauses = append(subClauses, "created_at < ?")
+		subArgs = append(subArgs, before.UTC())
+	}
+
+	subWhere := strings.Join(subClauses, " AND ")
+	clause := fmt.Sprintf(
+		"(%s = ? OR (trace_id != '' AND trace_id IN ("+
+			"SELECT DISTINCT trace_id FROM signals "+
+			"WHERE %s"+
+			")))",
+		field, subWhere,
+	)
+
+	// First arg is for the outer "field = ?", rest are subquery args
+	args := append([]any{value}, subArgs...)
+	return clause, args
 }
 
 func escapeSQLString(s string) string {
