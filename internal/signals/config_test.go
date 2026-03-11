@@ -7,6 +7,10 @@ import (
 )
 
 func TestIdentitySignalsConfig_Validate(t *testing.T) {
+	validDebounce := DebouncerConfig{
+		MinFrequency: time.Second,
+		MaxBulkSize:  100,
+	}
 	tests := []struct {
 		name    string
 		cfg     IdentitySignalsConfig
@@ -22,6 +26,7 @@ func TestIdentitySignalsConfig_Validate(t *testing.T) {
 			cfg: IdentitySignalsConfig{
 				Enabled: true,
 				Store: StoreConfig{
+					Debounce: validDebounce,
 					DuckLake: DuckLakeConfig{Enabled: false},
 				},
 			},
@@ -32,6 +37,7 @@ func TestIdentitySignalsConfig_Validate(t *testing.T) {
 			cfg: IdentitySignalsConfig{
 				Enabled: true,
 				Store: StoreConfig{
+					Debounce: validDebounce,
 					DuckLake: DuckLakeConfig{
 						Enabled:  true,
 						DataPath: "",
@@ -45,6 +51,7 @@ func TestIdentitySignalsConfig_Validate(t *testing.T) {
 			cfg: IdentitySignalsConfig{
 				Enabled: true,
 				Store: StoreConfig{
+					Debounce: validDebounce,
 					DuckLake: DuckLakeConfig{
 						Enabled:  true,
 						DataPath: "/var/lib/zitadel/signals",
@@ -58,6 +65,7 @@ func TestIdentitySignalsConfig_Validate(t *testing.T) {
 			cfg: IdentitySignalsConfig{
 				Enabled: true,
 				Store: StoreConfig{
+					Debounce: validDebounce,
 					DuckLake: DuckLakeConfig{
 						Enabled:  true,
 						DataPath: "/data",
@@ -73,6 +81,7 @@ func TestIdentitySignalsConfig_Validate(t *testing.T) {
 			cfg: IdentitySignalsConfig{
 				Enabled: true,
 				Store: StoreConfig{
+					Debounce: validDebounce,
 					DuckLake: DuckLakeConfig{
 						Enabled:  true,
 						DataPath: "s3://signals",
@@ -82,6 +91,28 @@ func TestIdentitySignalsConfig_Validate(t *testing.T) {
 				},
 			},
 			wantErr: "",
+		},
+		{
+			name: "zero min_frequency fails",
+			cfg: IdentitySignalsConfig{
+				Enabled: true,
+				Store: StoreConfig{
+					Debounce: DebouncerConfig{MinFrequency: 0, MaxBulkSize: 100},
+					DuckLake: DuckLakeConfig{Enabled: true, DataPath: "/data"},
+				},
+			},
+			wantErr: "min_frequency must be > 0",
+		},
+		{
+			name: "zero max_bulk_size fails",
+			cfg: IdentitySignalsConfig{
+				Enabled: true,
+				Store: StoreConfig{
+					Debounce: DebouncerConfig{MinFrequency: time.Second, MaxBulkSize: 0},
+					DuckLake: DuckLakeConfig{Enabled: true, DataPath: "/data"},
+				},
+			},
+			wantErr: "max_bulk_size must be > 0",
 		},
 	}
 	for _, tt := range tests {

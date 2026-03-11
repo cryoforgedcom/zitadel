@@ -25,7 +25,7 @@ interface TimelineEntry {
   isFirstInGroup: boolean;
   groupLabel: string;
   traceColor: string; // color assigned to this trace (empty if singleton or no trace)
-  hasTrace: boolean;  // true if signal has a valid (non-zero) trace_id
+  hasTrace: boolean; // true if signal has a valid (non-zero) trace_id
 }
 
 @Component({
@@ -58,6 +58,7 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
 
   private alive = true;
 
+  signalsAvailable = true;
   loading = false;
   signals: Signal[] = [];
   totalCount = 0;
@@ -110,7 +111,7 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
     }
     // Restore time range
     if (params['time']) {
-      const tr = this.timeRanges.find(r => r.value === params['time']);
+      const tr = this.timeRanges.find((r) => r.value === params['time']);
       if (tr) this.selectedTimeRange = tr;
     }
     if (this.entityValue) {
@@ -123,11 +124,11 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
   }
 
   get entityLabel(): string {
-    return this.entityTypes.find(e => e.key === this.entityType)?.label ?? this.entityType;
+    return this.entityTypes.find((e) => e.key === this.entityType)?.label ?? this.entityType;
   }
 
   get entityIcon(): string {
-    return this.entityTypes.find(e => e.key === this.entityType)?.icon ?? 'person';
+    return this.entityTypes.find((e) => e.key === this.entityType)?.icon ?? 'person';
   }
 
   selectEntityType(key: string): void {
@@ -167,10 +168,14 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
     if (!this.grpc.signal || !this.entityValue) return;
     this.loading = true;
 
-    const filterKey = this.entityType === 'user_id' ? 'userId'
-      : this.entityType === 'client_id' ? 'clientId'
-      : this.entityType === 'org_id' ? 'orgId'
-      : 'traceId';
+    const filterKey =
+      this.entityType === 'user_id'
+        ? 'userId'
+        : this.entityType === 'client_id'
+          ? 'clientId'
+          : this.entityType === 'org_id'
+            ? 'orgId'
+            : 'traceId';
 
     this.grpc.signal
       .listSignals({
@@ -185,38 +190,42 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
           this.buildTimeline();
           this.loading = false;
         },
-      )
-      .catch(() => {
-        this.toast.showError('Failed to load signals. Please try again.');
-        this.loading = false;
-      });
+        (err) => {
+          this.loading = false;
+          this.handleApiError(err);
+        },
+      );
   }
 
   loadStats(): void {
     if (!this.grpc.signal || !this.entityValue) return;
 
-    const filterKey = this.entityType === 'user_id' ? 'userId'
-      : this.entityType === 'client_id' ? 'clientId'
-      : this.entityType === 'org_id' ? 'orgId'
-      : 'traceId';
+    const filterKey =
+      this.entityType === 'user_id'
+        ? 'userId'
+        : this.entityType === 'client_id'
+          ? 'clientId'
+          : this.entityType === 'org_id'
+            ? 'orgId'
+            : 'traceId';
 
     const filters = { [filterKey]: this.entityValue };
 
-    this.grpc.signal
-      .aggregateSignals({ filters, groupBy: 'operation', metric: 'count', timeBucket: '' })
-      .then((resp) => {
+    this.grpc.signal.aggregateSignals({ filters, groupBy: 'operation', metric: 'count', timeBucket: '' }).then(
+      (resp) => {
         if (!this.alive) return;
         this.operationCounts = resp.buckets ?? [];
-      })
-      .catch(() => {});
+      },
+      (err) => this.handleApiError(err),
+    );
 
-    this.grpc.signal
-      .aggregateSignals({ filters, groupBy: 'outcome', metric: 'count', timeBucket: '' })
-      .then((resp) => {
+    this.grpc.signal.aggregateSignals({ filters, groupBy: 'outcome', metric: 'count', timeBucket: '' }).then(
+      (resp) => {
         if (!this.alive) return;
         this.outcomeCounts = resp.buckets ?? [];
-      })
-      .catch(() => {});
+      },
+      (err) => this.handleApiError(err),
+    );
   }
 
   private buildTimeline(): void {
@@ -303,9 +312,15 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
   navigateToEntity(type: 'user' | 'org' | 'project', id: string): void {
     if (!id || id === '—') return;
     switch (type) {
-      case 'user': this.router.navigate(['/users', id]); break;
-      case 'org': this.router.navigate(['/orgs', id]); break;
-      case 'project': this.router.navigate(['/projects', id]); break;
+      case 'user':
+        this.router.navigate(['/users', id]);
+        break;
+      case 'org':
+        this.router.navigate(['/orgs', id]);
+        break;
+      case 'project':
+        this.router.navigate(['/projects', id]);
+        break;
     }
   }
 
@@ -338,18 +353,18 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
   }
 
   get successCount(): number {
-    return Number(this.outcomeCounts.find(b => b.key === 'success')?.count ?? 0);
+    return Number(this.outcomeCounts.find((b) => b.key === 'success')?.count ?? 0);
   }
 
   get failureCount(): number {
-    return Number(this.outcomeCounts.find(b => b.key === 'failure')?.count ?? 0);
+    return Number(this.outcomeCounts.find((b) => b.key === 'failure')?.count ?? 0);
   }
 
   get topOperations(): { key: string; count: number }[] {
     return this.operationCounts
-      .filter(b => b.key)
+      .filter((b) => b.key)
       .slice(0, 5)
-      .map(b => ({ key: b.key, count: Number(b.count) }));
+      .map((b) => ({ key: b.key, count: Number(b.count) }));
   }
 
   nextPage(): void {
@@ -386,5 +401,18 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
     const dotParts = name.split('.');
     if (dotParts.length > 3) return dotParts.slice(-3).join('.');
     return name;
+  }
+
+  private handleApiError(err: any): void {
+    if (this.isServiceUnavailable(err)) {
+      this.signalsAvailable = false;
+      return;
+    }
+    this.toast.showError(err);
+  }
+
+  private isServiceUnavailable(err: any): boolean {
+    const code = err?.code ?? err?.status;
+    return code === 12 || code === 5;
   }
 }

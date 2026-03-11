@@ -5,6 +5,7 @@ package signals
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -48,6 +49,12 @@ type StoreConfig struct {
 
 // Validate checks the store configuration.
 func (c StoreConfig) Validate() error {
+	if c.Debounce.MinFrequency <= 0 {
+		return fmt.Errorf("store.debounce.min_frequency must be > 0")
+	}
+	if c.Debounce.MaxBulkSize == 0 {
+		return fmt.Errorf("store.debounce.max_bulk_size must be > 0")
+	}
 	return c.DuckLake.Validate()
 }
 
@@ -155,8 +162,47 @@ func (c DuckLakeConfig) Validate() error {
 	if c.DataPath == "" {
 		return fmt.Errorf("identity signals ducklake data_path must not be empty")
 	}
+	if err := validateSafePath("data_path", c.DataPath); err != nil {
+		return err
+	}
+	if c.ExtensionDirectory != "" {
+		if err := validateSafePath("extension_directory", c.ExtensionDirectory); err != nil {
+			return err
+		}
+	}
+	if c.MetadataSchema != "" {
+		if err := validateSafeIdentifier("metadata_schema", c.MetadataSchema); err != nil {
+			return err
+		}
+	}
 	if c.Backend == ArchiveBackendS3 && c.S3.Bucket == "" {
 		return fmt.Errorf("identity signals ducklake s3 bucket must not be empty")
+	}
+	return nil
+}
+
+// validateSafePath checks that a filesystem or S3 path contains no control
+// characters or SQL-significant characters that could be exploited if the
+// value is used inside a DuckDB SQL string literal.
+func validateSafePath(field, val string) error {
+	for _, ch := range val {
+		if ch < 32 || ch == 127 {
+			return fmt.Errorf("identity signals ducklake %s contains control characters", field)
+		}
+	}
+	if strings.ContainsAny(val, ";`") {
+		return fmt.Errorf("identity signals ducklake %s contains forbidden characters", field)
+	}
+	return nil
+}
+
+// validateSafeIdentifier checks that a SQL identifier (schema/table name)
+// is alphanumeric with underscores only.
+func validateSafeIdentifier(field, val string) error {
+	for _, ch := range val {
+		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_') {
+			return fmt.Errorf("identity signals ducklake %s must be alphanumeric/underscore only", field)
+		}
 	}
 	return nil
 }

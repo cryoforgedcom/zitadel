@@ -58,6 +58,7 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
 
   private alive = true;
 
+  signalsAvailable = true;
   loading = false;
   signals: Signal[] = [];
   sortedSignals: Signal[] = [];
@@ -82,8 +83,16 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
   filterInputValue = '';
 
   private readonly suggestableFields = new Set([
-    'operation', 'ip', 'country', 'user_id', 'org_id', 'project_id', 'client_id',
-    'outcome', 'stream', 'resource',
+    'operation',
+    'ip',
+    'country',
+    'user_id',
+    'org_id',
+    'project_id',
+    'client_id',
+    'outcome',
+    'stream',
+    'resource',
   ]);
 
   filterForm: FormGroup = this.fb.group({
@@ -102,9 +111,18 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
   });
 
   private readonly filterLabelMap: Record<string, string> = {
-    stream: 'Stream', outcome: 'Outcome', operation: 'Operation', ip: 'IP',
-    country: 'Country', user_id: 'User', org_id: 'Org', project_id: 'Project',
-    client_id: 'Client', payload: 'Payload', trace_id: 'Trace', span_id: 'Span',
+    stream: 'Stream',
+    outcome: 'Outcome',
+    operation: 'Operation',
+    ip: 'IP',
+    country: 'Country',
+    user_id: 'User',
+    org_id: 'Org',
+    project_id: 'Project',
+    client_id: 'Client',
+    payload: 'Payload',
+    trace_id: 'Trace',
+    span_id: 'Span',
   };
 
   displayedColumns = ['createdAt', 'stream', 'userId', 'operation', 'outcome', 'ip', 'expand'];
@@ -130,7 +148,7 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
     }
     // Restore time range
     if (params['time']) {
-      const tr = this.timeRanges.find(r => r.value === params['time']);
+      const tr = this.timeRanges.find((r) => r.value === params['time']);
       if (tr) this.selectedTimeRange = tr;
     }
     // Capture highlight hint from Activity "View in Logs"
@@ -194,12 +212,18 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
           const tb = Number(b.createdAt?.seconds ?? 0);
           return (ta - tb) * dir;
         }
-        case 'stream': return (a.stream ?? '').localeCompare(b.stream ?? '') * dir;
-        case 'operation': return (a.operation ?? '').localeCompare(b.operation ?? '') * dir;
-        case 'outcome': return (a.outcome ?? '').localeCompare(b.outcome ?? '') * dir;
-        case 'ip': return (a.ip ?? '').localeCompare(b.ip ?? '') * dir;
-        case 'userId': return (a.userId ?? '').localeCompare(b.userId ?? '') * dir;
-        default: return 0;
+        case 'stream':
+          return (a.stream ?? '').localeCompare(b.stream ?? '') * dir;
+        case 'operation':
+          return (a.operation ?? '').localeCompare(b.operation ?? '') * dir;
+        case 'outcome':
+          return (a.outcome ?? '').localeCompare(b.outcome ?? '') * dir;
+        case 'ip':
+          return (a.ip ?? '').localeCompare(b.ip ?? '') * dir;
+        case 'userId':
+          return (a.userId ?? '').localeCompare(b.userId ?? '') * dir;
+        default:
+          return 0;
       }
     });
   }
@@ -264,21 +288,22 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
         (resp) => {
           if (!this.alive) return;
           this.filterSuggestions = (resp.buckets ?? [])
-            .filter(b => b.key)
-            .map(b => ({ key: b.key, count: Number(b.count) }))
+            .filter((b) => b.key)
+            .map((b) => ({ key: b.key, count: Number(b.count) }))
             .slice(0, 50);
           this.filterSuggestionsLoading = false;
         },
-      )
-      .catch(() => {
-        this.filterSuggestionsLoading = false;
-      });
+        (err) => {
+          this.filterSuggestionsLoading = false;
+          this.handleApiError(err);
+        },
+      );
   }
 
   filteredSuggestions(): { key: string; count: number }[] {
     if (!this.filterInputValue) return this.filterSuggestions;
     const search = this.filterInputValue.toLowerCase();
-    return this.filterSuggestions.filter(s => s.key.toLowerCase().includes(search));
+    return this.filterSuggestions.filter((s) => s.key.toLowerCase().includes(search));
   }
 
   selectFilterSuggestion(value: string): void {
@@ -323,9 +348,7 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
     this.refresh();
   }
 
-  private readonly validActivityFields = new Set([
-    'user_id', 'client_id', 'org_id', 'trace_id', 'session_id', 'ip',
-  ]);
+  private readonly validActivityFields = new Set(['user_id', 'client_id', 'org_id', 'trace_id', 'session_id', 'ip']);
 
   viewActivity(entityType: string, entityValue: string): void {
     if (!this.validActivityFields.has(entityType)) return;
@@ -336,9 +359,15 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
   navigateToEntity(type: 'user' | 'org' | 'project', id: string): void {
     if (!id || id === '—') return;
     switch (type) {
-      case 'user': this.router.navigate(['/users', id]); break;
-      case 'org': this.router.navigate(['/orgs', id]); break;
-      case 'project': this.router.navigate(['/projects', id]); break;
+      case 'user':
+        this.router.navigate(['/users', id]);
+        break;
+      case 'org':
+        this.router.navigate(['/orgs', id]);
+        break;
+      case 'project':
+        this.router.navigate(['/projects', id]);
+        break;
     }
   }
 
@@ -395,11 +424,11 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
           this.loading = false;
           this.tryHighlight();
         },
-      )
-      .catch(() => {
-        this.toast.showError('Failed to load signals. Please try again.');
-        this.loading = false;
-      });
+        (err) => {
+          this.loading = false;
+          this.handleApiError(err);
+        },
+      );
   }
 
   /** Auto-expand and highlight the row matching the hint from Activity → "View in Logs" */
@@ -412,7 +441,10 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
       if (this._highlightTs) {
         const sTs = Number(s.createdAt?.seconds ?? 0) * 1000;
         const diff = Math.abs(sTs - this._highlightTs);
-        if (diff < bestDiff) { bestDiff = diff; best = s; }
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          best = s;
+        }
       } else {
         best = s;
         break;
@@ -431,28 +463,34 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
     if (!this.grpc.signal) return;
     this.grpc.signal
       .aggregateSignals({ filters: this.buildFilters(), groupBy: 'stream', metric: 'count', timeBucket: '' })
-      .then((resp) => {
-        if (!this.alive) return;
-        this.streamCounts = resp.buckets ?? [];
-        this.streams = this.streamCounts.map((b) => b.key).filter((k) => k);
-      })
-      .catch(() => {});
+      .then(
+        (resp) => {
+          if (!this.alive) return;
+          this.streamCounts = resp.buckets ?? [];
+          this.streams = this.streamCounts.map((b) => b.key).filter((k) => k);
+        },
+        (err) => this.handleApiError(err),
+      );
     this.grpc.signal
       .aggregateSignals({ filters: this.buildFilters(), groupBy: 'outcome', metric: 'count', timeBucket: '' })
-      .then((resp) => {
-        if (!this.alive) return;
-        this.outcomeCounts = resp.buckets ?? [];
-      })
-      .catch(() => {});
+      .then(
+        (resp) => {
+          if (!this.alive) return;
+          this.outcomeCounts = resp.buckets ?? [];
+        },
+        (err) => this.handleApiError(err),
+      );
     const filterFields = ['operation', 'ip', 'country', 'user_id', 'org_id', 'project_id', 'client_id'];
     for (const field of filterFields) {
       this.grpc.signal
         .aggregateSignals({ filters: this.buildFilters(), groupBy: field, metric: 'count', timeBucket: '' })
-        .then((resp) => {
-          if (!this.alive) return;
-          this.dimensionCounts[field] = (resp.buckets ?? []).filter(b => b.key).length;
-        })
-        .catch(() => {});
+        .then(
+          (resp) => {
+            if (!this.alive) return;
+            this.dimensionCounts[field] = (resp.buckets ?? []).filter((b) => b.key).length;
+          },
+          (err) => this.handleApiError(err),
+        );
     }
   }
 
@@ -509,5 +547,18 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
 
   get totalPages(): number {
     return Math.ceil(this.totalCount / this.limit) || 1;
+  }
+
+  private handleApiError(err: any): void {
+    if (this.isServiceUnavailable(err)) {
+      this.signalsAvailable = false;
+      return;
+    }
+    this.toast.showError(err);
+  }
+
+  private isServiceUnavailable(err: any): boolean {
+    const code = err?.code ?? err?.status;
+    return code === 12 || code === 5;
   }
 }

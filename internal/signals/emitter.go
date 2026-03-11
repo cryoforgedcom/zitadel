@@ -72,6 +72,7 @@ func (e *Emitter) Start(ctx context.Context) {
 		sink:    e.sink,
 		cfg:     e.cfg.Debounce,
 		metrics: e.metrics,
+		dropped: &e.dropped,
 		cache:   make([]Signal, 0, e.cfg.Debounce.MaxBulkSize),
 	}
 
@@ -100,6 +101,10 @@ func (e *Emitter) Start(ctx context.Context) {
 		case <-tickC:
 			d.flush()
 		case <-ctx.Done():
+			// Drain remaining signals from the channel. The parent context
+			// is cancelled, but debouncer.flush() detects ctx.Err() != nil
+			// and creates a fresh 5-second background context for the
+			// final WriteBatch call (see flush()).
 			for {
 				select {
 				case sig := <-e.ch:
@@ -124,6 +129,7 @@ type signalDebouncer struct {
 	sink    SignalSink
 	cfg     DebouncerConfig
 	metrics *SignalMetrics
+	dropped *atomic.Int64
 	mu      sync.Mutex
 	cache   []Signal
 }
@@ -164,6 +170,9 @@ func (d *signalDebouncer) flush() {
 
 	start := time.Now()
 	if err := d.sink.WriteBatch(ctx, recorded); err != nil {
+		dropped := int64(len(batch))
+		d.dropped.Add(dropped)
+		d.metrics.RecordDropped(ctx, dropped)
 		slog.ErrorContext(ctx, "identity_signals.batch_write_failed",
 			slog.Int("batch_size", len(batch)),
 			slog.String("error", err.Error()),

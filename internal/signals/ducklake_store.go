@@ -549,6 +549,8 @@ func (s *DuckLakeStore) Compact(ctx context.Context) (int, error) {
 	defer cancel()
 
 	var fileCount int
+	// 'signals' refers to the DuckDB catalog alias (always "signals",
+	// see ATTACH ... AS signals) and the table name (signals.signals).
 	err := s.db.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM ducklake_data_files('signals', 'signals')",
 	).Scan(&fileCount)

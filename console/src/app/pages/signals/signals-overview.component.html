@@ -5,6 +5,17 @@
     <span><strong>Preview Feature</strong> — Identity Signals is in preview. Data format and APIs may change between releases. Not recommended for production use.</span>
   </div>
 
+  <!-- Feature unavailable notice -->
+  <div class="unavailable-notice" *ngIf="!signalsAvailable">
+    <mat-icon>info_outline</mat-icon>
+    <div>
+      <strong>Identity Signals is not enabled</strong>
+      <p>The Identity Signals subsystem is not configured on this instance. Enable it in the server configuration under <code>IdentitySignals.Enabled</code>.</p>
+    </div>
+  </div>
+
+  <ng-container *ngIf="signalsAvailable">
+
   <!-- Dashboard header with tabs -->
   <div class="query-bar">
     <div class="query-left">
@@ -203,5 +214,6 @@
         </div>
       </div>
     </ng-container>
+  </ng-container>
   </ng-container>
 </div>

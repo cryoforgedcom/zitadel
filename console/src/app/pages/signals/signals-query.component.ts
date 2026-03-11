@@ -72,6 +72,8 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
 
   private alive = true;
 
+  signalsAvailable = true;
+
   // X-axis timeline labels
   xAxisLabels: { text: string; pct: number }[] = [];
   // Y-axis tick values
@@ -110,15 +112,23 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
 
   // Map time range values to total minutes
   private readonly timeRangeMinutes: Record<string, number> = {
-    '1 hour': 60, '6 hours': 360, '24 hours': 1440,
-    '7 days': 10080, '30 days': 43200,
+    '1 hour': 60,
+    '6 hours': 360,
+    '24 hours': 1440,
+    '7 days': 10080,
+    '30 days': 43200,
   };
 
   // Map bucket labels to milliseconds
   private readonly bucketMs: Record<string, number> = {
-    '1 minute': 60_000, '5 minutes': 300_000, '15 minutes': 900_000,
-    '30 minutes': 1_800_000, '1 hour': 3_600_000, '3 hours': 10_800_000,
-    '6 hours': 21_600_000, '12 hours': 43_200_000,
+    '1 minute': 60_000,
+    '5 minutes': 300_000,
+    '15 minutes': 900_000,
+    '30 minutes': 1_800_000,
+    '1 hour': 3_600_000,
+    '3 hours': 10_800_000,
+    '6 hours': 21_600_000,
+    '12 hours': 43_200_000,
   };
 
   // Boundaries of the currently displayed time window (used to build full x-axis grid)
@@ -128,7 +138,7 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
   get availableResolutions(): Resolution[] {
     const rangeMinutes = this.timeRangeMinutes[this.selectedTimeRange.value] ?? 1440;
     // Only show resolutions where the range has at least 3 buckets
-    return this.resolutions.filter(r => rangeMinutes / r.minutes >= 3);
+    return this.resolutions.filter((r) => rangeMinutes / r.minutes >= 3);
   }
 
   // Summary
@@ -209,8 +219,16 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
   filterInputValue = '';
 
   private readonly suggestableFields = new Set([
-    'operation', 'ip', 'country', 'user_id', 'org_id', 'project_id', 'client_id',
-    'outcome', 'stream', 'resource',
+    'operation',
+    'ip',
+    'country',
+    'user_id',
+    'org_id',
+    'project_id',
+    'client_id',
+    'outcome',
+    'stream',
+    'resource',
   ]);
 
   timeRanges: TimeRange[] = [
@@ -242,11 +260,11 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
 
   get selectedSourceLabel(): string {
     if (!this.selectedSource) return 'All Signals';
-    return this.availableSources.find(s => s.key === this.selectedSource)?.label ?? this.selectedSource;
+    return this.availableSources.find((s) => s.key === this.selectedSource)?.label ?? this.selectedSource;
   }
 
   get selectedMetricLabel(): string {
-    return this.metrics.find(m => m.key === this.selectedMetric)?.label ?? this.selectedMetric;
+    return this.metrics.find((m) => m.key === this.selectedMetric)?.label ?? this.selectedMetric;
   }
 
   get selectedGroupBy(): string {
@@ -276,7 +294,13 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
 
   get activeResolution(): Resolution {
     if (this.selectedResolution) return this.selectedResolution;
-    return this.resolutions.find(r => r.value === this.selectedTimeRange.bucket) ?? { label: this.selectedTimeRange.bucket, value: this.selectedTimeRange.bucket, minutes: 0 };
+    return (
+      this.resolutions.find((r) => r.value === this.selectedTimeRange.bucket) ?? {
+        label: this.selectedTimeRange.bucket,
+        value: this.selectedTimeRange.bucket,
+        minutes: 0,
+      }
+    );
   }
 
   get activeResolutionLabel(): string {
@@ -291,14 +315,14 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
   // --- Group-by ---
 
   dimensionLabel(key: string): string {
-    return this.dimensions.find(d => d.key === key)?.label ?? key;
+    return this.dimensions.find((d) => d.key === key)?.label ?? key;
   }
 
   filteredDimensions() {
     const search = this.dimensionSearch.toLowerCase();
     return this.dimensions
-      .filter(d => !this.activeGroupBys.includes(d.key))
-      .filter(d => !search || d.label.toLowerCase().includes(search) || d.key.includes(search));
+      .filter((d) => !this.activeGroupBys.includes(d.key))
+      .filter((d) => !search || d.label.toLowerCase().includes(search) || d.key.includes(search));
   }
 
   addGroupBy(key: string): void {
@@ -311,7 +335,7 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
   }
 
   removeGroupBy(key: string): void {
-    this.activeGroupBys = this.activeGroupBys.filter(k => k !== key);
+    this.activeGroupBys = this.activeGroupBys.filter((k) => k !== key);
     this.primaryBreakdown = [];
     this.loadChart();
   }
@@ -341,7 +365,7 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
 
   openFilterInput(key: string): void {
     this.pendingFilterKey = key;
-    this.pendingFilterLabel = this.dimensions.find(d => d.key === key)?.label ?? key;
+    this.pendingFilterLabel = this.dimensions.find((d) => d.key === key)?.label ?? key;
     this.filterSuggestions = [];
     this.filterInputValue = '';
     if (this.suggestableFields.has(key)) {
@@ -381,21 +405,22 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
         (resp) => {
           if (!this.alive) return;
           this.filterSuggestions = (resp.buckets ?? [])
-            .filter(b => b.key)
-            .map(b => ({ key: b.key, count: Number(b.count) }))
+            .filter((b) => b.key)
+            .map((b) => ({ key: b.key, count: Number(b.count) }))
             .slice(0, 50);
           this.filterSuggestionsLoading = false;
         },
-      )
-      .catch(() => {
-        this.filterSuggestionsLoading = false;
-      });
+        (err) => {
+          this.filterSuggestionsLoading = false;
+          this.handleApiError(err);
+        },
+      );
   }
 
   filteredSuggestions(): { key: string; count: number }[] {
     if (!this.filterInputValue) return this.filterSuggestions;
     const search = this.filterInputValue.toLowerCase();
-    return this.filterSuggestions.filter(s => s.key.toLowerCase().includes(search));
+    return this.filterSuggestions.filter((s) => s.key.toLowerCase().includes(search));
   }
 
   selectFilterSuggestion(value: string): void {
@@ -420,7 +445,7 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
     let rows = this.primaryBreakdown;
     if (this.breakdownSearch) {
       const s = this.breakdownSearch.toLowerCase();
-      rows = rows.filter(r => r.key.toLowerCase().includes(s));
+      rows = rows.filter((r) => r.key.toLowerCase().includes(s));
     }
     const pageSize = 10;
     const start = this.breakdownPage * pageSize;
@@ -442,9 +467,18 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
   // --- Navigation ---
 
   private readonly validDrillFields = new Set([
-    'operation', 'ip', 'country', 'user_id', 'org_id',
-    'project_id', 'client_id', 'resource', 'user_agent', 'referer',
-    'stream', 'outcome',
+    'operation',
+    'ip',
+    'country',
+    'user_id',
+    'org_id',
+    'project_id',
+    'client_id',
+    'resource',
+    'user_agent',
+    'referer',
+    'stream',
+    'outcome',
   ]);
 
   drillDownToLogs(field: string, value: string): void {
@@ -466,19 +500,19 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
   private restoreFromUrl(): void {
     const p = this.route.snapshot.queryParams;
     // Source / metric
-    if (p['source'] && this.availableSources.some(s => s.key === p['source'])) {
+    if (p['source'] && this.availableSources.some((s) => s.key === p['source'])) {
       this.selectedSource = p['source'];
     }
-    if (p['metric'] && this.metrics.some(m => m.key === p['metric'])) {
+    if (p['metric'] && this.metrics.some((m) => m.key === p['metric'])) {
       this.selectedMetric = p['metric'];
     }
     // Group by
-    if (p['groupBy'] && this.dimensions.some(d => d.key === p['groupBy'])) {
+    if (p['groupBy'] && this.dimensions.some((d) => d.key === p['groupBy'])) {
       this.activeGroupBys = [p['groupBy']];
     }
     // Time range
     if (p['time']) {
-      const tr = this.timeRanges.find(r => r.value === p['time']);
+      const tr = this.timeRanges.find((r) => r.value === p['time']);
       if (tr) this.selectedTimeRange = tr;
     }
     // Filters
@@ -540,11 +574,11 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
           this.buildChartPath();
           this.chartLoading = false;
         },
-      )
-      .catch(() => {
-        this.toast.showError('Failed to load aggregation data. Please try again.');
-        this.chartLoading = false;
-      });
+        (err) => {
+          this.chartLoading = false;
+          this.handleApiError(err);
+        },
+      );
   }
 
   /**
@@ -561,7 +595,7 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
     this.chartWindowStart = this.chartWindowEnd - rangeMs;
 
     // Build lookup from ISO key → buckets (may be multi-series)
-    const hasSeries = buckets.some(b => b.series);
+    const hasSeries = buckets.some((b) => b.series);
     const byKey = new Map<string, AggregationBucket[]>();
     for (const b of buckets) {
       const list = byKey.get(b.key) ?? [];
@@ -570,21 +604,19 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
     }
 
     // Discover the set of series present (for multi-series fill)
-    const seriesSet = hasSeries
-      ? [...new Set(buckets.map(b => b.series).filter(Boolean))]
-      : [''];
+    const seriesSet = hasSeries ? [...new Set(buckets.map((b) => b.series).filter(Boolean))] : [''];
 
     const result: AggregationBucket[] = [];
     for (let t = this.chartWindowStart; t <= this.chartWindowEnd; t += bucketInterval) {
       const isoKey = new Date(t).toISOString().replace(/\.\d{3}Z$/, 'Z');
       if (hasSeries) {
         for (const s of seriesSet) {
-          const existing = byKey.get(isoKey)?.find(b => b.series === s);
-          result.push(existing ?? { key: isoKey, count: BigInt(0), value: 0, series: s ?? '' } as AggregationBucket);
+          const existing = byKey.get(isoKey)?.find((b) => b.series === s);
+          result.push(existing ?? ({ key: isoKey, count: BigInt(0), value: 0, series: s ?? '' } as AggregationBucket));
         }
       } else {
         const existing = byKey.get(isoKey)?.[0];
-        result.push(existing ?? { key: isoKey, count: BigInt(0), value: 0, series: '' } as AggregationBucket);
+        result.push(existing ?? ({ key: isoKey, count: BigInt(0), value: 0, series: '' } as AggregationBucket));
       }
     }
     return result;
@@ -594,28 +626,34 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
     if (!this.grpc.signal) return;
     this.grpc.signal
       .aggregateSignals({ filters: this.buildFilters(), groupBy: 'stream', metric: 'count', timeBucket: '' })
-      .then((resp) => {
-        if (!this.alive) return;
-        this.streamCounts = resp.buckets ?? [];
-        this.streams = this.streamCounts.map((b) => b.key).filter((k) => k);
-      })
-      .catch(() => {});
+      .then(
+        (resp) => {
+          if (!this.alive) return;
+          this.streamCounts = resp.buckets ?? [];
+          this.streams = this.streamCounts.map((b) => b.key).filter((k) => k);
+        },
+        (err) => this.handleApiError(err),
+      );
     this.grpc.signal
       .aggregateSignals({ filters: this.buildFilters(), groupBy: 'outcome', metric: 'count', timeBucket: '' })
-      .then((resp) => {
-        if (!this.alive) return;
-        this.outcomeCounts = resp.buckets ?? [];
-      })
-      .catch(() => {});
+      .then(
+        (resp) => {
+          if (!this.alive) return;
+          this.outcomeCounts = resp.buckets ?? [];
+        },
+        (err) => this.handleApiError(err),
+      );
     for (const dim of this.dimensions) {
       this.grpc.signal
         .aggregateSignals({ filters: this.buildFilters(), groupBy: dim.key, metric: 'count', timeBucket: '' })
-        .then((resp) => {
-          if (!this.alive) return;
-          const buckets = (resp.buckets ?? []).filter(b => b.key);
-          this.dimensionCounts[dim.key] = buckets.length;
-        })
-        .catch(() => {});
+        .then(
+          (resp) => {
+            if (!this.alive) return;
+            const buckets = (resp.buckets ?? []).filter((b) => b.key);
+            this.dimensionCounts[dim.key] = buckets.length;
+          },
+          (err) => this.handleApiError(err),
+        );
     }
   }
 
@@ -627,18 +665,18 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
     const groupBy = this.activeGroupBys[0];
     this.grpc.signal
       .aggregateSignals({ filters: this.buildFilters(), groupBy, metric: this.selectedMetric, timeBucket: '' })
-      .then((resp) => {
-        if (!this.alive) return;
-        const buckets = resp.buckets ?? [];
-        const total = buckets.reduce((s, b) => s + this.bv(b), 0) || 1;
-        this.primaryBreakdown = buckets
-          .filter((b) => b.key)
-          .map((b) => ({ key: b.key, count: this.bv(b), pct: (this.bv(b) / total) * 100 }));
-        this.breakdownPage = 0;
-      })
-      .catch(() => {
-        this.toast.showError('Failed to load aggregation data. Please try again.');
-      });
+      .then(
+        (resp) => {
+          if (!this.alive) return;
+          const buckets = resp.buckets ?? [];
+          const total = buckets.reduce((s, b) => s + this.bv(b), 0) || 1;
+          this.primaryBreakdown = buckets
+            .filter((b) => b.key)
+            .map((b) => ({ key: b.key, count: this.bv(b), pct: (this.bv(b) / total) * 100 }));
+          this.breakdownPage = 0;
+        },
+        (err) => this.handleApiError(err),
+      );
   }
 
   buildChartPath(): void {
@@ -661,7 +699,7 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
     this.buildYAxisTicks();
 
     // Check if we have multi-series data (buckets with non-empty series field)
-    const hasSeries = this.chartBuckets.some(b => b.series);
+    const hasSeries = this.chartBuckets.some((b) => b.series);
 
     if (hasSeries) {
       this.buildMultiSeriesChart();
@@ -686,7 +724,7 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
     this.chartPath = 'M' + points.join(' L');
 
     const barGap = 1;
-    const barW = Math.max((w / this.chartBuckets.length) - barGap, 1);
+    const barW = Math.max(w / this.chartBuckets.length - barGap, 1);
     this.chartBars = this.chartBuckets.map((b, i) => {
       const val = this.bv(b);
       const barH = (val / max) * h;
@@ -713,7 +751,7 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
     }
 
     // Collect all unique time keys — sort chronologically
-    const allKeys = [...new Set(this.chartBuckets.map(b => b.key))];
+    const allKeys = [...new Set(this.chartBuckets.map((b) => b.key))];
     allKeys.sort((a, b) => {
       const ta = new Date(a).getTime();
       const tb = new Date(b).getTime();
@@ -727,7 +765,7 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
     }
 
     // Find global max across all series
-    this.chartMaxCount = Math.max(...this.chartBuckets.map(b => this.bv(b)), 1);
+    this.chartMaxCount = Math.max(...this.chartBuckets.map((b) => this.bv(b)), 1);
 
     const padding = 8;
     const w = this.chartWidth - padding * 2;
@@ -741,7 +779,7 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
       const color = this.seriesColors[seriesIdx % this.seriesColors.length];
 
       // Map this series' buckets by time key for fast lookup
-      const byKey = new Map(buckets.map(b => [b.key, this.bv(b)]));
+      const byKey = new Map(buckets.map((b) => [b.key, this.bv(b)]));
 
       // Line path
       const step = w / Math.max(allKeys.length - 1, 1);
@@ -756,7 +794,7 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
 
       // Bar data — subdivide each time slot by series
       const barGap = 1;
-      const slotW = Math.max((w / allKeys.length) - barGap, 1);
+      const slotW = Math.max(w / allKeys.length - barGap, 1);
       const subBarW = Math.max(slotW / seriesCount - 1, 1);
       const bars = allKeys.map((tk, i) => {
         const val = byKey.get(tk) ?? 0;
@@ -830,7 +868,8 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
       const d = new Date(t);
       const pct = (i / (targetLabels - 1)) * 100;
       const text = showDate
-        ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' +
+        ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) +
+          ' ' +
           d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
         : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
       this.xAxisLabels.push({ text, pct });
@@ -846,8 +885,13 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
     }
     // Set y-axis unit label based on metric
     const metricUnits: Record<string, string> = {
-      count: 'count', distinct_count: 'users',
-      avg: 'ms', sum: 'ms', p50: 'ms', p95: 'ms', p99: 'ms',
+      count: 'count',
+      distinct_count: 'users',
+      avg: 'ms',
+      sum: 'ms',
+      p50: 'ms',
+      p95: 'ms',
+      p99: 'ms',
     };
     this.yAxisLabel = metricUnits[this.selectedMetric] ?? '';
 
@@ -864,5 +908,18 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
     for (let v = niceMax; v >= 0; v -= niceStep) {
       this.yAxisTicks.push(v);
     }
+  }
+
+  private handleApiError(err: any): void {
+    if (this.isServiceUnavailable(err)) {
+      this.signalsAvailable = false;
+      return;
+    }
+    this.toast.showError(err);
+  }
+
+  private isServiceUnavailable(err: any): boolean {
+    const code = err?.code ?? err?.status;
+    return code === 12 || code === 5;
   }
 }

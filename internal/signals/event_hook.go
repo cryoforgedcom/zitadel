@@ -6,6 +6,7 @@ package signals
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -58,6 +59,14 @@ func NewEventSignalHook(emitter *Emitter) func(ctx context.Context, events []eve
 		}
 
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.ErrorContext(ctx, "identity_signals.event_hook_panic",
+						slog.Any("panic", r),
+						slog.Int("batch_size", len(snaps)),
+					)
+				}
+			}()
 			for _, s := range snaps {
 				ids := extractIDs(s.aggType, s.aggID, s.payload)
 
@@ -126,7 +135,9 @@ func extractIDs(aggType, aggID, payload string) extractedIDs {
 
 	// Parse the JSON payload once into a generic map to handle all field
 	// name variants used across the codebase.
-	if payload == "" {
+	// Cap at 1MB to prevent OOM on extremely large payloads.
+	const maxPayloadSize = 1 << 20 // 1MB
+	if payload == "" || len(payload) > maxPayloadSize {
 		return ids
 	}
 	var m map[string]json.RawMessage

@@ -20,6 +20,9 @@ type Server struct {
 }
 
 func CreateServer(reader signals.SignalReader) *Server {
+	if reader == nil {
+		return nil
+	}
 	return &Server{
 		reader: reader,
 	}

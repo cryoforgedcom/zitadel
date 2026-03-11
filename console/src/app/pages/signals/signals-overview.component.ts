@@ -86,6 +86,8 @@ export class SignalsOverviewComponent implements OnInit {
 
   private static readonly AVG_ROW_BYTES = 512;
 
+  signalsAvailable = true;
+
   ngOnInit(): void {
     this.refresh();
   }
@@ -141,7 +143,7 @@ export class SignalsOverviewComponent implements OnInit {
           this.chartLoading = false;
         },
         (err) => {
-          this.toast.showError(err);
+          this.handleApiError(err);
           this.chartLoading = false;
         },
       );
@@ -151,71 +153,89 @@ export class SignalsOverviewComponent implements OnInit {
     if (!this.grpc.signal) return;
     this.grpc.signal
       .aggregateSignals({ filters: {}, groupBy: 'stream', metric: 'count', timeBucket: '' })
-      .then((resp) => {
-        this.streamCounts = resp.buckets ?? [];
-        this.streams = this.streamCounts.map((b) => b.key).filter((k) => k);
-      });
+      .then(
+        (resp) => {
+          this.streamCounts = resp.buckets ?? [];
+          this.streams = this.streamCounts.map((b) => b.key).filter((k) => k);
+        },
+        (err) => this.handleApiError(err),
+      );
     this.grpc.signal
       .aggregateSignals({ filters: {}, groupBy: 'outcome', metric: 'count', timeBucket: '' })
-      .then((resp) => {
-        this.outcomeCounts = resp.buckets ?? [];
-      });
+      .then(
+        (resp) => {
+          this.outcomeCounts = resp.buckets ?? [];
+        },
+        (err) => this.handleApiError(err),
+      );
   }
 
   loadTopOperations(): void {
     if (!this.grpc.signal) return;
     this.grpc.signal
       .aggregateSignals({ filters: {}, groupBy: 'operation', metric: 'count', timeBucket: '' })
-      .then((resp) => {
-        const buckets = resp.buckets ?? [];
-        const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
-        this.topOperations = buckets
-          .filter((b) => b.key)
-          .slice(0, 10)
-          .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
-      });
+      .then(
+        (resp) => {
+          const buckets = resp.buckets ?? [];
+          const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
+          this.topOperations = buckets
+            .filter((b) => b.key)
+            .slice(0, 10)
+            .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
+        },
+        (err) => this.handleApiError(err),
+      );
   }
 
   loadTopUsers(): void {
     if (!this.grpc.signal) return;
     this.grpc.signal
       .aggregateSignals({ filters: {}, groupBy: 'user_id', metric: 'count', timeBucket: '' })
-      .then((resp) => {
-        const buckets = resp.buckets ?? [];
-        const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
-        this.topUsers = buckets
-          .filter((b) => b.key)
-          .slice(0, 10)
-          .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
-      });
+      .then(
+        (resp) => {
+          const buckets = resp.buckets ?? [];
+          const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
+          this.topUsers = buckets
+            .filter((b) => b.key)
+            .slice(0, 10)
+            .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
+        },
+        (err) => this.handleApiError(err),
+      );
   }
 
   loadTopIPs(): void {
     if (!this.grpc.signal) return;
     this.grpc.signal
       .aggregateSignals({ filters: {}, groupBy: 'ip', metric: 'count', timeBucket: '' })
-      .then((resp) => {
-        const buckets = resp.buckets ?? [];
-        const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
-        this.topIPs = buckets
-          .filter((b) => b.key)
-          .slice(0, 10)
-          .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
-      });
+      .then(
+        (resp) => {
+          const buckets = resp.buckets ?? [];
+          const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
+          this.topIPs = buckets
+            .filter((b) => b.key)
+            .slice(0, 10)
+            .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
+        },
+        (err) => this.handleApiError(err),
+      );
   }
 
   loadTopCountries(): void {
     if (!this.grpc.signal) return;
     this.grpc.signal
       .aggregateSignals({ filters: {}, groupBy: 'country', metric: 'count', timeBucket: '' })
-      .then((resp) => {
-        const buckets = resp.buckets ?? [];
-        const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
-        this.topCountries = buckets
-          .filter((b) => b.key)
-          .slice(0, 10)
-          .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
-      });
+      .then(
+        (resp) => {
+          const buckets = resp.buckets ?? [];
+          const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
+          this.topCountries = buckets
+            .filter((b) => b.key)
+            .slice(0, 10)
+            .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
+        },
+        (err) => this.handleApiError(err),
+      );
   }
 
   loadRecentFailures(): void {
@@ -225,9 +245,12 @@ export class SignalsOverviewComponent implements OnInit {
         query: { offset: BigInt(0), limit: 5, asc: false },
         filters: { outcome: 'failure' },
       })
-      .then((resp) => {
-        this.recentFailures = resp.signals ?? [];
-      });
+      .then(
+        (resp) => {
+          this.recentFailures = resp.signals ?? [];
+        },
+        (err) => this.handleApiError(err),
+      );
   }
 
   buildChartPath(): void {
@@ -342,9 +365,24 @@ export class SignalsOverviewComponent implements OnInit {
 
         this.storeHealthLoading = false;
       },
-      () => {
+      (err) => {
+        this.handleApiError(err);
         this.storeHealthLoading = false;
       },
     );
+  }
+
+  private handleApiError(err: any): void {
+    if (this.isServiceUnavailable(err)) {
+      this.signalsAvailable = false;
+      return;
+    }
+    this.toast.showError(err);
+  }
+
+  private isServiceUnavailable(err: any): boolean {
+    const code = err?.code ?? err?.status;
+    // gRPC UNIMPLEMENTED (12) or NOT_FOUND (5) — service not registered
+    return code === 12 || code === 5;
   }
 }
