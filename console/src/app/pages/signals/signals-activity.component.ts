@@ -225,14 +225,23 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
 
     const zeroTrace = '00000000000000000000000000000000';
 
-    // Assign a color to every valid trace ID so that the colored left-
-    // border and badge are always visible.  When multiple signals on the
-    // page share the same trace_id they automatically get the same color
-    // which visually groups them.  Singleton traces (e.g. in user views
-    // where the matching request signal isn't in scope) still get a
-    // color so users can click through to the full trace.
+    // Count occurrences of each trace ID to find multi-signal traces.
+    const traceCounts = new Map<string, number>();
+    for (const s of this.signals) {
+      if (s.traceId && s.traceId !== zeroTrace) {
+        traceCounts.set(s.traceId, (traceCounts.get(s.traceId) ?? 0) + 1);
+      }
+    }
+
+    // Assign colors only to traces that appear 2+ times on this page.
     const traceColorMap = new Map<string, string>();
     let colorIdx = 0;
+    for (const [traceId, count] of traceCounts) {
+      if (count >= 2) {
+        traceColorMap.set(traceId, this.traceColors[colorIdx % this.traceColors.length]);
+        colorIdx++;
+      }
+    }
 
     for (const s of this.signals) {
       const ts = this.toMillis(s.createdAt);
@@ -243,14 +252,7 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
       lastGroup = groupLabel;
 
       const hasTrace = !!(s.traceId && s.traceId !== zeroTrace);
-      let traceColor = '';
-      if (hasTrace) {
-        if (!traceColorMap.has(s.traceId)) {
-          traceColorMap.set(s.traceId, this.traceColors[colorIdx % this.traceColors.length]);
-          colorIdx++;
-        }
-        traceColor = traceColorMap.get(s.traceId)!;
-      }
+      const traceColor = hasTrace ? (traceColorMap.get(s.traceId) ?? '') : '';
 
       this.timeline.push({ signal: s, timeLabel, isFirstInGroup, groupLabel, traceColor, hasTrace });
     }
