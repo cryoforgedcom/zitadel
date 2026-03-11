@@ -43,7 +43,7 @@ func (s *DuckLakeStore) LogInfo(_ context.Context) {}
 // CompactionWorker is a no-op stub for non-CGO builds.
 type CompactionWorker struct{ done chan struct{} }
 
-func NewCompactionWorker(_ *DuckLakeStore, _ time.Duration) *CompactionWorker {
+func NewCompactionWorker(_ *DuckLakeStore, _ time.Duration, _ *SignalMetrics) *CompactionWorker {
 	ch := make(chan struct{})
 	close(ch)
 	return &CompactionWorker{done: ch}
@@ -55,7 +55,7 @@ func (w *CompactionWorker) Done() <-chan struct{}    { return w.done }
 // RetentionWorker is a no-op stub for non-CGO builds.
 type RetentionWorker struct{ done chan struct{} }
 
-func NewRetentionWorker(_ *DuckLakeStore, _ StreamsConfig, _ RetentionConfig) *RetentionWorker {
+func NewRetentionWorker(_ *DuckLakeStore, _ StreamsConfig, _ RetentionConfig, _ *SignalMetrics) *RetentionWorker {
 	ch := make(chan struct{})
 	close(ch)
 	return &RetentionWorker{done: ch}

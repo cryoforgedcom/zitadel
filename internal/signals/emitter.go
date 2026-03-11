@@ -1,5 +1,8 @@
 package signals
 
+// PREVIEW: Identity Signals is a preview feature. APIs, storage format,
+// and configuration may change between releases without notice.
+
 import (
 	"context"
 	"log/slog"
@@ -15,22 +18,24 @@ type Emitter struct {
 	ch      chan Signal
 	sink    SignalSink
 	cfg     StoreConfig
+	metrics *SignalMetrics
 	dropped atomic.Int64
 	done    chan struct{}
 }
 
 // NewEmitter creates a new signal emitter. Call [Emitter.Start] to begin
 // draining signals from the channel.
-func NewEmitter(cfg StoreConfig, sink SignalSink) *Emitter {
+func NewEmitter(cfg StoreConfig, sink SignalSink, m *SignalMetrics) *Emitter {
 	size := cfg.ChannelSize
 	if size <= 0 {
 		size = 4096
 	}
 	return &Emitter{
-		ch:   make(chan Signal, size),
-		sink: sink,
-		cfg:  cfg,
-		done: make(chan struct{}),
+		ch:      make(chan Signal, size),
+		sink:    sink,
+		cfg:     cfg,
+		metrics: m,
+		done:    make(chan struct{}),
 	}
 }
 
@@ -41,7 +46,8 @@ func (e *Emitter) Emit(signal Signal) {
 	case e.ch <- signal:
 	default:
 		count := e.dropped.Add(1)
-		if count%1000 == 0 {
+		e.metrics.RecordDropped(context.Background(), 1)
+		if count%100 == 0 {
 			slog.Warn("identity_signals.channel_full",
 				slog.Int64("total_dropped", count),
 				slog.Int("channel_cap", cap(e.ch)),
@@ -62,10 +68,11 @@ func (e *Emitter) Start(ctx context.Context) {
 	defer close(e.done)
 
 	d := &signalDebouncer{
-		ctx:   ctx,
-		sink:  e.sink,
-		cfg:   e.cfg.Debounce,
-		cache: make([]Signal, 0, e.cfg.Debounce.MaxBulkSize),
+		ctx:     ctx,
+		sink:    e.sink,
+		cfg:     e.cfg.Debounce,
+		metrics: e.metrics,
+		cache:   make([]Signal, 0, e.cfg.Debounce.MaxBulkSize),
 	}
 
 	var ticker *time.Ticker
@@ -113,11 +120,12 @@ func (e *Emitter) Done() <-chan struct{} {
 
 // signalDebouncer accumulates signals and flushes them in batches.
 type signalDebouncer struct {
-	ctx   context.Context
-	sink  SignalSink
-	cfg   DebouncerConfig
-	mu    sync.Mutex
-	cache []Signal
+	ctx     context.Context
+	sink    SignalSink
+	cfg     DebouncerConfig
+	metrics *SignalMetrics
+	mu      sync.Mutex
+	cache   []Signal
 }
 
 func (d *signalDebouncer) add(sig Signal) {
@@ -154,10 +162,21 @@ func (d *signalDebouncer) flush() {
 		recorded[i] = RecordedSignal{Signal: sig}
 	}
 
+	start := time.Now()
 	if err := d.sink.WriteBatch(ctx, recorded); err != nil {
 		slog.ErrorContext(ctx, "identity_signals.batch_write_failed",
 			slog.Int("batch_size", len(batch)),
 			slog.String("error", err.Error()),
 		)
+	} else {
+		d.metrics.RecordBatchWriteDuration(ctx, time.Since(start).Seconds())
+		// Count ingested signals per stream for OTEL metrics.
+		streamCounts := make(map[string]int64)
+		for _, sig := range batch {
+			streamCounts[string(sig.Stream)]++
+		}
+		for stream, count := range streamCounts {
+			d.metrics.RecordIngested(ctx, stream, count)
+		}
 	}
 }

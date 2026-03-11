@@ -1,7 +1,11 @@
 package signals
 
+// PREVIEW: Identity Signals is a preview feature. APIs, storage format,
+// and configuration may change between releases without notice.
+
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -21,13 +25,14 @@ func NewEventSignalHook(emitter *Emitter) func(ctx context.Context, events []eve
 		// Snapshot event data before spawning goroutine — Event
 		// interface values may not be safe to read after Push returns.
 		type snap struct {
-			instanceID string
-			aggID      string
-			aggType    string
-			creator    string
-			eventType  string
-			ts         time.Time
-			payload    string
+			instanceID    string
+			aggID         string
+			aggType       string
+			resourceOwner string
+			creator       string
+			eventType     string
+			ts            time.Time
+			payload       string
 		}
 		snaps := make([]snap, len(events))
 		for i, e := range events {
@@ -41,35 +46,38 @@ func NewEventSignalHook(emitter *Emitter) func(ctx context.Context, events []eve
 				payload = string(b)
 			}
 			snaps[i] = snap{
-				instanceID: agg.InstanceID,
-				aggID:      agg.ID,
-				aggType:    string(agg.Type),
-				creator:    e.Creator(),
-				eventType:  string(e.Type()),
-				ts:         ts,
-				payload:    payload,
+				instanceID:    agg.InstanceID,
+				aggID:         agg.ID,
+				aggType:       string(agg.Type),
+				resourceOwner: agg.ResourceOwner,
+				creator:       e.Creator(),
+				eventType:     string(e.Type()),
+				ts:            ts,
+				payload:        payload,
 			}
 		}
 
 		go func() {
 			for _, s := range snaps {
-				// Only set UserID/SessionID when the aggregate
-				// actually represents a user or session. For other
-				// aggregate types the ID is a resource identifier,
-				// not a user/session.
-				var userID, sessionID string
-				switch {
-				case strings.HasPrefix(s.aggType, "user"):
-					userID = s.aggID
-				case strings.HasPrefix(s.aggType, "session"):
-					sessionID = s.aggID
+				ids := extractIDs(s.aggType, s.aggID, s.payload)
+
+				// Fallback: use the event creator (acting user) when no
+				// userID could be extracted from aggregate or payload.
+				// Skip system-level identifiers like "SYSTEM" / "system"
+				// which are set when the OIDC/SAML server acts on behalf
+				// of a user (not a real user ID).
+				userID := ids.userID
+				if userID == "" && isRealUser(s.creator) {
+					userID = s.creator
 				}
 
 				emitter.Emit(Signal{
 					InstanceID: s.instanceID,
 					UserID:     userID,
 					CallerID:   s.creator,
-					SessionID:  sessionID,
+					SessionID:  ids.sessionID,
+					ClientID:   ids.clientID,
+					OrgID:      s.resourceOwner,
 					Operation:  s.eventType,
 					Stream:     StreamEvents,
 					Resource:   s.aggType + "/" + s.aggID,
@@ -92,4 +100,79 @@ func outcomeFromEventType(eventType string) Outcome {
 		return OutcomeFailure
 	}
 	return OutcomeSuccess
+}
+
+// extractedIDs holds the identity fields extracted from an event.
+type extractedIDs struct {
+	userID    string
+	sessionID string
+	clientID  string
+}
+
+// extractIDs pulls user/session/client IDs from the aggregate type + ID and
+// the JSON payload. Different event types use inconsistent JSON field names
+// (camelCase vs snake_case), so we parse into a generic map and check all
+// known variants.
+func extractIDs(aggType, aggID, payload string) extractedIDs {
+	var ids extractedIDs
+
+	// Aggregate-level: the aggregate ID is the entity itself for user/session types
+	switch {
+	case strings.HasPrefix(aggType, "user"):
+		ids.userID = aggID
+	case strings.HasPrefix(aggType, "session"):
+		ids.sessionID = aggID
+	}
+
+	// Parse the JSON payload once into a generic map to handle all field
+	// name variants used across the codebase.
+	if payload == "" {
+		return ids
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(payload), &m); err != nil {
+		return ids
+	}
+
+	// User ID — try all variants: "userID", "user_id", "userId", "hint_user_id"
+	if ids.userID == "" {
+		ids.userID = firstStringField(m, "userID", "user_id", "userId", "hint_user_id")
+	}
+
+	// Session ID — try: "sessionID", "session_id"
+	if ids.sessionID == "" {
+		ids.sessionID = firstStringField(m, "sessionID", "session_id")
+	}
+
+	// Client ID — try: "clientID", "clientId", "client_id"
+	ids.clientID = firstStringField(m, "clientID", "clientId", "client_id")
+
+	return ids
+}
+
+// firstStringField returns the value of the first key found in the map that
+// unmarshals to a non-empty string.
+func firstStringField(m map[string]json.RawMessage, keys ...string) string {
+	for _, k := range keys {
+		raw, ok := m[k]
+		if !ok {
+			continue
+		}
+		var v string
+		if err := json.Unmarshal(raw, &v); err == nil && v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// isRealUser returns true when creator looks like a real user ID rather
+// than a well-known system identifier. The OIDC/SAML server and migration
+// code use "SYSTEM" / "system" as creator; these are not real users.
+func isRealUser(creator string) bool {
+	if creator == "" {
+		return false
+	}
+	up := strings.ToUpper(creator)
+	return up != "SYSTEM"
 }

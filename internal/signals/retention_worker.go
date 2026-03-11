@@ -15,11 +15,12 @@ type RetentionWorker struct {
 	store   *DuckLakeStore
 	streams StreamsConfig
 	cfg     RetentionConfig
+	metrics *SignalMetrics
 	done    chan struct{}
 }
 
 // NewRetentionWorker creates a retention worker.
-func NewRetentionWorker(store *DuckLakeStore, streams StreamsConfig, cfg RetentionConfig) *RetentionWorker {
+func NewRetentionWorker(store *DuckLakeStore, streams StreamsConfig, cfg RetentionConfig, m *SignalMetrics) *RetentionWorker {
 	interval := cfg.PruneInterval
 	if interval <= 0 {
 		interval = 6 * time.Hour
@@ -28,6 +29,7 @@ func NewRetentionWorker(store *DuckLakeStore, streams StreamsConfig, cfg Retenti
 		store:   store,
 		streams: streams,
 		cfg:     RetentionConfig{PruneInterval: interval},
+		metrics: m,
 		done:    make(chan struct{}),
 	}
 }
@@ -42,7 +44,7 @@ func (w *RetentionWorker) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			w.run(ctx)
+			w.safeRun(ctx)
 		case <-ctx.Done():
 			return
 		}
@@ -52,6 +54,17 @@ func (w *RetentionWorker) Start(ctx context.Context) {
 // Done returns a channel closed when the worker has stopped.
 func (w *RetentionWorker) Done() <-chan struct{} {
 	return w.done
+}
+
+func (w *RetentionWorker) safeRun(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.ErrorContext(ctx, "identity_signals.retention_panic",
+				slog.Any("panic", r),
+			)
+		}
+	}()
+	w.run(ctx)
 }
 
 func (w *RetentionWorker) run(ctx context.Context) {
@@ -71,6 +84,7 @@ func (w *RetentionWorker) run(ctx context.Context) {
 		}
 
 		if pruned > 0 {
+			w.metrics.RecordPruned(ctx, string(stream), pruned)
 			slog.InfoContext(ctx, "identity_signals.retention_pruned",
 				slog.String("stream", string(stream)),
 				slog.Int64("rows_deleted", pruned),

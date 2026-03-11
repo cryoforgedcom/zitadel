@@ -89,6 +89,12 @@ func listQueryToOffsetLimit(q *object.ListQuery) (offset, limit int) {
 	if limit > 1000 {
 		limit = 1000
 	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > 10000 {
+		offset = 10000
+	}
 	return offset, limit
 }
 
@@ -172,15 +178,10 @@ func findingToProto(f *signals.RecordedFinding) *signal.Finding {
 	}
 }
 
-// authorizeSignalAccess checks that the caller has permission to view
-// the requested signals. The proto auth_option enforces iam.read which
-// limits access to instance administrators. This function provides an
-// additional scope check: self-access (own userId) is always allowed,
-// and org-scoped queries are allowed when the caller is in that org.
-// Cross-org or unscoped queries are permitted since iam.read already
-// restricts to instance admins.
+// authorizeSignalAccess is a placeholder for future fine-grained
+// authorization (e.g. org-scoped queries). Currently the proto
+// auth_option enforces iam.read which limits access to instance
+// administrators, so no additional restriction is applied here.
 func authorizeSignalAccess(_ context.Context, _ signals.SignalFilters) error {
-	// iam.read is enforced at the proto interceptor level, so only
-	// instance admins reach this point. No further restriction needed.
 	return nil
 }

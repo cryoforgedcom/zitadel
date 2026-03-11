@@ -1,6 +1,6 @@
 import { animate, state, style, transition, trigger } from '@angular/animations';
 import { CommonModule } from '@angular/common';
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -49,12 +49,14 @@ interface TimeRange {
     ]),
   ],
 })
-export class SignalsLogsComponent implements OnInit {
+export class SignalsLogsComponent implements OnInit, OnDestroy {
   private readonly grpc = inject(GrpcService);
   private readonly fb = inject(FormBuilder);
   private readonly toast = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+
+  private alive = true;
 
   loading = false;
   signals: Signal[] = [];
@@ -70,6 +72,7 @@ export class SignalsLogsComponent implements OnInit {
   dimensionCounts: Record<string, number> = {};
 
   expandedSignals = new Set<Signal>();
+  highlightedSignal: Signal | null = null;
 
   // Filter prompt state
   pendingFilterKey = '';
@@ -130,8 +133,20 @@ export class SignalsLogsComponent implements OnInit {
       const tr = this.timeRanges.find(r => r.value === params['time']);
       if (tr) this.selectedTimeRange = tr;
     }
+    // Capture highlight hint from Activity "View in Logs"
+    if (params['highlight']) {
+      this._highlightOp = params['highlight'];
+      this._highlightTs = params['highlight_ts'] ? Number(params['highlight_ts']) : 0;
+    }
     this.refresh();
   }
+
+  ngOnDestroy(): void {
+    this.alive = false;
+  }
+
+  private _highlightOp = '';
+  private _highlightTs = 0;
 
   refresh(): void {
     this.syncUrl();
@@ -217,7 +232,8 @@ export class SignalsLogsComponent implements OnInit {
 
   applyPendingFilter(value: string): void {
     if (value && this.pendingFilterKey) {
-      this.filterForm.patchValue({ [this.pendingFilterKey]: value.trim() });
+      const trimmed = value.trim().substring(0, 512);
+      this.filterForm.patchValue({ [this.pendingFilterKey]: trimmed });
       this.pendingFilterKey = '';
       this.pendingFilterLabel = '';
       this.filterSuggestions = [];
@@ -246,16 +262,17 @@ export class SignalsLogsComponent implements OnInit {
       })
       .then(
         (resp) => {
+          if (!this.alive) return;
           this.filterSuggestions = (resp.buckets ?? [])
             .filter(b => b.key)
             .map(b => ({ key: b.key, count: Number(b.count) }))
             .slice(0, 50);
           this.filterSuggestionsLoading = false;
         },
-        () => {
-          this.filterSuggestionsLoading = false;
-        },
-      );
+      )
+      .catch(() => {
+        this.filterSuggestionsLoading = false;
+      });
   }
 
   filteredSuggestions(): { key: string; count: number }[] {
@@ -306,9 +323,23 @@ export class SignalsLogsComponent implements OnInit {
     this.refresh();
   }
 
+  private readonly validActivityFields = new Set([
+    'user_id', 'client_id', 'org_id', 'trace_id', 'session_id', 'ip',
+  ]);
+
   viewActivity(entityType: string, entityValue: string): void {
+    if (!this.validActivityFields.has(entityType)) return;
     if (!entityValue || entityValue === '—') return;
     this.router.navigate(['/signals/activity'], { queryParams: { [entityType]: entityValue } });
+  }
+
+  navigateToEntity(type: 'user' | 'org' | 'project', id: string): void {
+    if (!id || id === '—') return;
+    switch (type) {
+      case 'user': this.router.navigate(['/users', id]); break;
+      case 'org': this.router.navigate(['/orgs', id]); break;
+      case 'project': this.router.navigate(['/projects', id]); break;
+    }
   }
 
   copyToClipboard(value: string, event: MouseEvent): void {
@@ -357,16 +388,43 @@ export class SignalsLogsComponent implements OnInit {
       })
       .then(
         (resp) => {
+          if (!this.alive) return;
           this.signals = resp.signals ?? [];
           this.sortedSignals = [...this.signals];
           this.totalCount = Number(resp.details?.totalResult ?? 0);
           this.loading = false;
+          this.tryHighlight();
         },
-        (err) => {
-          this.toast.showError(err);
-          this.loading = false;
-        },
-      );
+      )
+      .catch(() => {
+        this.toast.showError('Failed to load signals. Please try again.');
+        this.loading = false;
+      });
+  }
+
+  /** Auto-expand and highlight the row matching the hint from Activity → "View in Logs" */
+  private tryHighlight(): void {
+    if (!this._highlightOp) return;
+    let best: Signal | null = null;
+    let bestDiff = Infinity;
+    for (const s of this.sortedSignals) {
+      if (s.operation !== this._highlightOp) continue;
+      if (this._highlightTs) {
+        const sTs = Number(s.createdAt?.seconds ?? 0) * 1000;
+        const diff = Math.abs(sTs - this._highlightTs);
+        if (diff < bestDiff) { bestDiff = diff; best = s; }
+      } else {
+        best = s;
+        break;
+      }
+    }
+    if (best) {
+      this.expandedSignals.add(best);
+      this.highlightedSignal = best;
+    }
+    // Only highlight on first load
+    this._highlightOp = '';
+    this._highlightTs = 0;
   }
 
   loadDimensions(): void {
@@ -374,19 +432,24 @@ export class SignalsLogsComponent implements OnInit {
     this.grpc.signal
       .aggregateSignals({ filters: this.buildFilters(), groupBy: 'stream', metric: 'count', timeBucket: '' })
       .then((resp) => {
+        if (!this.alive) return;
         this.streamCounts = resp.buckets ?? [];
         this.streams = this.streamCounts.map((b) => b.key).filter((k) => k);
-      });
+      })
+      .catch(() => {});
     this.grpc.signal
       .aggregateSignals({ filters: this.buildFilters(), groupBy: 'outcome', metric: 'count', timeBucket: '' })
       .then((resp) => {
+        if (!this.alive) return;
         this.outcomeCounts = resp.buckets ?? [];
-      });
+      })
+      .catch(() => {});
     const filterFields = ['operation', 'ip', 'country', 'user_id', 'org_id', 'project_id', 'client_id'];
     for (const field of filterFields) {
       this.grpc.signal
         .aggregateSignals({ filters: this.buildFilters(), groupBy: field, metric: 'count', timeBucket: '' })
         .then((resp) => {
+          if (!this.alive) return;
           this.dimensionCounts[field] = (resp.buckets ?? []).filter(b => b.key).length;
         })
         .catch(() => {});

@@ -1,5 +1,8 @@
 package signals
 
+// PREVIEW: Identity Signals is a preview feature. APIs, storage format,
+// and configuration may change between releases without notice.
+
 import (
 	"context"
 	"net"

@@ -41,7 +41,7 @@ func TestEmitter_BasicEmitAndDrain(t *testing.T) {
 			MaxBulkSize:  10,
 		},
 	}
-	emitter := NewEmitter(cfg, sink)
+	emitter := NewEmitter(cfg, sink, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go emitter.Start(ctx)
@@ -76,7 +76,7 @@ func TestEmitter_DropCounting(t *testing.T) {
 			MaxBulkSize:  1000,      // never batch-flush
 		},
 	}
-	emitter := NewEmitter(cfg, sink)
+	emitter := NewEmitter(cfg, sink, nil)
 	// Don't start the drain loop — channel will fill up
 
 	for i := 0; i < 10; i++ {
@@ -98,7 +98,7 @@ func TestEmitter_GracefulShutdownDrains(t *testing.T) {
 			MaxBulkSize:  1000,      // no batch flush
 		},
 	}
-	emitter := NewEmitter(cfg, sink)
+	emitter := NewEmitter(cfg, sink, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go emitter.Start(ctx)
@@ -127,7 +127,7 @@ func TestEmitter_BatchFlush(t *testing.T) {
 			MaxBulkSize:  5,         // flush every 5 signals
 		},
 	}
-	emitter := NewEmitter(cfg, sink)
+	emitter := NewEmitter(cfg, sink, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go emitter.Start(ctx)
@@ -157,7 +157,7 @@ func TestEmitter_DefaultChannelSize(t *testing.T) {
 	cfg := StoreConfig{
 		ChannelSize: 0, // should default to 4096
 	}
-	emitter := NewEmitter(cfg, sink)
+	emitter := NewEmitter(cfg, sink, nil)
 	if cap(emitter.ch) != 4096 {
 		t.Errorf("expected default channel size 4096, got %d", cap(emitter.ch))
 	}

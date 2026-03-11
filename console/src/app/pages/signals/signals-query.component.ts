@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -63,17 +63,23 @@ interface ChartSeries {
   templateUrl: './signals-query.component.html',
   styleUrls: ['./signals.component.scss'],
 })
-export class SignalsQueryComponent implements OnInit {
+export class SignalsQueryComponent implements OnInit, OnDestroy {
   private readonly grpc = inject(GrpcService);
   private readonly fb = inject(FormBuilder);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
+  private alive = true;
+
   // X-axis timeline labels
   xAxisLabels: { text: string; pct: number }[] = [];
   // Y-axis tick values
   yAxisTicks: number[] = [];
+  // Y-axis unit label (e.g. "ms", "count")
+  yAxisLabel = '';
+  // Scaled max used for chart rendering (matches top y-axis tick)
+  chartScaleMax = 1;
 
   // Chart
   chartBuckets: AggregationBucket[] = [];
@@ -107,6 +113,17 @@ export class SignalsQueryComponent implements OnInit {
     '1 hour': 60, '6 hours': 360, '24 hours': 1440,
     '7 days': 10080, '30 days': 43200,
   };
+
+  // Map bucket labels to milliseconds
+  private readonly bucketMs: Record<string, number> = {
+    '1 minute': 60_000, '5 minutes': 300_000, '15 minutes': 900_000,
+    '30 minutes': 1_800_000, '1 hour': 3_600_000, '3 hours': 10_800_000,
+    '6 hours': 21_600_000, '12 hours': 43_200_000,
+  };
+
+  // Boundaries of the currently displayed time window (used to build full x-axis grid)
+  private chartWindowStart = 0;
+  private chartWindowEnd = 0;
 
   get availableResolutions(): Resolution[] {
     const rangeMinutes = this.timeRangeMinutes[this.selectedTimeRange.value] ?? 1440;
@@ -197,17 +214,21 @@ export class SignalsQueryComponent implements OnInit {
   ]);
 
   timeRanges: TimeRange[] = [
-    { label: 'Last 1h', value: '1 hour', bucket: '1 minute' },
+    { label: 'Last 1h', value: '1 hour', bucket: '5 minutes' },
     { label: 'Last 6h', value: '6 hours', bucket: '5 minutes' },
     { label: 'Last 24h', value: '24 hours', bucket: '30 minutes' },
     { label: 'Last 7d', value: '7 days', bucket: '3 hours' },
     { label: 'Last 30d', value: '30 days', bucket: '12 hours' },
   ];
-  selectedTimeRange: TimeRange = this.timeRanges[2];
+  selectedTimeRange: TimeRange = this.timeRanges[1];
 
   ngOnInit(): void {
     this.restoreFromUrl();
     this.refresh();
+  }
+
+  ngOnDestroy(): void {
+    this.alive = false;
   }
 
   refresh(): void {
@@ -358,16 +379,17 @@ export class SignalsQueryComponent implements OnInit {
       })
       .then(
         (resp) => {
+          if (!this.alive) return;
           this.filterSuggestions = (resp.buckets ?? [])
             .filter(b => b.key)
             .map(b => ({ key: b.key, count: Number(b.count) }))
             .slice(0, 50);
           this.filterSuggestionsLoading = false;
         },
-        () => {
-          this.filterSuggestionsLoading = false;
-        },
-      );
+      )
+      .catch(() => {
+        this.filterSuggestionsLoading = false;
+      });
   }
 
   filteredSuggestions(): { key: string; count: number }[] {
@@ -419,8 +441,20 @@ export class SignalsQueryComponent implements OnInit {
 
   // --- Navigation ---
 
+  private readonly validDrillFields = new Set([
+    'operation', 'ip', 'country', 'user_id', 'org_id',
+    'project_id', 'client_id', 'resource', 'user_agent', 'referer',
+    'stream', 'outcome',
+  ]);
+
   drillDownToLogs(field: string, value: string): void {
+    if (!this.validDrillFields.has(field)) return;
     this.router.navigate(['/signals/logs'], { queryParams: { [field]: value } });
+  }
+
+  /** Returns the series color for a breakdown row based on its index. */
+  breakdownColor(idx: number): string {
+    return this.seriesColors[idx % this.seriesColors.length];
   }
 
   trackByKey(_i: number, row: BreakdownRow): string {
@@ -463,7 +497,7 @@ export class SignalsQueryComponent implements OnInit {
     if (this.selectedSource) params['source'] = this.selectedSource;
     if (this.selectedMetric !== 'count') params['metric'] = this.selectedMetric;
     if (this.activeGroupBys.length && this.activeGroupBys[0] !== 'operation') params['groupBy'] = this.activeGroupBys[0];
-    if (this.selectedTimeRange !== this.timeRanges[2]) params['time'] = this.selectedTimeRange.value;
+    if (this.selectedTimeRange !== this.timeRanges[1]) params['time'] = this.selectedTimeRange.value;
     const f = this.filterForm.value;
     for (const [key, val] of Object.entries(f)) {
       if (val && key !== 'stream') params[key] = val as string;
@@ -501,15 +535,59 @@ export class SignalsQueryComponent implements OnInit {
       })
       .then(
         (resp) => {
-          this.chartBuckets = resp.buckets ?? [];
+          if (!this.alive) return;
+          this.chartBuckets = this.fillTimeGrid(resp.buckets ?? []);
           this.buildChartPath();
           this.chartLoading = false;
         },
-        (err) => {
-          this.toast.showError(err);
-          this.chartLoading = false;
-        },
-      );
+      )
+      .catch(() => {
+        this.toast.showError('Failed to load aggregation data. Please try again.');
+        this.chartLoading = false;
+      });
+  }
+
+  /**
+   * Expands sparse API results into a complete time-series grid covering the
+   * full selected time window. Buckets missing from the response are inserted
+   * with count = 0 so the chart always spans the full window without gaps.
+   */
+  private fillTimeGrid(buckets: AggregationBucket[]): AggregationBucket[] {
+    const bucketInterval = this.bucketMs[this.activeResolution.value] ?? 300_000;
+    const rangeMs = (this.timeRangeMinutes[this.selectedTimeRange.value] ?? 360) * 60_000;
+    const now = Date.now();
+    // Align end to the nearest bucket boundary so the grid is stable across refreshes
+    this.chartWindowEnd = Math.floor(now / bucketInterval) * bucketInterval;
+    this.chartWindowStart = this.chartWindowEnd - rangeMs;
+
+    // Build lookup from ISO key → buckets (may be multi-series)
+    const hasSeries = buckets.some(b => b.series);
+    const byKey = new Map<string, AggregationBucket[]>();
+    for (const b of buckets) {
+      const list = byKey.get(b.key) ?? [];
+      list.push(b);
+      byKey.set(b.key, list);
+    }
+
+    // Discover the set of series present (for multi-series fill)
+    const seriesSet = hasSeries
+      ? [...new Set(buckets.map(b => b.series).filter(Boolean))]
+      : [''];
+
+    const result: AggregationBucket[] = [];
+    for (let t = this.chartWindowStart; t <= this.chartWindowEnd; t += bucketInterval) {
+      const isoKey = new Date(t).toISOString().replace(/\.\d{3}Z$/, 'Z');
+      if (hasSeries) {
+        for (const s of seriesSet) {
+          const existing = byKey.get(isoKey)?.find(b => b.series === s);
+          result.push(existing ?? { key: isoKey, count: BigInt(0), value: 0, series: s ?? '' } as AggregationBucket);
+        }
+      } else {
+        const existing = byKey.get(isoKey)?.[0];
+        result.push(existing ?? { key: isoKey, count: BigInt(0), value: 0, series: '' } as AggregationBucket);
+      }
+    }
+    return result;
   }
 
   loadDimensions(): void {
@@ -517,19 +595,23 @@ export class SignalsQueryComponent implements OnInit {
     this.grpc.signal
       .aggregateSignals({ filters: this.buildFilters(), groupBy: 'stream', metric: 'count', timeBucket: '' })
       .then((resp) => {
+        if (!this.alive) return;
         this.streamCounts = resp.buckets ?? [];
         this.streams = this.streamCounts.map((b) => b.key).filter((k) => k);
-      });
+      })
+      .catch(() => {});
     this.grpc.signal
       .aggregateSignals({ filters: this.buildFilters(), groupBy: 'outcome', metric: 'count', timeBucket: '' })
       .then((resp) => {
+        if (!this.alive) return;
         this.outcomeCounts = resp.buckets ?? [];
-      });
-    // Load distinct value counts for each dimension
+      })
+      .catch(() => {});
     for (const dim of this.dimensions) {
       this.grpc.signal
         .aggregateSignals({ filters: this.buildFilters(), groupBy: dim.key, metric: 'count', timeBucket: '' })
         .then((resp) => {
+          if (!this.alive) return;
           const buckets = (resp.buckets ?? []).filter(b => b.key);
           this.dimensionCounts[dim.key] = buckets.length;
         })
@@ -546,12 +628,16 @@ export class SignalsQueryComponent implements OnInit {
     this.grpc.signal
       .aggregateSignals({ filters: this.buildFilters(), groupBy, metric: this.selectedMetric, timeBucket: '' })
       .then((resp) => {
+        if (!this.alive) return;
         const buckets = resp.buckets ?? [];
         const total = buckets.reduce((s, b) => s + this.bv(b), 0) || 1;
         this.primaryBreakdown = buckets
           .filter((b) => b.key)
           .map((b) => ({ key: b.key, count: this.bv(b), pct: (this.bv(b) / total) * 100 }));
         this.breakdownPage = 0;
+      })
+      .catch(() => {
+        this.toast.showError('Failed to load aggregation data. Please try again.');
       });
   }
 
@@ -559,12 +645,20 @@ export class SignalsQueryComponent implements OnInit {
     if (this.chartBuckets.length === 0) {
       this.chartPath = '';
       this.chartMaxCount = 0;
+      this.chartScaleMax = 1;
       this.chartBars = [];
       this.chartSeries = [];
       this.xAxisLabels = [];
       this.yAxisTicks = [];
+      this.yAxisLabel = '';
       return;
     }
+
+    // Compute raw max from data
+    this.chartMaxCount = Math.max(...this.chartBuckets.map((b) => this.bv(b)), 1);
+
+    // Build y-axis ticks FIRST so the chart scale aligns with the labels
+    this.buildYAxisTicks();
 
     // Check if we have multi-series data (buckets with non-empty series field)
     const hasSeries = this.chartBuckets.some(b => b.series);
@@ -575,19 +669,18 @@ export class SignalsQueryComponent implements OnInit {
       this.buildSingleSeriesChart();
     }
     this.buildXAxisLabels();
-    this.buildYAxisTicks();
   }
 
   private buildSingleSeriesChart(): void {
     this.chartSeries = [];
-    this.chartMaxCount = Math.max(...this.chartBuckets.map((b) => this.bv(b)), 1);
     const padding = 8;
     const w = this.chartWidth - padding * 2;
     const h = this.chartHeight - padding * 2;
+    const max = this.chartScaleMax;
     const step = w / Math.max(this.chartBuckets.length - 1, 1);
     const points = this.chartBuckets.map((b, i) => {
       const x = padding + i * step;
-      const y = padding + h - (this.bv(b) / this.chartMaxCount) * h;
+      const y = padding + h - (this.bv(b) / max) * h;
       return `${x},${y}`;
     });
     this.chartPath = 'M' + points.join(' L');
@@ -596,7 +689,7 @@ export class SignalsQueryComponent implements OnInit {
     const barW = Math.max((w / this.chartBuckets.length) - barGap, 1);
     this.chartBars = this.chartBuckets.map((b, i) => {
       const val = this.bv(b);
-      const barH = (val / this.chartMaxCount) * h;
+      const barH = (val / max) * h;
       return {
         x: padding + i * (barW + barGap),
         y: padding + h - barH,
@@ -639,6 +732,7 @@ export class SignalsQueryComponent implements OnInit {
     const padding = 8;
     const w = this.chartWidth - padding * 2;
     const h = this.chartHeight - padding * 2;
+    const max = this.chartScaleMax;
     const seriesCount = seriesMap.size;
 
     this.chartSeries = [];
@@ -654,7 +748,7 @@ export class SignalsQueryComponent implements OnInit {
       const points = allKeys.map((tk, i) => {
         const val = byKey.get(tk) ?? 0;
         const x = padding + i * step;
-        const y = padding + h - (val / this.chartMaxCount) * h;
+        const y = padding + h - (val / max) * h;
         return `${x},${y}`;
       });
       const path = 'M' + points.join(' L');
@@ -666,7 +760,7 @@ export class SignalsQueryComponent implements OnInit {
       const subBarW = Math.max(slotW / seriesCount - 1, 1);
       const bars = allKeys.map((tk, i) => {
         const val = byKey.get(tk) ?? 0;
-        const barH = (val / this.chartMaxCount) * h;
+        const barH = (val / max) * h;
         return {
           x: padding + i * (slotW + barGap) + seriesIdx * (subBarW + 1),
           y: padding + h - barH,
@@ -721,31 +815,24 @@ export class SignalsQueryComponent implements OnInit {
   }
 
   private buildXAxisLabels(): void {
-    const keys = this.isMultiSeries
-      ? [...new Set(this.chartBuckets.map(b => b.key))]
-      : this.chartBuckets.map(b => b.key);
-    if (keys.length < 2) {
+    if (this.chartWindowStart === 0 || this.chartBuckets.length < 2) {
       this.xAxisLabels = [];
       return;
     }
-    // Parse as dates
-    const dates = keys.map(k => new Date(k)).filter(d => !isNaN(d.getTime()));
-    if (dates.length < 2) {
-      this.xAxisLabels = [];
-      return;
-    }
-    dates.sort((a, b) => a.getTime() - b.getTime());
-    const rangeMs = dates[dates.length - 1].getTime() - dates[0].getTime();
-    // Pick ~5-8 evenly spaced labels
-    const targetLabels = Math.min(dates.length, 7);
-    const step = Math.max(Math.floor(dates.length / targetLabels), 1);
-    const showDate = rangeMs > 24 * 60 * 60 * 1000;
+    const windowMs = this.chartWindowEnd - this.chartWindowStart;
+    const showDate = windowMs > 24 * 60 * 60 * 1000;
+
+    // Pick ~6 evenly spaced labels across the full window
+    const targetLabels = 6;
+    const stepMs = windowMs / (targetLabels - 1);
     this.xAxisLabels = [];
-    for (let i = 0; i < dates.length; i += step) {
-      const d = dates[i];
-      const pct = ((d.getTime() - dates[0].getTime()) / rangeMs) * 100;
+    for (let i = 0; i < targetLabels; i++) {
+      const t = this.chartWindowStart + i * stepMs;
+      const d = new Date(t);
+      const pct = (i / (targetLabels - 1)) * 100;
       const text = showDate
-        ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+        ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' +
+          d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
         : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
       this.xAxisLabels.push({ text, pct });
     }
@@ -754,16 +841,28 @@ export class SignalsQueryComponent implements OnInit {
   private buildYAxisTicks(): void {
     if (this.chartMaxCount <= 0) {
       this.yAxisTicks = [];
+      this.chartScaleMax = 1;
+      this.yAxisLabel = '';
       return;
     }
-    // Nice round ticks
+    // Set y-axis unit label based on metric
+    const metricUnits: Record<string, string> = {
+      count: 'count', distinct_count: 'users',
+      avg: 'ms', sum: 'ms', p50: 'ms', p95: 'ms', p99: 'ms',
+    };
+    this.yAxisLabel = metricUnits[this.selectedMetric] ?? '';
+
+    // Nice round ticks — compute a ceiling max so bars align with labels
     const max = this.chartMaxCount;
     const tickCount = 4;
     const rawStep = max / tickCount;
     const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
     const niceStep = Math.ceil(rawStep / magnitude) * magnitude;
+    const niceMax = niceStep * tickCount;
+    // Use the nice max as the chart scale so bars/lines match the y-axis
+    this.chartScaleMax = niceMax;
     this.yAxisTicks = [];
-    for (let v = niceStep * tickCount; v >= 0; v -= niceStep) {
+    for (let v = niceMax; v >= 0; v -= niceStep) {
       this.yAxisTicks.push(v);
     }
   }

@@ -7,6 +7,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule } from '@ngx-translate/core';
+import { timestampFromDate } from '@bufbuild/protobuf/wkt';
 import { GrpcService } from 'src/app/services/grpc.service';
 import { ToastService } from 'src/app/services/toast.service';
 
@@ -73,6 +74,12 @@ export class SignalsOverviewComponent implements OnInit {
   ];
   selectedTimeRange: TimeRange = this.timeRanges[2];
 
+  // Store health
+  storeHealthLoading = false;
+  ingestRate5m = 0;
+  ingestRate1h = 0;
+  storageByStream: { stream: string; count: number; pct: number }[] = [];
+
   ngOnInit(): void {
     this.refresh();
   }
@@ -85,6 +92,7 @@ export class SignalsOverviewComponent implements OnInit {
     this.loadTopIPs();
     this.loadTopCountries();
     this.loadRecentFailures();
+    this.loadStoreHealth();
   }
 
   selectTimeRange(range: TimeRange): void {
@@ -265,5 +273,60 @@ export class SignalsOverviewComponent implements OnInit {
     const dotParts = name.split('.');
     if (dotParts.length > 3) return dotParts.slice(-3).join('.');
     return name;
+  }
+
+  loadStoreHealth(): void {
+    if (!this.grpc.signal) return;
+    this.storeHealthLoading = true;
+
+    const streamReq = this.grpc.signal.aggregateSignals({
+      filters: {},
+      groupBy: 'stream',
+      metric: 'count',
+      timeBucket: '',
+    });
+
+    const now = new Date();
+    const fiveMinAgo = timestampFromDate(new Date(now.getTime() - 5 * 60 * 1000));
+    const oneHourAgo = timestampFromDate(new Date(now.getTime() - 60 * 60 * 1000));
+
+    const rate5mReq = this.grpc.signal.aggregateSignals({
+      filters: { after: fiveMinAgo },
+      groupBy: 'stream',
+      metric: 'count',
+      timeBucket: '',
+    });
+
+    const rate1hReq = this.grpc.signal.aggregateSignals({
+      filters: { after: oneHourAgo },
+      groupBy: 'stream',
+      metric: 'count',
+      timeBucket: '',
+    });
+
+    Promise.all([streamReq, rate5mReq, rate1hReq]).then(
+      ([streamResp, rate5mResp, rate1hResp]) => {
+        const buckets = streamResp.buckets ?? [];
+        const total = buckets.reduce((s, b) => s + Number(b.count), 0) || 1;
+        this.storageByStream = buckets
+          .filter((b) => b.key)
+          .map((b) => ({
+            stream: b.key,
+            count: Number(b.count),
+            pct: (Number(b.count) / total) * 100,
+          }));
+
+        const sum5m = (rate5mResp.buckets ?? []).reduce((s, b) => s + Number(b.count), 0);
+        this.ingestRate5m = Math.round(sum5m / 5);
+
+        const sum1h = (rate1hResp.buckets ?? []).reduce((s, b) => s + Number(b.count), 0);
+        this.ingestRate1h = Math.round(sum1h / 60);
+
+        this.storeHealthLoading = false;
+      },
+      () => {
+        this.storeHealthLoading = false;
+      },
+    );
   }
 }

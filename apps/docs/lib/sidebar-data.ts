@@ -696,6 +696,13 @@ export const guidesSidebar: readonly SidebarItem[] = [
           "guides/integrate/external-audit-log",
         ],
       },
+      {
+        type: "category",
+        label: "Identity Signals (Preview)",
+        items: [
+          "concepts/features/identity-signals",
+        ],
+      },
     ],
   },
   {

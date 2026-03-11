@@ -1,4 +1,10 @@
 <div class="signals-page">
+  <!-- Preview banner -->
+  <div class="preview-banner">
+    <mat-icon>science</mat-icon>
+    <span><strong>Preview Feature</strong> — Identity Signals is in preview. Data format and APIs may change between releases. Not recommended for production use.</span>
+  </div>
+
   <!-- Time range header -->
   <div class="query-bar">
     <div class="query-left">
@@ -68,6 +74,33 @@
       <span>{{ chartMaxCount | number }}</span>
       <span>{{ chartMaxCount / 2 | number:'1.0-0' }}</span>
       <span>0</span>
+    </div>
+  </div>
+
+  <!-- Store Health -->
+  <div class="store-health-section">
+    <div class="section-header">
+      <mat-icon style="font-size:20px;width:20px;height:20px;color:var(--accent)">monitor_heart</mat-icon>
+      <span class="panel-title">Store Health</span>
+      <mat-spinner *ngIf="storeHealthLoading" diameter="16" style="margin-left:auto"></mat-spinner>
+    </div>
+    <div class="store-health-grid" *ngIf="!storeHealthLoading">
+      <div class="health-card">
+        <span class="stat-value">{{ ingestRate5m | number }}</span>
+        <span class="stat-label">signals / min (last 5m)</span>
+      </div>
+      <div class="health-card">
+        <span class="stat-value">{{ ingestRate1h | number }}</span>
+        <span class="stat-label">signals / min (last 1h)</span>
+      </div>
+      <div class="health-card health-card-wide" *ngIf="storageByStream.length > 0">
+        <span class="stat-label" style="margin-bottom:8px">Stored by Stream</span>
+        <div class="health-stream-row" *ngFor="let s of storageByStream">
+          <span style="font-size:13px;text-transform:capitalize">{{ s.stream }}</span>
+          <span class="mono">{{ s.count | number }}</span>
+          <div class="br-bar-wrap"><div class="br-bar" [style.width.%]="s.pct"></div></div>
+        </div>
+      </div>
     </div>
   </div>
 

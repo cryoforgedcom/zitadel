@@ -1,6 +1,6 @@
 import { animate, state, style, transition, trigger } from '@angular/animations';
 import { CommonModule } from '@angular/common';
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -24,6 +24,7 @@ interface TimelineEntry {
   timeLabel: string;
   isFirstInGroup: boolean;
   groupLabel: string;
+  traceColor: string; // color assigned to this trace (empty if no trace)
 }
 
 @Component({
@@ -48,11 +49,13 @@ interface TimelineEntry {
     ]),
   ],
 })
-export class SignalsActivityComponent implements OnInit {
+export class SignalsActivityComponent implements OnInit, OnDestroy {
   private readonly grpc = inject(GrpcService);
   private readonly toast = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+
+  private alive = true;
 
   loading = false;
   signals: Signal[] = [];
@@ -69,9 +72,12 @@ export class SignalsActivityComponent implements OnInit {
   operationCounts: AggregationBucket[] = [];
   outcomeCounts: AggregationBucket[] = [];
 
-  // Timeline groups
+  // Chronological timeline with trace color hints
   timeline: TimelineEntry[] = [];
   expandedSignals = new Set<Signal>();
+
+  // Trace color palette for grouping signals visually
+  private readonly traceColors = ['#6366f1', '#22c55e', '#f59e0b', '#06b6d4', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 
   // Entity type display
   readonly entityTypes: { key: string; label: string; icon: string }[] = [
@@ -109,6 +115,10 @@ export class SignalsActivityComponent implements OnInit {
     if (this.entityValue) {
       this.refresh();
     }
+  }
+
+  ngOnDestroy(): void {
+    this.alive = false;
   }
 
   get entityLabel(): string {
@@ -168,16 +178,17 @@ export class SignalsActivityComponent implements OnInit {
       })
       .then(
         (resp) => {
+          if (!this.alive) return;
           this.signals = resp.signals ?? [];
           this.totalCount = Number(resp.details?.totalResult ?? 0);
           this.buildTimeline();
           this.loading = false;
         },
-        (err) => {
-          this.toast.showError(err);
-          this.loading = false;
-        },
-      );
+      )
+      .catch(() => {
+        this.toast.showError('Failed to load signals. Please try again.');
+        this.loading = false;
+      });
   }
 
   loadStats(): void {
@@ -193,19 +204,43 @@ export class SignalsActivityComponent implements OnInit {
     this.grpc.signal
       .aggregateSignals({ filters, groupBy: 'operation', metric: 'count', timeBucket: '' })
       .then((resp) => {
+        if (!this.alive) return;
         this.operationCounts = resp.buckets ?? [];
-      });
+      })
+      .catch(() => {});
 
     this.grpc.signal
       .aggregateSignals({ filters, groupBy: 'outcome', metric: 'count', timeBucket: '' })
       .then((resp) => {
+        if (!this.alive) return;
         this.outcomeCounts = resp.buckets ?? [];
-      });
+      })
+      .catch(() => {});
   }
 
   private buildTimeline(): void {
     this.timeline = [];
     let lastGroup = '';
+
+    // Count occurrences of each trace ID to identify multi-signal traces.
+    // Filter out the all-zeros trace ID (no active span in context).
+    const zeroTrace = '00000000000000000000000000000000';
+    const traceCounts = new Map<string, number>();
+    for (const s of this.signals) {
+      if (s.traceId && s.traceId !== zeroTrace) {
+        traceCounts.set(s.traceId, (traceCounts.get(s.traceId) ?? 0) + 1);
+      }
+    }
+
+    // Assign colors only to traces that appear 2+ times
+    const traceColorMap = new Map<string, string>();
+    let colorIdx = 0;
+    for (const [traceId, count] of traceCounts) {
+      if (count >= 2) {
+        traceColorMap.set(traceId, this.traceColors[colorIdx % this.traceColors.length]);
+        colorIdx++;
+      }
+    }
 
     for (const s of this.signals) {
       const ts = this.toMillis(s.createdAt);
@@ -214,9 +249,21 @@ export class SignalsActivityComponent implements OnInit {
       const groupLabel = d ? this.formatDateGroup(d) : '—';
       const isFirstInGroup = groupLabel !== lastGroup;
       lastGroup = groupLabel;
+      const traceColor = (s.traceId && s.traceId !== zeroTrace) ? (traceColorMap.get(s.traceId) ?? '') : '';
 
-      this.timeline.push({ signal: s, timeLabel, isFirstInGroup, groupLabel });
+      this.timeline.push({ signal: s, timeLabel, isFirstInGroup, groupLabel, traceColor });
     }
+  }
+
+  /** Navigate to Activity filtered by a trace ID */
+  viewTrace(traceId: string): void {
+    this.entityType = 'trace_id';
+    this.entityValue = traceId;
+    this.searchInput = traceId;
+    this.offset = 0;
+    this.expandedSignals.clear();
+    this.syncUrl();
+    this.refresh();
   }
 
   private formatTime(d: Date): string {
@@ -250,6 +297,15 @@ export class SignalsActivityComponent implements OnInit {
     });
   }
 
+  navigateToEntity(type: 'user' | 'org' | 'project', id: string): void {
+    if (!id || id === '—') return;
+    switch (type) {
+      case 'user': this.router.navigate(['/users', id]); break;
+      case 'org': this.router.navigate(['/orgs', id]); break;
+      case 'project': this.router.navigate(['/projects', id]); break;
+    }
+  }
+
   openInLogs(): void {
     this.router.navigate(['/signals/logs'], { queryParams: { [this.entityType]: this.entityValue } });
   }
@@ -258,6 +314,10 @@ export class SignalsActivityComponent implements OnInit {
     const params: Record<string, string> = {};
     if (signal.traceId) params['trace_id'] = signal.traceId;
     else if (signal.operation) params['operation'] = signal.operation;
+    // Pass highlight hint so Logs can auto-expand this exact row
+    if (signal.operation) params['highlight'] = signal.operation;
+    const ts = this.toMillis(signal.createdAt);
+    if (ts) params['highlight_ts'] = String(ts);
     this.router.navigate(['/signals/logs'], { queryParams: params });
   }
 

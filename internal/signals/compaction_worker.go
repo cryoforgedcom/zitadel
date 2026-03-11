@@ -16,17 +16,19 @@ import (
 type CompactionWorker struct {
 	store    *DuckLakeStore
 	interval time.Duration
+	metrics  *SignalMetrics
 	done     chan struct{}
 }
 
 // NewCompactionWorker creates a compaction worker.
-func NewCompactionWorker(store *DuckLakeStore, interval time.Duration) *CompactionWorker {
+func NewCompactionWorker(store *DuckLakeStore, interval time.Duration, m *SignalMetrics) *CompactionWorker {
 	if interval <= 0 {
 		interval = 1 * time.Hour
 	}
 	return &CompactionWorker{
 		store:    store,
 		interval: interval,
+		metrics:  m,
 		done:     make(chan struct{}),
 	}
 }
@@ -41,7 +43,7 @@ func (w *CompactionWorker) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			w.run(ctx)
+			w.safeRun(ctx)
 		case <-ctx.Done():
 			return
 		}
@@ -53,11 +55,23 @@ func (w *CompactionWorker) Done() <-chan struct{} {
 	return w.done
 }
 
+func (w *CompactionWorker) safeRun(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.ErrorContext(ctx, "identity_signals.compaction_panic",
+				slog.Any("panic", r),
+			)
+		}
+	}()
+	w.run(ctx)
+}
+
 func (w *CompactionWorker) run(ctx context.Context) {
 	if w.store == nil {
 		return
 	}
 
+	start := time.Now()
 	compacted, err := w.store.Compact(ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, "identity_signals.compaction_failed",
@@ -67,6 +81,7 @@ func (w *CompactionWorker) run(ctx context.Context) {
 	}
 
 	if compacted > 0 {
+		w.metrics.RecordCompactionDuration(ctx, time.Since(start).Seconds())
 		slog.InfoContext(ctx, "identity_signals.compaction_complete",
 			slog.Int("files_compacted", compacted),
 		)

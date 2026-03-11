@@ -76,6 +76,8 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 // SignalService provides read access to identity signals for observability.
 // Signals are behavioral observations collected during authentication and API
 // operations. They enable admins to query and aggregate auth traffic patterns.
+// PREVIEW: Identity Signals is a preview feature. This service definition
+// may change between releases without notice.
 service SignalService {
 
   // List signals with optional filters and pagination.

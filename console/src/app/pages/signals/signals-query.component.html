@@ -1,4 +1,10 @@
 <div class="signals-page">
+  <!-- Preview banner -->
+  <div class="preview-banner">
+    <mat-icon>science</mat-icon>
+    <span><strong>Preview Feature</strong> — Identity Signals is in preview. Data format and APIs may change between releases. Not recommended for production use.</span>
+  </div>
+
   <!-- Control rows (Vercel-style) -->
   <div class="explore-controls">
     <!-- Row 1: Metric -->
@@ -116,6 +122,7 @@
       <span class="filter-prompt-label">{{ pendingFilterLabel }} =</span>
       <input class="filter-prompt-input" #filterInput
         [placeholder]="'Type or pick ' + pendingFilterLabel + '...'"
+        maxlength="512"
         (keyup.enter)="applyPendingFilter($any($event.target).value)"
         (keyup.escape)="cancelPendingFilter()"
         (input)="filterInputValue = $any($event.target).value" />
@@ -162,6 +169,7 @@
     <div class="chart-with-axes">
       <!-- Y axis -->
       <div class="chart-y-labels" *ngIf="!chartLoading && chartBuckets.length > 0">
+        <span class="chart-y-unit" *ngIf="yAxisLabel">{{ yAxisLabel }}</span>
         <span *ngFor="let tick of yAxisTicks">{{ isFloatMetric ? (tick | number:'1.0-1') : (tick | number:'1.0-0') }}</span>
       </div>
 
@@ -262,8 +270,11 @@
         <span class="bh-count">{{ selectedMetricLabel }}</span>
         <span class="bh-bar"></span>
       </div>
-      <div class="breakdown-row" *ngFor="let row of filteredBreakdown(); trackBy: trackByKey" (click)="drillDownToLogs(selectedGroupBy, row.key)">
-        <span class="br-key mono" [matTooltip]="row.key">{{ shortName(row.key) || '(empty)' }}</span>
+      <div class="breakdown-row" *ngFor="let row of filteredBreakdown(); let i = index; trackBy: trackByKey" (click)="drillDownToLogs(selectedGroupBy, row.key)">
+        <span class="br-key mono" [matTooltip]="row.key">
+          <span class="br-color-dot" [style.background]="breakdownColor(breakdownPage * 10 + i)"></span>
+          {{ shortName(row.key) || '(empty)' }}
+        </span>
         <span class="br-count">{{ isFloatMetric ? (row.count | number:'1.1-1') : (row.count | number) }}</span>
         <div class="br-bar-wrap">
           <div class="br-bar" [style.width.%]="row.pct"></div>

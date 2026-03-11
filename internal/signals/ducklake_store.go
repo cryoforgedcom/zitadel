@@ -4,6 +4,9 @@
 // DuckDB C library via cgo. Builds with CGO_ENABLED=0 use the stub in
 // ducklake_store_nocgo.go instead.
 
+// PREVIEW: Identity Signals is a preview feature. APIs, storage format,
+// and configuration may change between releases without notice.
+
 package signals
 
 import (
@@ -84,7 +87,7 @@ func NewDuckLakeStore(pgDSN string, dlCfg DuckLakeConfig) (*DuckLakeStore, error
 	}
 	attachSQL := fmt.Sprintf(
 		"ATTACH 'ducklake:postgres:%s' AS signals (DATA_PATH '%s', METADATA_SCHEMA '%s')",
-		pgDSN, dlCfg.DataPath, escapeSQLString(metadataSchema),
+		escapeSQLString(pgDSN), escapeSQLString(dlCfg.DataPath), escapeSQLString(metadataSchema),
 	)
 	if _, err := db.Exec(attachSQL); err != nil {
 		db.Close()
@@ -97,7 +100,8 @@ func NewDuckLakeStore(pgDSN string, dlCfg DuckLakeConfig) (*DuckLakeStore, error
 				"  GRANT ALL ON ALL TABLES IN SCHEMA %s TO <your_zitadel_user>;",
 				err, metadataSchema, metadataSchema, metadataSchema)
 		}
-		return nil, fmt.Errorf("ducklake: attach catalog: %w", err)
+		// Do not log attachSQL — it contains the PostgreSQL DSN with credentials.
+		return nil, fmt.Errorf("ducklake: attach catalog failed: %w", err)
 	}
 
 	if err := createSignalsTable(db); err != nil {
@@ -131,9 +135,10 @@ func configureS3(db *sql.DB, s3 ArchiveS3Config) error {
 	if !s3.UseSSL {
 		stmts = append(stmts, "SET s3_use_ssl=false")
 	}
-	for _, stmt := range stmts {
+	for i, stmt := range stmts {
 		if _, err := db.Exec(stmt); err != nil {
-			return fmt.Errorf("%s: %w", stmt, err)
+			// Never log the statement — it may contain S3 credentials.
+			return fmt.Errorf("s3 configuration step %d failed: %w", i, err)
 		}
 	}
 	return nil
@@ -319,7 +324,9 @@ func (s *DuckLakeStore) AggregateSignals(ctx context.Context, filters SignalFilt
 			return nil, fmt.Errorf("ducklake: unsupported time_bucket interval: %q", interval)
 		}
 		groupExpr = fmt.Sprintf("time_bucket(INTERVAL '%s', created_at)", interval)
-		selectExpr = groupExpr + " AS bucket_key"
+		// Format the timestamp as ISO 8601 so the frontend can parse it
+		// reliably with new Date(). DuckDB's strftime(ts, format) syntax.
+		selectExpr = fmt.Sprintf("strftime(%s, '%%Y-%%m-%%dT%%H:%%M:%%SZ') AS bucket_key", groupExpr)
 	default:
 		col, ok := allowedGroupByFields[req.GroupBy]
 		if !ok {
@@ -418,6 +425,7 @@ func (s *DuckLakeStore) AggregateSignals(ctx context.Context, filters SignalFilt
 				WHERE %s%s AND %s = ?
 				GROUP BY %s
 				ORDER BY bucket_key ASC
+				LIMIT 1000
 			`, selectExpr, metricExpr, where, emptyFilter, secondaryCol, groupExpr)
 
 			sRows, err := s.db.QueryContext(ctx, seriesQuery, seriesArgs...)
@@ -491,10 +499,14 @@ func (s *DuckLakeStore) AggregateSignals(ctx context.Context, filters SignalFilt
 }
 
 // PruneStream deletes signals older than the retention duration for the given stream.
+// When instanceID is empty, signals are pruned across all instances — this is
+// intentional for the retention worker which runs globally. The instanceID
+// parameter is kept for future per-instance retention policies.
 // Returns the number of rows deleted.
 func (s *DuckLakeStore) PruneStream(ctx context.Context, instanceID string, stream SignalStream, retention time.Duration) (int64, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	// DELETE is a write operation; acquire exclusive lock for DuckDB single-writer.
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.closed {
 		return 0, fmt.Errorf("ducklake: store closed")
 	}
@@ -522,12 +534,19 @@ func (s *DuckLakeStore) PruneStream(ctx context.Context, instanceID string, stre
 // exclusive lock to prevent concurrent reads/writes during the table
 // swap. The operation runs inside a single DuckDB transaction so a
 // crash mid-compaction cannot lose data.
+//
+// A 5-minute timeout is enforced to prevent indefinite lock holding
+// that would block all query API calls.
 func (s *DuckLakeStore) Compact(ctx context.Context) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
 		return 0, fmt.Errorf("ducklake: store closed")
 	}
+
+	// Enforce a maximum duration so compaction cannot block reads indefinitely.
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
 
 	var fileCount int
 	err := s.db.QueryRowContext(ctx,
@@ -536,7 +555,11 @@ func (s *DuckLakeStore) Compact(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, nil // not critical — skip this cycle
 	}
-	if fileCount < 10 {
+	threshold := s.dlCfg.CompactionThreshold
+	if threshold <= 0 {
+		threshold = 10
+	}
+	if fileCount < threshold {
 		return 0, nil
 	}
 
@@ -564,11 +587,6 @@ func (s *DuckLakeStore) Compact(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("compact: commit: %w", err)
 	}
 	return fileCount, nil
-}
-
-// DB returns the underlying DuckDB connection for admin queries.
-func (s *DuckLakeStore) DB() *sql.DB {
-	return s.db
 }
 
 // Close detaches the DuckLake catalog and closes the DuckDB connection.

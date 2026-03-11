@@ -1,5 +1,8 @@
 package signals
 
+// PREVIEW: Identity Signals is a preview feature. APIs, storage format,
+// and configuration may change between releases without notice.
+
 import (
 	"fmt"
 	"time"
@@ -139,6 +142,9 @@ type DuckLakeConfig struct {
 	FlushInterval time.Duration
 	// CompactionInterval is how often the compaction worker merges small Parquet files.
 	CompactionInterval time.Duration
+	// CompactionThreshold is the minimum number of Parquet files that must exist
+	// before compaction is triggered. Set to 0 to use the default (10).
+	CompactionThreshold int
 }
 
 // Validate checks the DuckLake configuration for consistency.

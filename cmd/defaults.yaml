@@ -811,6 +811,9 @@ SystemAPIUsers:
 # Configure the SystemAPIUsers by environment variable using JSON notation:
 # ZITADEL_SYSTEMAPIUSERS='{"systemuser":{"Path":"/path/to/superuser/key.pem"},"systemuser2":{"KeyData":"<base64 encoded key>"}}'
 
+# PREVIEW: Identity Signals is a preview feature. Configuration keys,
+# defaults, and behavior may change between releases without notice.
+#
 # IdentitySignals captures behavioral observations during authentication and
 # API operations — a core domain feature for identity observability.
 # Signals are stored in DuckLake (DuckDB + Parquet + PG catalog) and exposed
@@ -850,6 +853,8 @@ IdentitySignals:
       FlushInterval: 30s # ZITADEL_IDENTITYSIGNALS_STORE_DUCKLAKE_FLUSHINTERVAL
       # How often the compaction worker merges small Parquet files.
       CompactionInterval: 1h # ZITADEL_IDENTITYSIGNALS_STORE_DUCKLAKE_COMPACTIONINTERVAL
+      # Minimum number of Parquet files before compaction is triggered. Default: 10.
+      CompactionThreshold: 10 # ZITADEL_IDENTITYSIGNALS_STORE_DUCKLAKE_COMPACTIONTHRESHOLD
       S3:
         Endpoint: "" # ZITADEL_IDENTITYSIGNALS_STORE_DUCKLAKE_S3_ENDPOINT
         Bucket: zitadel-signals # ZITADEL_IDENTITYSIGNALS_STORE_DUCKLAKE_S3_BUCKET
