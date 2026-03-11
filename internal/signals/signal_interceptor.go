@@ -28,16 +28,21 @@ const signalServicePrefix = "/zitadel.signal."
 func SignalConnectUnaryInterceptor(emitter *Emitter, geoCountryHeader string) connect.UnaryInterceptorFunc {
 	return func(handler connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-			start := time.Now()
-			resp, handlerErr := handler(ctx, req)
-
 			if emitter == nil {
-				return resp, handlerErr
+				return handler(ctx, req)
 			}
 
 			if strings.HasPrefix(req.Spec().Procedure, signalServicePrefix) {
-				return resp, handlerErr
+				return handler(ctx, req)
 			}
+
+			// Inject a mutable holder so the event hook (called
+			// synchronously during eventstore.Push inside handler)
+			// can pass the target user ID back to us.
+			ctx, holder := withSignalUserHolder(ctx)
+
+			start := time.Now()
+			resp, handlerErr := handler(ctx, req)
 
 			ctxData := authz.GetCtxData(ctx)
 			instance := authz.GetInstance(ctx)
@@ -47,11 +52,19 @@ func SignalConnectUnaryInterceptor(emitter *Emitter, geoCountryHeader string) co
 				outcome = OutcomeFailure
 			}
 
+			// Use the target user from events when the authenticated
+			// caller differs (e.g. login service user calling
+			// CreateSession on behalf of the end user).
+			userID := ctxData.UserID
+			if holder.userID != "" {
+				userID = holder.userID
+			}
+
 			hctx := ExtractHTTPContext(http.Header(req.Header()), geoCountryHeader)
 
 			emitter.Emit(Signal{
 				InstanceID:     instance.InstanceID(),
-				UserID:         ctxData.UserID,
+				UserID:         userID,
 				CallerID:       ctxData.UserID,
 				OrgID:          ctxData.OrgID,
 				ProjectID:      ctxData.ProjectID,
@@ -89,6 +102,10 @@ func SignalHTTPMiddleware(emitter *Emitter, geoCountryHeader string) func(http.H
 				return
 			}
 
+			// Inject holder before the handler runs.
+			ctx, holder := withSignalUserHolder(r.Context())
+			r = r.WithContext(ctx)
+
 			start := time.Now()
 			rw := &statusCapture{ResponseWriter: w, status: http.StatusOK}
 			next.ServeHTTP(rw, r)
@@ -99,7 +116,7 @@ func SignalHTTPMiddleware(emitter *Emitter, geoCountryHeader string) func(http.H
 				return
 			}
 
-			ctx := r.Context()
+			ctx = r.Context()
 			instance := authz.GetInstance(ctx)
 			ctxData := authz.GetCtxData(ctx)
 
@@ -108,10 +125,15 @@ func SignalHTTPMiddleware(emitter *Emitter, geoCountryHeader string) func(http.H
 				outcome = OutcomeFailure
 			}
 
+			userID := ctxData.UserID
+			if holder.userID != "" {
+				userID = holder.userID
+			}
+
 			hctx := ExtractHTTPContext(r.Header, geoCountryHeader)
 			emitter.Emit(Signal{
 				InstanceID:     instance.InstanceID(),
-				UserID:         ctxData.UserID,
+				UserID:         userID,
 				CallerID:       ctxData.UserID,
 				OrgID:          ctxData.OrgID,
 				ProjectID:      ctxData.ProjectID,
