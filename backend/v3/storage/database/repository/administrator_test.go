@@ -104,7 +104,7 @@ func TestAdministratorRepository_CRUDAcrossScopes(t *testing.T) {
 				assert.Equal(t, tt.administrator.ID, list[0].ID)
 			}
 
-			updatedAt := time.Now().Add(time.Second)
+			updatedAt := time.Now().Round(time.Millisecond).Add(time.Second)
 			_, err = adminRepo.Update(t.Context(), savepoint,
 				tt.filter,
 				adminRepo.SetUpdatedAt(updatedAt),
