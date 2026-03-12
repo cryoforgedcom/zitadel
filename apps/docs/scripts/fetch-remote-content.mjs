@@ -495,8 +495,8 @@ async function run() {
 
     // Explicit logic for version 4.10.x and 4.11.x to use active branch (Faking legacy versions)
     // This prevents fetching incompatible legacy docs for 4.10.1, 4.11.0 etc.
-    if (tag === FALLBACK_VERSION || (semver.major(tag) === 4 && semver.minor(tag) <= 11)) {
-      console.log(`[fake-override] Version ${tag} matches legacy (<= 4.11). Using fallback source (main/current) instead of tag.`);
+    if (tag === FALLBACK_VERSION || (semver.major(tag) === 4 && semver.minor(tag) <= 12)) {
+      console.log(`[fake-override] Version ${tag} matches legacy (<= 4.12). Using fallback source (main/current) instead of tag.`);
       sourceRef = getCurrentRef();
     }
 

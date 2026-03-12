@@ -1,0 +1,8 @@
+{
+  "name": "docs",
+  "engineVersion": "v0.20.1",
+  "sdk": {
+    "source": "typescript"
+  },
+  "source": "apps/docs/dagger"
+}

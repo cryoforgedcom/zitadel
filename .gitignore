@@ -100,6 +100,10 @@ go.work.sum
 .nx/workspace-data
 .cursor/rules/nx-rules.mdc
 
+# Turbo
+.turbo
+
+
 # AI Files
 CLAUDE.md
 .mcp.json

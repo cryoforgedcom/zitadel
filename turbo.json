@@ -1,0 +1,24 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build", "generate"],
+      "outputs": [".next/**", "!", ".next/cache/**", "dist/**", "build/**"]
+    },
+    "generate": {
+      "dependsOn": ["^generate"]
+    },
+    "dev": {
+      "dependsOn": ["^build", "generate"],
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import { glob } from 'glob';
-import { join, dirname, resolve } from 'path';
+import path, { join, dirname, resolve } from 'path';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import os from 'os';
@@ -158,10 +158,15 @@ async function run() {
                 args.push('--exclude-path', excludedPath);
             }
 
+            const platform = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'darwin' : 'linux';
+            const arch = process.arch === 'x64' ? 'amd64' : process.arch === 'arm64' ? 'arm64' : process.arch;
+            const binPath = path.resolve(__dirname, `../.artifacts/bin/${platform}/${arch}`);
+            const envWithBin = { ...process.env, PATH: `${binPath}${path.delimiter}${process.env.PATH || ''}` };
+
             const child = spawn('npx', args, {
               cwd: taskTempDir, 
               stdio: 'inherit',
-              env: process.env
+              env: envWithBin
             });
 
             child.on('close', (code) => {

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "install-proto-plugins": {},
+    "fetch:remote-content": {
+      "outputs": ["content/versions.json"]
+    },
+    "generate:proto-docs": {
+      "dependsOn": ["fetch:remote-content", "install-proto-plugins"],
+      "outputs": ["openapi/**"]
+    },
+    "generate:api-reference": {
+      "dependsOn": ["generate:proto-docs"],
+      "outputs": ["content/reference/api/**", "content/**/reference/api/**"]
+    },
+    "fix:api-links": {
+      "dependsOn": ["generate:api-reference"]
+    },
+    "generate:index-pages": {
+      "dependsOn": ["fix:api-links"]
+    },
+    "build:mdx-source": {
+      "dependsOn": ["generate:index-pages"],
+      "outputs": [".source/**"]
+    },
+    "generate": {
+      "dependsOn": ["build:mdx-source"]
+    }
+  }
+}
