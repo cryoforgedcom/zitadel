@@ -202,8 +202,7 @@ async function downloadVersion(tag, sourceRef) {
     if (fs.existsSync(join(tempDir, 'apps/docs/content'))) {
         fs.renameSync(join(tempDir, 'apps/docs/content'), contentDest);
     } else {
-         // Fallback warning
-         console.warn(`[warn] apps/docs/content not found in archive for ${tag} (ref: ${safeLog(sourceRef)})`);
+        throw new Error(`apps/docs/content not found in archive for ${tag} (ref: ${safeLog(sourceRef)})`);
     }
     
     // Handle external files
