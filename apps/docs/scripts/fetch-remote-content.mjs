@@ -177,7 +177,10 @@ async function downloadVersion(tag, sourceRef) {
         await new Promise((resolve, reject) => {
             const tar = spawn('tar', tarArgsWildcard);
             Readable.fromWeb(res.body).pipe(tar.stdin);
-            tar.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`tar exited ${code}`))));
+            // Exit code 2 in GNU tar means some wildcard patterns didn't match (e.g. older versions 
+            // may not have */cmd/setup/steps.yaml). This is non-fatal since the essential docs content
+            // is still extracted successfully.
+            tar.on('close', (code) => (code === 0 || code === 2 ? resolve() : reject(new Error(`tar exited ${code}`))));
             tar.stderr.on('data', d => {
                 const msg = d.toString();
                 if (!msg.includes('Not found in archive')) console.error(msg);
