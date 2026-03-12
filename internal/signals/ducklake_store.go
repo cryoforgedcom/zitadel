@@ -363,10 +363,14 @@ func (s *DuckLakeStore) AggregateSignals(ctx context.Context, filters SignalFilt
 		return nil, fmt.Errorf("ducklake: unsupported metric: %q", req.Metric)
 	}
 
-	// For non-time_bucket groupings, exclude empty-string keys
+	// For non-time_bucket groupings, exclude empty/null keys
 	emptyFilter := ""
 	if req.GroupBy != "time_bucket" {
-		emptyFilter = fmt.Sprintf(" AND %s != ''", groupExpr)
+		if fd := FieldByColumn(req.GroupBy); fd != nil && fd.Filter == FilterBoolean {
+			emptyFilter = fmt.Sprintf(" AND %s IS NOT NULL", groupExpr)
+		} else {
+			emptyFilter = fmt.Sprintf(" AND %s != ''", groupExpr)
+		}
 	}
 
 	// Multi-dimensional: secondary group-by produces per-series time buckets
@@ -384,14 +388,18 @@ func (s *DuckLakeStore) AggregateSignals(ctx context.Context, filters SignalFilt
 		}
 		// Two-step approach to avoid double-WHERE parameter issues:
 		// 1. Find top N series values
+		secondaryNullFilter := fmt.Sprintf("%s IS NOT NULL AND %s != ''", secondaryCol, secondaryCol)
+		if fd := FieldByColumn(req.SecondaryGroupBy); fd != nil && fd.Filter == FilterBoolean {
+			secondaryNullFilter = fmt.Sprintf("%s IS NOT NULL", secondaryCol)
+		}
 		topQuery := fmt.Sprintf(`
 			SELECT %s AS series_key
 			FROM signals.signals
-			WHERE %s AND %s IS NOT NULL AND %s != ''
+			WHERE %s AND %s
 			GROUP BY %s
 			ORDER BY COUNT(*) DESC
 			LIMIT %d
-		`, secondaryCol, where, secondaryCol, secondaryCol, secondaryCol, limit)
+		`, secondaryCol, where, secondaryNullFilter, secondaryCol, limit)
 
 		topRows, err := s.db.QueryContext(ctx, topQuery, args...)
 		if err != nil {

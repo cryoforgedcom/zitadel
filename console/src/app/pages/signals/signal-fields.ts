@@ -6,7 +6,7 @@
  * Keep both in sync when adding new fields.
  */
 
-export type SignalFilterType = 'exact' | 'substring' | 'trace_correlated';
+export type SignalFilterType = 'exact' | 'substring' | 'trace_correlated' | 'boolean';
 
 export interface SignalFieldDef {
   /** DuckDB column name (e.g. "user_id") */
@@ -46,7 +46,7 @@ export const SIGNAL_FIELDS: SignalFieldDef[] = [
   { key: 'forwarded_chain', label: 'Forwarded Chain', filterType: 'substring', groupable: false, suggestable: false },
   { key: 'referer', label: 'Referer', filterType: 'substring', groupable: true, suggestable: true },
   { key: 'sec_fetch_site', label: 'Fetch Site', filterType: 'exact', groupable: true, suggestable: false },
-  { key: 'is_https', label: 'HTTPS', filterType: 'exact', groupable: true, suggestable: false },
+  { key: 'is_https', label: 'HTTPS', filterType: 'boolean', groupable: true, suggestable: false },
   { key: 'payload', label: 'Payload', filterType: 'substring', groupable: false, suggestable: false },
   { key: 'trace_id', label: 'Trace', filterType: 'exact', groupable: false, suggestable: false, icon: 'link' },
   { key: 'span_id', label: 'Span', filterType: 'exact', groupable: false, suggestable: false },

@@ -63,6 +63,9 @@ func filtersToSQL(f SignalFilters) (string, []any) {
 		case FilterExact:
 			clauses = append(clauses, col+" = ?")
 			args = append(args, val)
+		case FilterBoolean:
+			clauses = append(clauses, col+" = CAST(? AS BOOLEAN)")
+			args = append(args, val)
 		}
 	}
 

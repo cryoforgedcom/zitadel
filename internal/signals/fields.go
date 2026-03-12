@@ -10,6 +10,8 @@ const (
 	FilterSubstring FilterType = "substring"
 	// FilterTraceCorrelated matches directly OR via trace_id correlation.
 	FilterTraceCorrelated FilterType = "trace_correlated"
+	// FilterBoolean matches column = CAST(? AS BOOLEAN).
+	FilterBoolean FilterType = "boolean"
 )
 
 // SignalFieldDef describes a single column in the signals table
@@ -46,7 +48,7 @@ var SignalFields = []SignalFieldDef{
 	{Column: "forwarded_chain", Label: "Forwarded Chain", Filter: FilterSubstring, Groupable: false},
 	{Column: "referer", Label: "Referer", Filter: FilterSubstring, Groupable: true},
 	{Column: "sec_fetch_site", Label: "Fetch Site", Filter: FilterExact, Groupable: true},
-	{Column: "is_https", Label: "HTTPS", Filter: FilterExact, Groupable: true},
+	{Column: "is_https", Label: "HTTPS", Filter: FilterBoolean, Groupable: true},
 	{Column: "payload", Label: "Payload", Filter: FilterSubstring, Groupable: false},
 	{Column: "trace_id", Label: "Trace", Filter: FilterExact, Groupable: false},
 	{Column: "span_id", Label: "Span", Filter: FilterExact, Groupable: false},
