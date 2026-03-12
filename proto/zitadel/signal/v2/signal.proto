@@ -95,6 +95,20 @@ message SignalFilters {
   string project_id = 15;
   // Filter by client (application) ID.
   string client_id = 16;
+  // Substring match (ILIKE) against the user agent string.
+  string user_agent = 17;
+  // Exact match on device fingerprint ID.
+  string fingerprint_id = 18;
+  // Exact match on service account (caller) ID.
+  string caller_id = 19;
+  // Substring match (ILIKE) against the HTTP referer header.
+  string referer = 20;
+  // Exact match on Accept-Language header value.
+  string accept_language = 21;
+  // Substring match (ILIKE) against the X-Forwarded-For chain.
+  string forwarded_chain = 22;
+  // Exact match on Sec-Fetch-Site header value.
+  string sec_fetch_site = 23;
 }
 
 // AggregationBucket is one bucket returned by AggregateSignals.

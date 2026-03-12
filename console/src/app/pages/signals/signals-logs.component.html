@@ -116,36 +116,12 @@
             <mat-icon class="ctl-icon">filter_alt</mat-icon> Add filter
           </button>
           <mat-menu #filterMenu="matMenu">
-            <button mat-menu-item (click)="openFilterInput('operation')" [disabled]="dimensionCounts['operation'] === 0">
-              <span>Operation</span
-              ><span class="dim-count" *ngIf="dimensionCounts['operation']">{{ dimensionCounts['operation'] }}</span>
+            <button mat-menu-item *ngFor="let fd of filterFieldDefs"
+              (click)="openFilterInput(fd.key)"
+              [disabled]="fd.suggestable && dimensionCounts[fd.key] === 0">
+              <span>{{ fd.label }}</span>
+              <span class="dim-count" *ngIf="dimensionCounts[fd.key]">{{ dimensionCounts[fd.key] }}</span>
             </button>
-            <button mat-menu-item (click)="openFilterInput('ip')" [disabled]="dimensionCounts['ip'] === 0">
-              <span>IP Address</span><span class="dim-count" *ngIf="dimensionCounts['ip']">{{ dimensionCounts['ip'] }}</span>
-            </button>
-            <button mat-menu-item (click)="openFilterInput('country')" [disabled]="dimensionCounts['country'] === 0">
-              <span>Country</span
-              ><span class="dim-count" *ngIf="dimensionCounts['country']">{{ dimensionCounts['country'] }}</span>
-            </button>
-            <button mat-menu-item (click)="openFilterInput('user_id')" [disabled]="dimensionCounts['user_id'] === 0">
-              <span>User ID</span
-              ><span class="dim-count" *ngIf="dimensionCounts['user_id']">{{ dimensionCounts['user_id'] }}</span>
-            </button>
-            <button mat-menu-item (click)="openFilterInput('org_id')" [disabled]="dimensionCounts['org_id'] === 0">
-              <span>Organization</span
-              ><span class="dim-count" *ngIf="dimensionCounts['org_id']">{{ dimensionCounts['org_id'] }}</span>
-            </button>
-            <button mat-menu-item (click)="openFilterInput('project_id')" [disabled]="dimensionCounts['project_id'] === 0">
-              <span>Project</span
-              ><span class="dim-count" *ngIf="dimensionCounts['project_id']">{{ dimensionCounts['project_id'] }}</span>
-            </button>
-            <button mat-menu-item (click)="openFilterInput('client_id')" [disabled]="dimensionCounts['client_id'] === 0">
-              <span>Client</span
-              ><span class="dim-count" *ngIf="dimensionCounts['client_id']">{{ dimensionCounts['client_id'] }}</span>
-            </button>
-            <button mat-menu-item (click)="openFilterInput('payload')">Payload</button>
-            <button mat-menu-item (click)="openFilterInput('trace_id')">Trace ID</button>
-            <button mat-menu-item (click)="openFilterInput('span_id')">Span ID</button>
           </mat-menu>
           <button class="clear-all-btn" *ngIf="hasActiveFilters()" (click)="resetFilters()">Clear all</button>
         </div>

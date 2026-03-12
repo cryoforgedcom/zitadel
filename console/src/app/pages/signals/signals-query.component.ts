@@ -10,6 +10,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule } from '@ngx-translate/core';
 import { GrpcService } from 'src/app/services/grpc.service';
 import { ToastService } from 'src/app/services/toast.service';
+import { groupableFields, suggestableFieldKeys, filterableFields, buildProtoFilters, filterLabelMap } from './signal-fields';
 
 import type { MessageInitShape } from '@bufbuild/protobuf';
 import type { AggregationBucket } from '@zitadel/proto/zitadel/signal/v2/signal_pb.js';
@@ -184,32 +185,13 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
   primaryBreakdown: BreakdownRow[] = [];
   dimensionCounts: Record<string, number> = {};
 
-  readonly dimensions = [
-    { key: 'operation', label: 'Operation' },
-    { key: 'resource', label: 'Resource' },
-    { key: 'stream', label: 'Stream' },
-    { key: 'outcome', label: 'Outcome' },
-    { key: 'ip', label: 'IP Address' },
-    { key: 'country', label: 'Country' },
-    { key: 'user_id', label: 'User ID' },
-    { key: 'org_id', label: 'Organization' },
-    { key: 'project_id', label: 'Project' },
-    { key: 'client_id', label: 'Client' },
-    { key: 'user_agent', label: 'User Agent' },
-    { key: 'referer', label: 'Referer' },
-  ];
+  readonly dimensions = groupableFields().map(f => ({ key: f.key, label: f.label }));
 
   // Filters
   filterForm: FormGroup = this.fb.group({
     stream: [''],
     outcome: [''],
-    operation: [''],
-    ip: [''],
-    country: [''],
-    user_id: [''],
-    org_id: [''],
-    project_id: [''],
-    client_id: [''],
+    ...Object.fromEntries(filterableFields().map(f => [f.key, ['']])),
   });
 
   pendingFilterKey = '';
@@ -218,18 +200,7 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
   filterSuggestionsLoading = false;
   filterInputValue = '';
 
-  private readonly suggestableFields = new Set([
-    'operation',
-    'ip',
-    'country',
-    'user_id',
-    'org_id',
-    'project_id',
-    'client_id',
-    'outcome',
-    'stream',
-    'resource',
-  ]);
+  private readonly suggestableFields = new Set(suggestableFieldKeys());
 
   timeRanges: TimeRange[] = [
     { label: 'Last 1h', value: '1 hour', bucket: '5 minutes' },
@@ -342,22 +313,14 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
 
   // --- Filters ---
 
+  private readonly _filterLabelMap = filterLabelMap();
+
   activeFilterChips(): FilterChip[] {
     const chips: FilterChip[] = [];
     const vals = this.filterForm.value;
-    const filterFields: { key: string; label: string }[] = [
-      { key: 'outcome', label: 'Outcome' },
-      { key: 'operation', label: 'Operation' },
-      { key: 'ip', label: 'IP' },
-      { key: 'country', label: 'Country' },
-      { key: 'user_id', label: 'User' },
-      { key: 'org_id', label: 'Org' },
-      { key: 'project_id', label: 'Project' },
-      { key: 'client_id', label: 'Client' },
-    ];
-    for (const f of filterFields) {
-      if (vals[f.key]) {
-        chips.push({ key: f.key, label: f.label, value: vals[f.key] });
+    for (const [key, val] of Object.entries(vals)) {
+      if (val && key !== 'stream') {
+        chips.push({ key, label: this._filterLabelMap[key] ?? key, value: val as string });
       }
     }
     return chips;
@@ -540,18 +503,7 @@ export class SignalsQueryComponent implements OnInit, OnDestroy {
   }
 
   private buildFilters(excludeField?: string): MessageInitShape<typeof SignalFiltersSchema> {
-    const f = this.filterForm.value;
-    const filters: Record<string, string> = {};
-    if (f.stream && excludeField !== 'stream') filters['stream'] = f.stream;
-    if (f.outcome && excludeField !== 'outcome') filters['outcome'] = f.outcome;
-    if (f.operation && excludeField !== 'operation') filters['operation'] = f.operation;
-    if (f.ip && excludeField !== 'ip') filters['ip'] = f.ip;
-    if (f.country && excludeField !== 'country') filters['country'] = f.country;
-    if (f.user_id && excludeField !== 'user_id') filters['userId'] = f.user_id;
-    if (f.org_id && excludeField !== 'org_id') filters['orgId'] = f.org_id;
-    if (f.project_id && excludeField !== 'project_id') filters['projectId'] = f.project_id;
-    if (f.client_id && excludeField !== 'client_id') filters['clientId'] = f.client_id;
-    return filters;
+    return buildProtoFilters(this.filterForm.value, excludeField);
   }
 
   loadChart(): void {

@@ -10,6 +10,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { timestampFromDate } from '@bufbuild/protobuf/wkt';
 import { GrpcService } from 'src/app/services/grpc.service';
 import { ToastService } from 'src/app/services/toast.service';
+import { groupableFields, fieldLabel } from './signal-fields';
 
 import type { Signal, AggregationBucket } from '@zitadel/proto/zitadel/signal/v2/signal_pb.js';
 
@@ -60,11 +61,12 @@ export class SignalsOverviewComponent implements OnInit {
   outcomeCounts: AggregationBucket[] = [];
   streams: string[] = [];
 
-  // Fixed panels
-  topOperations: BreakdownRow[] = [];
-  topUsers: BreakdownRow[] = [];
-  topIPs: BreakdownRow[] = [];
-  topCountries: BreakdownRow[] = [];
+  // Dynamic breakdown panels driven by field registry
+  readonly breakdownPanels = groupableFields()
+    .filter(f => !['stream', 'outcome', 'is_https'].includes(f.key))
+    .slice(0, 6)
+    .map(f => ({ key: f.key, label: fieldLabel(f.key) }));
+  breakdowns: Record<string, BreakdownRow[]> = {};
   recentFailures: Signal[] = [];
 
   timeRanges: TimeRange[] = [
@@ -101,10 +103,7 @@ export class SignalsOverviewComponent implements OnInit {
     this.loadDimensions();
     if (this.activeTab === 'signals') {
       this.loadChart();
-      this.loadTopOperations();
-      this.loadTopUsers();
-      this.loadTopIPs();
-      this.loadTopCountries();
+      this.loadBreakdowns();
       this.loadRecentFailures();
     } else {
       this.loadStoreHealth();
@@ -170,72 +169,23 @@ export class SignalsOverviewComponent implements OnInit {
       );
   }
 
-  loadTopOperations(): void {
+  loadBreakdowns(): void {
     if (!this.grpc.signal) return;
-    this.grpc.signal
-      .aggregateSignals({ filters: {}, groupBy: 'operation', metric: 'count', timeBucket: '' })
-      .then(
-        (resp) => {
-          const buckets = resp.buckets ?? [];
-          const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
-          this.topOperations = buckets
-            .filter((b) => b.key)
-            .slice(0, 10)
-            .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
-        },
-        (err) => this.handleApiError(err),
-      );
-  }
-
-  loadTopUsers(): void {
-    if (!this.grpc.signal) return;
-    this.grpc.signal
-      .aggregateSignals({ filters: {}, groupBy: 'user_id', metric: 'count', timeBucket: '' })
-      .then(
-        (resp) => {
-          const buckets = resp.buckets ?? [];
-          const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
-          this.topUsers = buckets
-            .filter((b) => b.key)
-            .slice(0, 10)
-            .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
-        },
-        (err) => this.handleApiError(err),
-      );
-  }
-
-  loadTopIPs(): void {
-    if (!this.grpc.signal) return;
-    this.grpc.signal
-      .aggregateSignals({ filters: {}, groupBy: 'ip', metric: 'count', timeBucket: '' })
-      .then(
-        (resp) => {
-          const buckets = resp.buckets ?? [];
-          const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
-          this.topIPs = buckets
-            .filter((b) => b.key)
-            .slice(0, 10)
-            .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
-        },
-        (err) => this.handleApiError(err),
-      );
-  }
-
-  loadTopCountries(): void {
-    if (!this.grpc.signal) return;
-    this.grpc.signal
-      .aggregateSignals({ filters: {}, groupBy: 'country', metric: 'count', timeBucket: '' })
-      .then(
-        (resp) => {
-          const buckets = resp.buckets ?? [];
-          const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
-          this.topCountries = buckets
-            .filter((b) => b.key)
-            .slice(0, 10)
-            .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
-        },
-        (err) => this.handleApiError(err),
-      );
+    for (const panel of this.breakdownPanels) {
+      this.grpc.signal
+        .aggregateSignals({ filters: {}, groupBy: panel.key, metric: 'count', timeBucket: '' })
+        .then(
+          (resp) => {
+            const buckets = resp.buckets ?? [];
+            const maxCount = Math.max(...buckets.map((b) => Number(b.count)), 1);
+            this.breakdowns[panel.key] = buckets
+              .filter((b) => b.key)
+              .slice(0, 10)
+              .map((b) => ({ key: b.key, count: Number(b.count), pct: (Number(b.count) / maxCount) * 100 }));
+          },
+          (err) => this.handleApiError(err),
+        );
+    }
   }
 
   loadRecentFailures(): void {
@@ -301,6 +251,10 @@ export class SignalsOverviewComponent implements OnInit {
 
   trackByKey(_i: number, row: BreakdownRow): string {
     return row.key;
+  }
+
+  getBreakdown(key: string): BreakdownRow[] {
+    return this.breakdowns[key] ?? [];
   }
 
   shortName(name: string): string {

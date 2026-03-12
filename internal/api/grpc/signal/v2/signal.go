@@ -101,24 +101,41 @@ func listQueryToOffsetLimit(q *object.ListQuery) (offset, limit int) {
 func filtersFromProto(instanceID string, pf *signal.SignalFilters) signals.SignalFilters {
 	f := signals.SignalFilters{
 		InstanceID: instanceID,
+		Fields:     make(map[string]string),
 	}
 	if pf == nil {
 		return f
 	}
-	f.UserID = pf.GetUserId()
-	f.SessionID = pf.GetSessionId()
-	f.IP = pf.GetIp()
-	f.Stream = pf.GetStream()
-	f.Outcome = pf.GetOutcome()
-	f.Operation = pf.GetOperation()
-	f.Country = pf.GetCountry()
-	f.Resource = pf.GetResource()
-	f.OrgID = pf.GetOrgId()
-	f.ProjectID = pf.GetProjectId()
-	f.ClientID = pf.GetClientId()
-	f.Payload = pf.GetPayload()
-	f.TraceID = pf.GetTraceId()
-	f.SpanID = pf.GetSpanId()
+
+	// Map all proto filter fields into the generic Fields map.
+	// The field registry in fields.go determines how each is applied.
+	set := func(col, val string) {
+		if val != "" {
+			f.Fields[col] = val
+		}
+	}
+	set("user_id", pf.GetUserId())
+	set("session_id", pf.GetSessionId())
+	set("ip", pf.GetIp())
+	set("stream", pf.GetStream())
+	set("outcome", pf.GetOutcome())
+	set("operation", pf.GetOperation())
+	set("country", pf.GetCountry())
+	set("resource", pf.GetResource())
+	set("org_id", pf.GetOrgId())
+	set("project_id", pf.GetProjectId())
+	set("client_id", pf.GetClientId())
+	set("payload", pf.GetPayload())
+	set("trace_id", pf.GetTraceId())
+	set("span_id", pf.GetSpanId())
+	set("user_agent", pf.GetUserAgent())
+	set("fingerprint_id", pf.GetFingerprintId())
+	set("caller_id", pf.GetCallerId())
+	set("referer", pf.GetReferer())
+	set("accept_language", pf.GetAcceptLanguage())
+	set("forwarded_chain", pf.GetForwardedChain())
+	set("sec_fetch_site", pf.GetSecFetchSite())
+
 	if pf.GetAfter() != nil {
 		t := pf.GetAfter().AsTime()
 		f.After = &t

@@ -17,24 +17,15 @@ type SignalReader interface {
 }
 
 // SignalFilters defines query predicates for signal searches and aggregations.
+// Fields is a map of column name → filter value for all queryable columns.
+// InstanceID is always set from auth context (never user-supplied).
+// After/Before define the time range and are passed separately because
+// they use range operators (>= / <) and feed into trace correlation subqueries.
 type SignalFilters struct {
 	InstanceID string
-	UserID     string
-	SessionID  string
-	IP         string
-	Stream     string
-	Outcome    string
-	Operation  string
-	Country    string
-	Resource   string
-	OrgID      string
-	ProjectID  string
-	ClientID   string
-	Payload    string // substring ILIKE match
-	TraceID    string
-	SpanID     string
 	After      *time.Time
 	Before     *time.Time
+	Fields     map[string]string
 }
 
 // AggregateRequest defines an aggregation query.

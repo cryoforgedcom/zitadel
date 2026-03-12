@@ -328,9 +328,9 @@ func (s *DuckLakeStore) AggregateSignals(ctx context.Context, filters SignalFilt
 		// reliably with new Date(). DuckDB's strftime(ts, format) syntax.
 		selectExpr = fmt.Sprintf("strftime(%s, '%%Y-%%m-%%dT%%H:%%M:%%SZ') AS bucket_key", groupExpr)
 	default:
-		col, ok := allowedGroupByFields[req.GroupBy]
-		if !ok {
-			return nil, fmt.Errorf("ducklake: unsupported group_by field: %q", req.GroupBy)
+		col, err := validateGroupBy(req.GroupBy)
+		if err != nil {
+			return nil, fmt.Errorf("ducklake: %w", err)
 		}
 		groupExpr = col
 		selectExpr = col + " AS bucket_key"
@@ -371,9 +371,9 @@ func (s *DuckLakeStore) AggregateSignals(ctx context.Context, filters SignalFilt
 
 	// Multi-dimensional: secondary group-by produces per-series time buckets
 	if req.SecondaryGroupBy != "" {
-		secondaryCol, ok := allowedGroupByFields[req.SecondaryGroupBy]
-		if !ok {
-			return nil, fmt.Errorf("ducklake: unsupported secondary_group_by field: %q", req.SecondaryGroupBy)
+		secondaryCol, err := validateGroupBy(req.SecondaryGroupBy)
+		if err != nil {
+			return nil, fmt.Errorf("ducklake: unsupported secondary_group_by: %w", err)
 		}
 		limit := req.Limit
 		if limit <= 0 {

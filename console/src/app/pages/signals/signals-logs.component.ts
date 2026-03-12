@@ -13,6 +13,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule } from '@ngx-translate/core';
 import { GrpcService } from 'src/app/services/grpc.service';
 import { ToastService } from 'src/app/services/toast.service';
+import { SIGNAL_FIELDS, suggestableFieldKeys, filterLabelMap, filterableFields, buildProtoFilters } from './signal-fields';
 
 import type { MessageInitShape } from '@bufbuild/protobuf';
 import type { Signal, AggregationBucket } from '@zitadel/proto/zitadel/signal/v2/signal_pb.js';
@@ -82,48 +83,16 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
   filterSuggestionsLoading = false;
   filterInputValue = '';
 
-  private readonly suggestableFields = new Set([
-    'operation',
-    'ip',
-    'country',
-    'user_id',
-    'org_id',
-    'project_id',
-    'client_id',
-    'outcome',
-    'stream',
-    'resource',
-  ]);
+  private readonly suggestableFields = suggestableFieldKeys();
+  readonly filterFieldDefs = filterableFields();
 
   filterForm: FormGroup = this.fb.group({
     stream: [''],
     outcome: [''],
-    operation: [''],
-    ip: [''],
-    country: [''],
-    user_id: [''],
-    org_id: [''],
-    project_id: [''],
-    client_id: [''],
-    payload: [''],
-    trace_id: [''],
-    span_id: [''],
+    ...Object.fromEntries(filterableFields().map(f => [f.key, ['']])),
   });
 
-  private readonly filterLabelMap: Record<string, string> = {
-    stream: 'Stream',
-    outcome: 'Outcome',
-    operation: 'Operation',
-    ip: 'IP',
-    country: 'Country',
-    user_id: 'User',
-    org_id: 'Org',
-    project_id: 'Project',
-    client_id: 'Client',
-    payload: 'Payload',
-    trace_id: 'Trace',
-    span_id: 'Span',
-  };
+  private readonly _filterLabelMap = filterLabelMap();
 
   displayedColumns = ['createdAt', 'stream', 'userId', 'operation', 'outcome', 'ip', 'expand'];
 
@@ -238,7 +207,7 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
     const chips: { key: string; label: string; value: string }[] = [];
     for (const [key, value] of Object.entries(f)) {
       if (value && key !== 'stream' && key !== 'outcome') {
-        chips.push({ key, label: this.filterLabelMap[key] || key, value: value as string });
+        chips.push({ key, label: this._filterLabelMap[key] || key, value: value as string });
       }
     }
     return chips;
@@ -246,7 +215,7 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
 
   openFilterInput(key: string): void {
     this.pendingFilterKey = key;
-    this.pendingFilterLabel = this.filterLabelMap[key] || key;
+    this.pendingFilterLabel = this._filterLabelMap[key] || key;
     this.filterSuggestions = [];
     this.filterInputValue = '';
     if (this.suggestableFields.has(key)) {
@@ -380,21 +349,7 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
   }
 
   private buildFilters(excludeField?: string): MessageInitShape<typeof SignalFiltersSchema> {
-    const f = this.filterForm.value;
-    const filters: Record<string, string> = {};
-    if (f.stream && excludeField !== 'stream') filters['stream'] = f.stream;
-    if (f.outcome && excludeField !== 'outcome') filters['outcome'] = f.outcome;
-    if (f.operation && excludeField !== 'operation') filters['operation'] = f.operation;
-    if (f.ip && excludeField !== 'ip') filters['ip'] = f.ip;
-    if (f.country && excludeField !== 'country') filters['country'] = f.country;
-    if (f.user_id && excludeField !== 'user_id') filters['userId'] = f.user_id;
-    if (f.org_id && excludeField !== 'org_id') filters['orgId'] = f.org_id;
-    if (f.project_id && excludeField !== 'project_id') filters['projectId'] = f.project_id;
-    if (f.client_id && excludeField !== 'client_id') filters['clientId'] = f.client_id;
-    if (f.payload && excludeField !== 'payload') filters['payload'] = f.payload;
-    if (f.trace_id && excludeField !== 'trace_id') filters['traceId'] = f.trace_id;
-    if (f.span_id && excludeField !== 'span_id') filters['spanId'] = f.span_id;
-    return filters;
+    return buildProtoFilters(this.filterForm.value, excludeField);
   }
 
   private syncUrl(): void {
@@ -480,8 +435,7 @@ export class SignalsLogsComponent implements OnInit, OnDestroy {
         },
         (err) => this.handleApiError(err),
       );
-    const filterFields = ['operation', 'ip', 'country', 'user_id', 'org_id', 'project_id', 'client_id'];
-    for (const field of filterFields) {
+    for (const field of this.filterFieldDefs.filter(f => f.suggestable).map(f => f.key)) {
       this.grpc.signal
         .aggregateSignals({ filters: this.buildFilters(), groupBy: field, metric: 'count', timeBucket: '' })
         .then(

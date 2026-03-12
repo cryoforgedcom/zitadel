@@ -95,64 +95,20 @@
 
     <!-- Top-N panels -->
     <div class="overview-grid">
-      <div class="panel">
+      <div class="panel" *ngFor="let panel of breakdownPanels">
         <div class="panel-header">
-          <span class="panel-title">Top Operations</span>
-          <button class="panel-link" (click)="drillDown('operation', '')">View all →</button>
+          <span class="panel-title">Top {{ panel.label }}</span>
+          <button class="panel-link" (click)="drillDown(panel.key, '')">View all →</button>
         </div>
-        <div class="breakdown-table" *ngIf="topOperations.length > 0">
-          <div class="breakdown-row" *ngFor="let row of topOperations; trackBy: trackByKey" (click)="drillDown('operation', row.key)">
-            <span class="br-key mono" [matTooltip]="row.key">{{ shortName(row.key) }}</span>
+        <div class="breakdown-table" *ngIf="getBreakdown(panel.key).length > 0">
+          <div class="breakdown-row" *ngFor="let row of getBreakdown(panel.key); trackBy: trackByKey"
+               (click)="panel.key === 'user_id' ? viewUserActivity(row.key) : drillDown(panel.key, row.key)">
+            <span class="br-key mono" [matTooltip]="row.key">{{ panel.key === 'operation' ? shortName(row.key) : row.key }}</span>
             <span class="br-count">{{ row.count | number }}</span>
             <div class="br-bar-wrap"><div class="br-bar" [style.width.%]="row.pct"></div></div>
           </div>
         </div>
-        <div class="panel-empty" *ngIf="topOperations.length === 0">No operations recorded</div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-header">
-          <span class="panel-title">Top Users</span>
-          <button class="panel-link" (click)="drillDown('user_id', '')">View all →</button>
-        </div>
-        <div class="breakdown-table" *ngIf="topUsers.length > 0">
-          <div class="breakdown-row" *ngFor="let row of topUsers; trackBy: trackByKey" (click)="viewUserActivity(row.key)">
-            <span class="br-key mono" [matTooltip]="row.key">{{ row.key }}</span>
-            <span class="br-count">{{ row.count | number }}</span>
-            <div class="br-bar-wrap"><div class="br-bar" [style.width.%]="row.pct"></div></div>
-          </div>
-        </div>
-        <div class="panel-empty" *ngIf="topUsers.length === 0">No user activity recorded</div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-header">
-          <span class="panel-title">Top IPs</span>
-          <button class="panel-link" (click)="drillDown('ip', '')">View all →</button>
-        </div>
-        <div class="breakdown-table" *ngIf="topIPs.length > 0">
-          <div class="breakdown-row" *ngFor="let row of topIPs; trackBy: trackByKey" (click)="drillDown('ip', row.key)">
-            <span class="br-key mono" [matTooltip]="row.key">{{ row.key }}</span>
-            <span class="br-count">{{ row.count | number }}</span>
-            <div class="br-bar-wrap"><div class="br-bar" [style.width.%]="row.pct"></div></div>
-          </div>
-        </div>
-        <div class="panel-empty" *ngIf="topIPs.length === 0">No IP data recorded</div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-header">
-          <span class="panel-title">Top Countries</span>
-          <button class="panel-link" (click)="drillDown('country', '')">View all →</button>
-        </div>
-        <div class="breakdown-table" *ngIf="topCountries.length > 0">
-          <div class="breakdown-row" *ngFor="let row of topCountries; trackBy: trackByKey" (click)="drillDown('country', row.key)">
-            <span class="br-key mono" [matTooltip]="row.key">{{ row.key }}</span>
-            <span class="br-count">{{ row.count | number }}</span>
-            <div class="br-bar-wrap"><div class="br-bar" [style.width.%]="row.pct"></div></div>
-          </div>
-        </div>
-        <div class="panel-empty" *ngIf="topCountries.length === 0">No country data recorded</div>
+        <div class="panel-empty" *ngIf="getBreakdown(panel.key).length === 0">No data recorded</div>
       </div>
     </div>
   </ng-container>

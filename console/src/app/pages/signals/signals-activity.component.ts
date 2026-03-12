@@ -10,6 +10,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule } from '@ngx-translate/core';
 import { GrpcService } from 'src/app/services/grpc.service';
 import { ToastService } from 'src/app/services/toast.service';
+import { entityTypeFields, buildProtoFilters } from './signal-fields';
 
 import type { Signal, AggregationBucket } from '@zitadel/proto/zitadel/signal/v2/signal_pb.js';
 
@@ -104,12 +105,7 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
   private readonly traceColors = ['#6366f1', '#22c55e', '#f59e0b', '#06b6d4', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 
   // Entity type display
-  readonly entityTypes: { key: string; label: string; icon: string }[] = [
-    { key: 'user_id', label: 'User', icon: 'person' },
-    { key: 'client_id', label: 'Client', icon: 'devices' },
-    { key: 'org_id', label: 'Organization', icon: 'business' },
-    { key: 'trace_id', label: 'Trace', icon: 'link' },
-  ];
+  readonly entityTypes = entityTypeFields().map(f => ({ key: f.key, label: f.label, icon: f.icon! }));
 
   timeRanges: TimeRange[] = [
     { label: 'Last 1h', value: '1 hour', bucket: '1 minute' },
@@ -191,19 +187,12 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
     if (!this.grpc.signal || !this.entityValue) return;
     this.loading = true;
 
-    const filterKey =
-      this.entityType === 'user_id'
-        ? 'userId'
-        : this.entityType === 'client_id'
-          ? 'clientId'
-          : this.entityType === 'org_id'
-            ? 'orgId'
-            : 'traceId';
+    const filters = buildProtoFilters({ [this.entityType]: this.entityValue });
 
     this.grpc.signal
       .listSignals({
         query: { offset: BigInt(this.offset), limit: this.limit, asc: false },
-        filters: { [filterKey]: this.entityValue },
+        filters,
       })
       .then(
         (resp) => {
@@ -223,16 +212,7 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
   loadStats(): void {
     if (!this.grpc.signal || !this.entityValue) return;
 
-    const filterKey =
-      this.entityType === 'user_id'
-        ? 'userId'
-        : this.entityType === 'client_id'
-          ? 'clientId'
-          : this.entityType === 'org_id'
-            ? 'orgId'
-            : 'traceId';
-
-    const filters = { [filterKey]: this.entityValue };
+    const filters = buildProtoFilters({ [this.entityType]: this.entityValue });
 
     this.grpc.signal.aggregateSignals({ filters, groupBy: 'operation', metric: 'count', timeBucket: '' }).then(
       (resp) => {

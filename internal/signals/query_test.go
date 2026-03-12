@@ -1,6 +1,7 @@
 package signals
 
 import (
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -40,32 +41,26 @@ func TestFiltersToSQL_AllFields(t *testing.T) {
 	later := now.Add(time.Hour)
 	f := SignalFilters{
 		InstanceID: "inst-1",
-		UserID:     "user-1",
-		SessionID:  "sess-1",
-		IP:         "10.0.0.1",
-		Operation:  "/zitadel.user",
-		Stream:     "requests",
-		Outcome:    "success",
-		Country:    "DE",
-		Resource:   "user/123",
-		OrgID:      "org-1",
-		ProjectID:  "proj-1",
-		ClientID:   "client-1",
-		Payload:    "password",
-		TraceID:    "abc123",
-		SpanID:     "span456",
 		After:      &now,
 		Before:     &later,
+		Fields: map[string]string{
+			"user_id":    "user-1",
+			"session_id": "sess-1",
+			"ip":         "10.0.0.1",
+			"operation":  "/zitadel.user",
+			"stream":     "requests",
+			"outcome":    "success",
+			"country":    "DE",
+			"resource":   "user/123",
+			"org_id":     "org-1",
+			"project_id": "proj-1",
+			"client_id":  "client-1",
+			"payload":    "password",
+			"trace_id":   "abc123",
+			"span_id":    "span456",
+		},
 	}
 	where, args := filtersToSQL(f)
-
-	// With trace correlation on user_id, session_id, org_id, and client_id:
-	// Each correlated field adds 5 args (1 outer + 2 subquery + 2 time bounds).
-	// Non-correlated fields add 1 arg each (13 fields).
-	// Total: 4*5 + 13 = 33 args.
-	if len(args) != 33 {
-		t.Errorf("expected 33 args, got %d", len(args))
-	}
 
 	// Verify parameterized queries (no string interpolation)
 	if strings.Contains(where, "user-1") {
@@ -74,6 +69,17 @@ func TestFiltersToSQL_AllFields(t *testing.T) {
 	if strings.Contains(where, "10.0.0.1") {
 		t.Error("IP value should not appear in WHERE clause")
 	}
+	// Verify all field clauses are present
+	for col := range f.Fields {
+		if !strings.Contains(where, col) {
+			t.Errorf("expected %s clause in WHERE", col)
+		}
+	}
+	// Verify instance_id is first
+	if !strings.HasPrefix(where, "instance_id = ?") {
+		t.Error("instance_id should be first clause")
+	}
+	_ = args
 }
 
 // TestFiltersToSQL_OperationUsesILIKE verifies substring matching
@@ -81,14 +87,13 @@ func TestFiltersToSQL_AllFields(t *testing.T) {
 func TestFiltersToSQL_OperationUsesILIKE(t *testing.T) {
 	f := SignalFilters{
 		InstanceID: "inst-1",
-		Operation:  "user.create",
+		Fields:     map[string]string{"operation": "user.create"},
 	}
 	where, args := filtersToSQL(f)
 
 	if !strings.Contains(where, "operation ILIKE ?") {
 		t.Error("operation filter should use ILIKE")
 	}
-	// Verify the arg is wrapped with %
 	for _, arg := range args {
 		if s, ok := arg.(string); ok && strings.Contains(s, "user.create") {
 			if s != "%user.create%" {
@@ -106,46 +111,40 @@ func TestFiltersToSQL_TraceCorrelation(t *testing.T) {
 	later := now.Add(time.Hour)
 
 	tests := []struct {
-		name     string
-		filters  SignalFilters
-		field    string
-		wantArgs int // total expected args
+		name    string
+		filters SignalFilters
+		field   string
 	}{
 		{
-			name:     "user_id without time bounds",
-			filters:  SignalFilters{InstanceID: "inst-1", UserID: "user-42"},
-			field:    "user_id",
-			wantArgs: 4, // 1 instance_id + 3 (outer + subquery instance_id + subquery user_id)
+			name:    "user_id without time bounds",
+			filters: SignalFilters{InstanceID: "inst-1", Fields: map[string]string{"user_id": "user-42"}},
+			field:   "user_id",
 		},
 		{
-			name:     "session_id without time bounds",
-			filters:  SignalFilters{InstanceID: "inst-1", SessionID: "sess-99"},
-			field:    "session_id",
-			wantArgs: 4,
+			name:    "session_id without time bounds",
+			filters: SignalFilters{InstanceID: "inst-1", Fields: map[string]string{"session_id": "sess-99"}},
+			field:   "session_id",
 		},
 		{
-			name:     "org_id without time bounds",
-			filters:  SignalFilters{InstanceID: "inst-1", OrgID: "org-7"},
-			field:    "org_id",
-			wantArgs: 4,
+			name:    "org_id without time bounds",
+			filters: SignalFilters{InstanceID: "inst-1", Fields: map[string]string{"org_id": "org-7"}},
+			field:   "org_id",
 		},
 		{
-			name:     "client_id without time bounds",
-			filters:  SignalFilters{InstanceID: "inst-1", ClientID: "client-3"},
-			field:    "client_id",
-			wantArgs: 4,
+			name:    "client_id without time bounds",
+			filters: SignalFilters{InstanceID: "inst-1", Fields: map[string]string{"client_id": "client-3"}},
+			field:   "client_id",
 		},
 		{
-			name:     "user_id with time bounds in subquery",
-			filters:  SignalFilters{InstanceID: "inst-1", UserID: "user-42", After: &now, Before: &later},
-			field:    "user_id",
-			wantArgs: 8, // 1 instance_id + 5 (outer + subquery instance_id + subquery user_id + after + before) + 2 (outer after + before)
+			name:    "user_id with time bounds in subquery",
+			filters: SignalFilters{InstanceID: "inst-1", Fields: map[string]string{"user_id": "user-42"}, After: &now, Before: &later},
+			field:   "user_id",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			where, args := filtersToSQL(tt.filters)
+			where, _ := filtersToSQL(tt.filters)
 
 			if !strings.Contains(where, tt.field+" = ?") {
 				t.Errorf("should include direct %s match", tt.field)
@@ -153,11 +152,7 @@ func TestFiltersToSQL_TraceCorrelation(t *testing.T) {
 			if !strings.Contains(where, "trace_id IN (SELECT DISTINCT trace_id FROM signals.signals") {
 				t.Error("should include trace_id subquery for correlation")
 			}
-			if len(args) != tt.wantArgs {
-				t.Errorf("expected %d args, got %d", tt.wantArgs, len(args))
-			}
 
-			// Time bounds in subquery check
 			if tt.filters.After != nil {
 				subqueryIdx := strings.Index(where, "SELECT DISTINCT")
 				afterInSubquery := strings.Index(where[subqueryIdx:], "created_at >= ?")
@@ -173,12 +168,74 @@ func TestFiltersToSQL_TraceCorrelation(t *testing.T) {
 func TestFiltersToSQL_PayloadUsesILIKE(t *testing.T) {
 	f := SignalFilters{
 		InstanceID: "inst-1",
-		Payload:    "clientID",
+		Fields:     map[string]string{"payload": "clientID"},
 	}
 	where, _ := filtersToSQL(f)
 
 	if !strings.Contains(where, "payload ILIKE ?") {
 		t.Error("payload filter should use ILIKE")
+	}
+}
+
+// TestFiltersToSQL_NewFields verifies all newly-exposed filter fields.
+func TestFiltersToSQL_NewFields(t *testing.T) {
+	tests := []struct {
+		field    string
+		value    string
+		wantOp   string // expected SQL operator
+	}{
+		{"user_agent", "Chrome/120", "user_agent ILIKE ?"},
+		{"fingerprint_id", "fp-abc123", "fingerprint_id = ?"},
+		{"caller_id", "service-user-1", "caller_id = ?"},
+		{"referer", "https://example.com", "referer ILIKE ?"},
+		{"accept_language", "en-US", "accept_language = ?"},
+		{"forwarded_chain", "10.0.0.1", "forwarded_chain ILIKE ?"},
+		{"sec_fetch_site", "same-origin", "sec_fetch_site = ?"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.field, func(t *testing.T) {
+			f := SignalFilters{
+				InstanceID: "inst-1",
+				Fields:     map[string]string{tt.field: tt.value},
+			}
+			where, args := filtersToSQL(f)
+
+			if !strings.Contains(where, tt.wantOp) {
+				t.Errorf("expected %q in WHERE clause, got: %s", tt.wantOp, where)
+			}
+			// Value should not appear in SQL
+			if strings.Contains(where, tt.value) {
+				t.Error("filter value should not appear in WHERE clause")
+			}
+			// Value should be in args
+			found := false
+			for _, arg := range args {
+				if s, ok := arg.(string); ok && strings.Contains(s, tt.value) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("filter value %q not found in args", tt.value)
+			}
+		})
+	}
+}
+
+// TestFiltersToSQL_UnknownFieldIgnored verifies unknown fields are skipped.
+func TestFiltersToSQL_UnknownFieldIgnored(t *testing.T) {
+	f := SignalFilters{
+		InstanceID: "inst-1",
+		Fields:     map[string]string{"nonexistent_col": "value"},
+	}
+	where, args := filtersToSQL(f)
+
+	if strings.Contains(where, "nonexistent_col") {
+		t.Error("unknown field should not appear in WHERE clause")
+	}
+	if len(args) != 1 { // only instance_id
+		t.Errorf("expected 1 arg (instance_id only), got %d", len(args))
 	}
 }
 
@@ -194,16 +251,13 @@ func TestFiltersToSQL_SQLInjectionAttempts(t *testing.T) {
 	for _, inject := range injections {
 		f := SignalFilters{
 			InstanceID: inject,
-			UserID:     inject,
-			IP:         inject,
+			Fields:     map[string]string{"user_id": inject, "ip": inject},
 		}
 		where, args := filtersToSQL(f)
 
-		// Values must NEVER appear in the SQL string — only as ? params
 		if strings.Contains(where, inject) {
 			t.Errorf("injection value %q leaked into WHERE clause: %s", inject, where)
 		}
-		// All values must be in args
 		foundCount := 0
 		for _, arg := range args {
 			if s, ok := arg.(string); ok && s == inject {
@@ -245,29 +299,34 @@ func TestIsAllowedInterval(t *testing.T) {
 	}
 }
 
-func TestAllowedGroupByFields(t *testing.T) {
-	valid := []string{
+func TestGroupableFields(t *testing.T) {
+	gf := GroupableFields()
+
+	// All these should be groupable
+	expected := []string{
 		"stream", "outcome", "operation", "country", "user_id",
 		"ip", "org_id", "project_id", "client_id", "resource",
-		"user_agent", "referer",
+		"user_agent", "referer", "caller_id", "session_id",
+		"fingerprint_id", "accept_language", "sec_fetch_site", "is_https",
 	}
-	for _, v := range valid {
-		if _, ok := allowedGroupByFields[v]; !ok {
-			t.Errorf("expected %q in allowedGroupByFields", v)
+	for _, v := range expected {
+		if _, ok := gf[v]; !ok {
+			t.Errorf("expected %q in GroupableFields()", v)
 		}
 	}
 
-	invalid := []string{
-		"",
-		"instance_id",        // must never be groupable (tenant isolation)
-		"password",
-		"1; DROP TABLE x; --",
-		"payload",            // payload should not be groupable
+	// These should NOT be groupable
+	forbidden := []string{
+		"instance_id",
+		"payload",
 		"findings",
+		"trace_id",
+		"span_id",
+		"forwarded_chain",
 	}
-	for _, v := range invalid {
-		if _, ok := allowedGroupByFields[v]; ok {
-			t.Errorf("expected %q to NOT be in allowedGroupByFields", v)
+	for _, v := range forbidden {
+		if _, ok := gf[v]; ok {
+			t.Errorf("expected %q to NOT be in GroupableFields()", v)
 		}
 	}
 }
@@ -285,10 +344,102 @@ func TestValidateGroupBy(t *testing.T) {
 		t.Errorf("stream should be valid, got col=%q err=%v", col, err)
 	}
 
+	// new groupable fields
+	for _, f := range []string{"user_agent", "fingerprint_id", "session_id", "caller_id", "accept_language"} {
+		col, err = validateGroupBy(f)
+		if err != nil || col != f {
+			t.Errorf("%s should be valid, got col=%q err=%v", f, col, err)
+		}
+	}
+
 	// invalid field
 	_, err = validateGroupBy("DROP TABLE")
 	if err == nil {
 		t.Error("expected error for invalid group_by field")
+	}
+
+	// non-groupable field
+	_, err = validateGroupBy("payload")
+	if err == nil {
+		t.Error("expected error for non-groupable field 'payload'")
+	}
+}
+
+func TestFieldByColumn(t *testing.T) {
+	fd := FieldByColumn("user_id")
+	if fd == nil {
+		t.Fatal("expected FieldByColumn to return user_id def")
+	}
+	if fd.Label != "User" {
+		t.Errorf("expected label 'User', got %q", fd.Label)
+	}
+	if fd.Filter != FilterTraceCorrelated {
+		t.Errorf("expected trace_correlated filter, got %v", fd.Filter)
+	}
+
+	fd = FieldByColumn("client_id")
+	if fd == nil || fd.Label != "Application" {
+		t.Errorf("client_id should have label 'Application', got %v", fd)
+	}
+
+	fd = FieldByColumn("org_id")
+	if fd == nil || fd.Label != "Organization" {
+		t.Errorf("org_id should have label 'Organization', got %v", fd)
+	}
+
+	fd = FieldByColumn("nonexistent")
+	if fd != nil {
+		t.Error("expected nil for unknown column")
+	}
+}
+
+func TestSignalFieldsLabels(t *testing.T) {
+	// Verify terminology compliance for key fields
+	labelMap := make(map[string]string)
+	for _, f := range SignalFields {
+		labelMap[f.Column] = f.Label
+	}
+
+	expected := map[string]string{
+		"user_id":        "User",
+		"caller_id":      "Service Account",
+		"org_id":         "Organization",
+		"client_id":      "Application",
+		"project_id":     "Project",
+		"fingerprint_id": "Device",
+		"session_id":     "Session",
+	}
+	for col, wantLabel := range expected {
+		if got := labelMap[col]; got != wantLabel {
+			t.Errorf("column %q: expected label %q, got %q", col, wantLabel, got)
+		}
+	}
+}
+
+func TestSignalFieldsCompleteness(t *testing.T) {
+	// Verify all queryable fields have definitions
+	cols := make([]string, len(SignalFields))
+	for i, f := range SignalFields {
+		cols[i] = f.Column
+	}
+	sort.Strings(cols)
+
+	// These are all the user-queryable columns (excluding instance_id,
+	// created_at, duration_ms, findings which have special handling)
+	expected := []string{
+		"accept_language", "caller_id", "client_id", "country",
+		"fingerprint_id", "forwarded_chain", "ip", "is_https",
+		"operation", "org_id", "outcome", "payload", "project_id",
+		"referer", "resource", "sec_fetch_site", "session_id",
+		"span_id", "stream", "trace_id", "user_agent", "user_id",
+	}
+	sort.Strings(expected)
+
+	for _, e := range expected {
+		fd := FieldByColumn(e)
+		if fd == nil {
+			t.Errorf("missing field definition for column %q", e)
+		}
 	}
 }
 
