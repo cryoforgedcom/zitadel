@@ -429,79 +429,43 @@ function getLocalVersion() {
 }
 
 async function run() {
-  console.log('Starting version fetch from .remote-tags.json...');
+  console.log('[fetch-docs] Starting documentation fetch...');
   
-  const REMOTE_TAGS_FILE = join(ROOT_DIR, '.remote-tags.json');
-  if (!fs.existsSync(REMOTE_TAGS_FILE)) {
-    console.error(`[error] ${REMOTE_TAGS_FILE} not found. Ensure check:remote-tags runs first.`);
+  const INPUT_FILE = join(ROOT_DIR, '.artifacts/versions.json');
+  if (!fs.existsSync(INPUT_FILE)) {
+    console.error(`[error] ${INPUT_FILE} not found. Run check:remote-tags first.`);
     process.exit(1);
   }
 
-  const selectedTags = JSON.parse(fs.readFileSync(REMOTE_TAGS_FILE, 'utf8'));
+  const versionMetadata = JSON.parse(fs.readFileSync(INPUT_FILE, 'utf8'));
+  const remoteVersions = versionMetadata.filter(v => v.refType === 'tag');
 
-  let localVer = getLocalVersion();
-  let others = selectedTags;
+  console.log(`[fetch-docs] Versions to process: ${versionMetadata.map(v => v.param).join(', ')}`);
 
-  console.log(`Latest version (Local): ${localVer.label} (Unreleased: ${localVer.isUnreleased})`);
+  for (const v of remoteVersions) {
+    const versionDir = join(CONTENT_DIR, v.param);
+    if (fs.existsSync(versionDir)) {
+      console.log(`[skip] Version ${v.param} already exists. Skipping download.`);
+      continue;
+    }
 
-  // Conditional Fallback: If no versions found > 4.10.0, inject v4.10.0
-  if (others.length === 0) {
-    console.log(`[fallback] No versions found strictly > ${CUTOFF}. Injecting ${FALLBACK_VERSION} as fallback.`);
-    others.push(FALLBACK_VERSION);
+    const sourceUrl = `https://github.com/${REPO}/archive/refs/tags/${v.ref}.tar.gz`;
+    console.log(`[fetch-docs] Downloading ${v.param} from ${sourceUrl}...`);
+    
+    try {
+      await downloadVersion(v.ref, v.ref);
+      const contentDest = join(CONTENT_DIR, v.param);
+      await fixRelativeImports(contentDest, v.ref);
+      console.log(`[fetch-docs] Successfully fetched and processed ${v.param}`);
+    } catch (err) {
+      console.error(`[error] Failed to fetch ${v.param}:`, err.message);
+      v.error = true;
+    }
   }
 
-  console.log(`Older versions to fetch: ${others.join(', ') || 'None'}`);
-
-  await Promise.all(others.map(async (tag) => {
-    let sourceRef = tag;
-
-    // Explicit logic for version 4.10.x and 4.11.x to use active branch (Faking legacy versions)
-    // This prevents fetching incompatible legacy docs for 4.10.1, 4.11.0 etc.
-    if (tag === FALLBACK_VERSION || (semver.major(tag) === 4 && semver.minor(tag) <= 12)) {
-      console.log(`[fake-override] Version ${tag} matches legacy (<= 4.12). Using fallback source (main/current) instead of tag.`);
-      sourceRef = getCurrentRef();
-    }
-
-    const versionSlug = `v${semver.major(tag)}.${semver.minor(tag)}`;
-    const contentDest = join(CONTENT_DIR, versionSlug);
-
-    // Simple cache check: if directory exists and looks populated, skip
-    // We could check for a specific file like meta.json or similar if we wanted to be more robust
-    if (fs.existsSync(contentDest)) {
-      console.log(`[skip] Version ${versionSlug} already exists. Skipping download.`);
-    } else {
-        await downloadVersion(tag, sourceRef);
-        // Correctly pass sourceRef here so external files are fetched from the same place (local or remote)
-        await fixRelativeImports(contentDest, sourceRef);
-    }
-  }));
-
-  const versionsJson = [
-    {
-      param: 'latest',
-      label: localVer.isUnreleased ? `${localVer.label} (Unreleased)` : `${localVer.label} (Latest)`,
-      url: '/docs',
-      ref: 'local',
-      refType: 'local'
-    }
-  ];
-
-  for (const tag of others) {
-    const v = `v${semver.major(tag)}.${semver.minor(tag)}`;
-    const versionSlug = `v${semver.major(tag)}${semver.minor(tag)}x`;
-    const targetUrl = `https://docs-git-${versionSlug}-zitadel.vercel.app/docs`;
-    versionsJson.push({
-      param: v,
-      label: v,
-      url: `/docs/${v}`,
-      ref: tag,
-      refType: 'tag',
-      target: targetUrl
-    });
-  }
-
-  fs.writeFileSync(VERSIONS_FILE, JSON.stringify(versionsJson, null, 2));
-  console.log('versions.json generated successfully.');
+  const FINAL_VERSIONS_FILE = join(CONTENT_DIR, 'versions.json');
+  fs.writeFileSync(FINAL_VERSIONS_FILE, JSON.stringify(versionMetadata.filter(v => !v.error), null, 2));
+  console.log(`[fetch-docs] Generated ${FINAL_VERSIONS_FILE}`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

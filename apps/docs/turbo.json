@@ -6,12 +6,12 @@
       "outputs": [".artifacts/bin/**/protoc-gen-connect-openapi"]
     },
     "check:remote-tags": {
-      "outputs": [".remote-tags.json"],
+      "outputs": [".artifacts/versions.json"],
       "cache": false
     },
     "fetch:remote-content": {
       "dependsOn": ["check:remote-tags"],
-      "inputs": [".remote-tags.json", "scripts/fetch-remote-content.mjs"],
+      "inputs": [".artifacts/versions.json", "scripts/fetch-remote-content.mjs"],
       "outputs": ["content/v*", "content/versions.json", "public/v*"]
     },
     "generate:proto-docs": {

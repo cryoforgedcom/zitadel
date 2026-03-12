@@ -17,7 +17,7 @@ export class Docs {
     // We use a debian-based node image because the proto install script uses bash, curl, and tar
     let builder = dag.container()
       .from(`node:${nodeVersion}-bookworm`)
-      .withExec(["npm", "install", "-g", "pnpm", "turbo", "@bufbuild/buf@1.66.1"])
+      .withExec(["npm", "install", "-g", "pnpm", "turbo"])
       
     // Mount the monorepo root
     builder = builder

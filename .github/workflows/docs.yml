@@ -1,0 +1,28 @@
+name: Docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/docs/**'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'apps/docs/**'
+      - '.github/workflows/docs.yml'
+
+jobs:
+  build:
+    name: Build Docs with Dagger
+    runs-on: depot-ubuntu-22.04-16
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Build Docs
+        uses: dagger/dagger-for-github@v6
+        with:
+          version: "latest"
+          verb: call
+          args: build -m ./apps/docs/dagger --source .

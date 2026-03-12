@@ -36,5 +36,5 @@ next-env.d.ts
 /content/v*/
 /public/v*
 /.temp/
-/.artifacts/
+/.artifacts
 /.source

@@ -74,25 +74,19 @@ async function run() {
 
       // Dynamic discovery of excluded paths
       const getExcludedPaths = async () => {
-           const patterns = ['v2beta', 'v3alpha', '**/v2beta', '**/v3alpha'];
-           const excluded = new Set();
-           
            if (v.refType === 'local') {
+               const patterns = ['v2beta', 'v3alpha', '**/v2beta', '**/v3alpha'];
                try {
                   const files = await glob(patterns, { cwd: PROTO_DIR, nodir: false });
-                  files.forEach(f => excluded.add(f.split(path.sep).join('/')));
+                  return Array.from(new Set(files.map(f => f.split(path.sep).join('/'))));
                } catch (e) {
                    console.warn('[warn] Failed to glob local excluded paths', e.message);
+                   return [];
                }
            } else {
-               // For remote inputs, we can't easily glob before running buf.
-               // However, buf --exclude-path works with remote inputs if we know the paths.
-               // For older versions, we assume the same legacy patterns.
-               excluded.add('v2beta');
-               excluded.add('v3alpha');
-               // Additional common beta/alpha paths if needed
+               // Use pre-discovered exclusions from versions.json
+               return v.exclusions || [];
            }
-           return Array.from(excluded);
       };
 
       const excludedPaths = await getExcludedPaths();

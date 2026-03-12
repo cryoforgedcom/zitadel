@@ -9,64 +9,97 @@ const CUTOFF = '4.10.0';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
-const REMOTE_TAGS_FILE = join(ROOT_DIR, '.remote-tags.json');
+const ARTIFACTS_DIR = join(ROOT_DIR, '.artifacts');
+const VERSIONS_FILE = join(ARTIFACTS_DIR, 'versions.json');
 
 async function fetchTags() {
+  if (!fs.existsSync(ARTIFACTS_DIR)) {
+    fs.mkdirSync(ARTIFACTS_DIR, { recursive: true });
+  }
   const token = process.env.GITHUB_TOKEN;
-  const headers = { 'User-Agent': 'node-fetch' };
+  const headers = { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'node-fetch' };
   if (token) headers['Authorization'] = `token ${token}`;
 
   const url = `https://api.github.com/repos/${REPO}/tags?per_page=100`;
   console.log(`[check-tags] Fetching tags from ${url}...`);
   const res = await fetch(url, { headers });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Failed to fetch tags: ${res.statusText} - ${body}`);
+  if (!res.ok) throw new Error(`Failed to fetch tags: ${res.statusText}`);
+  return await res.json();
+}
+
+async function findExclusions(ref) {
+  const token = process.env.GITHUB_TOKEN;
+  const headers = { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'node-fetch' };
+  if (token) headers['Authorization'] = `token ${token}`;
+
+  // Fetch the tree for the proto directory
+  const url = `https://api.github.com/repos/${REPO}/git/trees/${ref}:proto?recursive=1`;
+  console.log(`[check-tags] Discovering exclusions for ${ref}...`);
+  try {
+    const res = await fetch(url, { headers });
+    if (!res.ok) return ['zitadel/v2beta', 'zitadel/v3alpha']; // Fallback to common paths
+    const data = await res.json();
+    const excluded = new Set();
+    if (data.tree) {
+      data.tree.forEach(item => {
+        if (item.type === 'tree' && (item.path.includes('v2beta') || item.path.includes('v3alpha'))) {
+          excluded.add(item.path);
+        }
+      });
+    }
+    return Array.from(excluded);
+  } catch (e) {
+    return ['zitadel/v2beta', 'zitadel/v3alpha'];
   }
-  const tags = await res.json();
-  console.log(`[check-tags] Fetched ${tags.length} tags.`);
-  return tags;
 }
 
 export function filterVersions(tags) {
-  console.log(`[check-tags] Filtering tags with cutoff strictly > ${CUTOFF}...`);
   const versions = tags
     .map(t => t.name)
-    .filter(v => {
-      const valid = semver.valid(v);
-      if (!valid) return false;
-      return semver.gt(v, CUTOFF);
-    })
+    .filter(v => semver.valid(v) && semver.gt(v, CUTOFF))
     .sort((a, b) => semver.rcompare(a, b));
 
   const groups = new Map();
   for (const v of versions) {
-    const majorMinor = `${semver.major(v)}.${semver.minor(v)}`;
-    if (!groups.has(majorMinor)) {
-      groups.set(majorMinor, v);
-    }
+    const majorMinor = `v${semver.major(v)}.${semver.minor(v)}`;
+    if (!groups.has(majorMinor)) groups.set(majorMinor, v);
   }
 
-  const result = Array.from(groups.values()).slice(0, 3);
-  console.log(`[check-tags] Selected versions: ${result.join(', ')}`);
-  return result;
+  return Array.from(groups.entries()).slice(0, 3);
 }
 
 async function run() {
-  console.log('[check-tags] Checking remote tags for caching...');
+  console.log('[check-tags] Generating consolidated version metadata...');
   try {
     const tags = await fetchTags();
-    const selectedTags = filterVersions(tags);
+    const selectedEntries = filterVersions(tags);
 
-    if (selectedTags.length === 0) {
-      console.log(`[check-tags] No versions found strictly > ${CUTOFF}. Injecting ${FALLBACK_VERSION} as fallback.`);
-      selectedTags.push(FALLBACK_VERSION);
+    const versionMetadata = [
+      {
+        param: 'latest',
+        label: 'latest',
+        url: '/docs',
+        ref: 'local',
+        refType: 'local'
+      }
+    ];
+
+    for (const [majorMinor, tag] of selectedEntries) {
+      const exclusions = await findExclusions(tag);
+      versionMetadata.push({
+        param: majorMinor,
+        label: majorMinor,
+        url: `/docs/${majorMinor}`,
+        ref: tag,
+        refType: 'tag',
+        exclusions
+      });
     }
 
-    fs.writeFileSync(REMOTE_TAGS_FILE, JSON.stringify(selectedTags, null, 2));
-    console.log(`[check-tags] Successfully wrote ${REMOTE_TAGS_FILE}`);
+    fs.writeFileSync(VERSIONS_FILE, JSON.stringify(versionMetadata, null, 2));
+    console.log(`[check-tags] Successfully wrote ${VERSIONS_FILE}`);
   } catch (err) {
-    console.error('[check-tags] Failed to check remote tags:', err);
+    console.error('[check-tags] Failed:', err);
     process.exit(1);
   }
 }
