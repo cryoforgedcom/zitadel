@@ -110,7 +110,9 @@
 .stat-failure { color: #ef4444; }
 .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
 @media (max-width: 900px) { .overview-grid { grid-template-columns: 1fr; } }
-.panel { border: 1px solid var(--border); border-radius: var(--r); background: var(--bg); overflow: hidden; }
+.panel { border: 1px solid var(--border); border-radius: var(--r); background: var(--bg); overflow: hidden;
+  .breakdown-table { border: none; border-radius: 0; }
+}
 .panel-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .panel-title { font-size: 13px; font-weight: 600; color: var(--t1); }
 .panel-link { font-size: 12px; color: var(--accent); background: none; border: none; cursor: pointer; &:hover { text-decoration: underline; } }
@@ -276,7 +278,11 @@
 .trace-summary-label { color: var(--t3); font-weight: 500; min-width: 70px; }
 .trace-ops { display: flex; flex-wrap: wrap; gap: 4px; }
 .trace-op { background: var(--bg2); padding: 1px 8px; border-radius: 4px; color: var(--t1); font-size: 11px; }
-.trace-shared { display: flex; flex-wrap: wrap; gap: 12px; padding: 6px 16px 10px 48px; font-size: 12px; color: var(--t2); }
+.trace-merged { padding: 6px 16px 10px 48px; font-size: 12px; }
+.trace-merged-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; color: var(--t2); }
+.trace-merged-label { font-weight: 500; color: var(--t3); min-width: 56px; font-size: 11px; text-transform: uppercase; }
+.trace-merged-vals { display: flex; flex-wrap: wrap; gap: 4px; }
+.trace-merged-val { background: var(--bg2); padding: 2px 8px; border-radius: 4px; font-size: 12px; display: inline-flex; align-items: center; gap: 2px; }
 .trace-shared-field { display: inline-flex; align-items: center; gap: 4px; }
 .trace-children { border-top: 1px solid var(--border); }
 .trace-child { display: flex; align-items: flex-start; padding: 8px 16px 8px 32px; cursor: pointer; gap: 12px; &:hover { background: var(--bg2); } }

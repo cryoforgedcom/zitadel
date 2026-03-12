@@ -422,25 +422,72 @@
               </div>
             </div>
 
-            <!-- Shared context -->
-            <div class="trace-shared" *ngIf="hasAnyShared($any(item).group.shared)">
-              <span class="trace-shared-field" *ngIf="$any(item).group.shared.userId">
-                <mat-icon class="meta-icon">person</mat-icon> {{ $any(item).group.shared.userId | slice:0:20 }}
-                <mat-icon class="kv-link-icon inline-link" (click)="navigateToEntity('user', $any(item).group.shared.userId); $event.stopPropagation()" matTooltip="Open user">open_in_new</mat-icon>
-              </span>
-              <span class="trace-shared-field" *ngIf="$any(item).group.shared.orgId">
-                <mat-icon class="meta-icon">business</mat-icon> {{ $any(item).group.shared.orgId | slice:0:20 }}
-              </span>
-              <span class="trace-shared-field" *ngIf="$any(item).group.shared.clientId">
-                <mat-icon class="meta-icon">devices</mat-icon> {{ $any(item).group.shared.clientId | slice:0:20 }}
-              </span>
-              <span class="trace-shared-field" *ngIf="$any(item).group.shared.sessionId">
-                <mat-icon class="meta-icon">key</mat-icon> {{ $any(item).group.shared.sessionId | slice:0:20 }}
-              </span>
-              <span class="trace-shared-field" *ngIf="$any(item).group.shared.ip">
-                <mat-icon class="meta-icon">language</mat-icon> {{ $any(item).group.shared.ip }}
-                <span *ngIf="$any(item).group.shared.country"> · {{ $any(item).group.shared.country }}</span>
-              </span>
+            <!-- Merged context: all unique values across the trace -->
+            <div class="trace-merged" *ngIf="hasAnyMerged($any(item).group.merged)">
+              <div class="trace-merged-row" *ngIf="$any(item).group.merged['userId']">
+                <mat-icon class="meta-icon">person</mat-icon>
+                <span class="trace-merged-label">User</span>
+                <span class="trace-merged-vals">
+                  <ng-container *ngFor="let v of $any(item).group.merged['userId']">
+                    <span class="trace-merged-val mono">{{ v | slice:0:20 }}
+                      <mat-icon class="kv-link-icon inline-link" (click)="navigateToEntity('user', v); $event.stopPropagation()" matTooltip="Open user">open_in_new</mat-icon>
+                    </span>
+                  </ng-container>
+                </span>
+              </div>
+              <div class="trace-merged-row" *ngIf="$any(item).group.merged['orgId']">
+                <mat-icon class="meta-icon">business</mat-icon>
+                <span class="trace-merged-label">Org</span>
+                <span class="trace-merged-vals">
+                  <span class="trace-merged-val mono" *ngFor="let v of $any(item).group.merged['orgId']">{{ v | slice:0:20 }}
+                    <mat-icon class="kv-link-icon inline-link" (click)="navigateToEntity('org', v); $event.stopPropagation()" matTooltip="Open org">open_in_new</mat-icon>
+                  </span>
+                </span>
+              </div>
+              <div class="trace-merged-row" *ngIf="$any(item).group.merged['sessionId']">
+                <mat-icon class="meta-icon">key</mat-icon>
+                <span class="trace-merged-label">Session</span>
+                <span class="trace-merged-vals">
+                  <span class="trace-merged-val mono" *ngFor="let v of $any(item).group.merged['sessionId']">{{ v | slice:0:20 }}</span>
+                </span>
+              </div>
+              <div class="trace-merged-row" *ngIf="$any(item).group.merged['clientId']">
+                <mat-icon class="meta-icon">devices</mat-icon>
+                <span class="trace-merged-label">Client</span>
+                <span class="trace-merged-vals">
+                  <span class="trace-merged-val mono" *ngFor="let v of $any(item).group.merged['clientId']">{{ v | slice:0:20 }}</span>
+                </span>
+              </div>
+              <div class="trace-merged-row" *ngIf="$any(item).group.merged['projectId']">
+                <mat-icon class="meta-icon">folder</mat-icon>
+                <span class="trace-merged-label">Project</span>
+                <span class="trace-merged-vals">
+                  <span class="trace-merged-val mono" *ngFor="let v of $any(item).group.merged['projectId']">{{ v | slice:0:20 }}
+                    <mat-icon class="kv-link-icon inline-link" (click)="navigateToEntity('project', v); $event.stopPropagation()" matTooltip="Open project">open_in_new</mat-icon>
+                  </span>
+                </span>
+              </div>
+              <div class="trace-merged-row" *ngIf="$any(item).group.merged['ip']">
+                <mat-icon class="meta-icon">language</mat-icon>
+                <span class="trace-merged-label">IP</span>
+                <span class="trace-merged-vals">
+                  <span class="trace-merged-val mono" *ngFor="let v of $any(item).group.merged['ip']">{{ v }}</span>
+                </span>
+              </div>
+              <div class="trace-merged-row" *ngIf="$any(item).group.merged['country']">
+                <mat-icon class="meta-icon">flag</mat-icon>
+                <span class="trace-merged-label">Country</span>
+                <span class="trace-merged-vals">
+                  <span class="trace-merged-val" *ngFor="let v of $any(item).group.merged['country']">{{ v }}</span>
+                </span>
+              </div>
+              <div class="trace-merged-row" *ngIf="$any(item).group.merged['userAgent']">
+                <mat-icon class="meta-icon">computer</mat-icon>
+                <span class="trace-merged-label">User Agent</span>
+                <span class="trace-merged-vals">
+                  <span class="trace-merged-val mono" *ngFor="let v of $any(item).group.merged['userAgent']" [matTooltip]="v">{{ v | slice:0:40 }}</span>
+                </span>
+              </div>
             </div>
 
             <!-- Expanded child entries -->
@@ -459,34 +506,34 @@
                     <span class="timeline-operation mono" [matTooltip]="child.signal.operation">{{ shortName(child.signal.operation) }}</span>
                     <span class="badge" [ngClass]="{ 'badge-ok': child.signal.outcome === 'success', 'badge-fail': child.signal.outcome === 'failure' }">{{ child.signal.outcome }}</span>
                   </div>
-                  <!-- Only show fields that differ from shared context -->
+                  <!-- Only show fields NOT already in the merged root -->
                   <div class="timeline-row-meta">
-                    <span class="timeline-meta" *ngIf="child.signal.userId && child.signal.userId !== $any(item).group.shared.userId">
+                    <span class="timeline-meta" *ngIf="child.signal.userId && !isInMerged($any(item).group.merged, 'userId', child.signal.userId)">
                       <mat-icon class="meta-icon">person</mat-icon> {{ child.signal.userId | slice:0:20 }}
                     </span>
-                    <span class="timeline-meta" *ngIf="child.signal.ip && child.signal.ip !== $any(item).group.shared.ip">
+                    <span class="timeline-meta" *ngIf="child.signal.ip && !isInMerged($any(item).group.merged, 'ip', child.signal.ip)">
                       <mat-icon class="meta-icon">language</mat-icon> {{ child.signal.ip }}
                     </span>
-                    <span class="timeline-meta" *ngIf="child.signal.clientId && child.signal.clientId !== $any(item).group.shared.clientId">
+                    <span class="timeline-meta" *ngIf="child.signal.clientId && !isInMerged($any(item).group.merged, 'clientId', child.signal.clientId)">
                       <mat-icon class="meta-icon">devices</mat-icon> {{ child.signal.clientId | slice:0:20 }}
                     </span>
                     <span class="timeline-meta" *ngIf="child.signal.resource">
                       <mat-icon class="meta-icon">folder</mat-icon> {{ child.signal.resource | slice:0:30 }}
                     </span>
                   </div>
-                  <!-- Expanded detail — show ONLY fields that differ from shared -->
+                  <!-- Expanded detail — show ONLY fields NOT in merged root -->
                   <div class="timeline-detail" *ngIf="expandedSignals.has(child.signal)" @detailExpand>
                     <div class="detail-kv-grid">
                       <div class="kv">
                         <span class="kv-label">Operation</span><span class="kv-val mono kv-copiable">{{ child.signal.operation || '—' }}<mat-icon class="kv-copy" *ngIf="child.signal.operation" (click)="copyToClipboard(child.signal.operation, $event)" matTooltip="Copy">content_copy</mat-icon></span>
                       </div>
-                      <div class="kv" *ngIf="child.signal.userId && child.signal.userId !== $any(item).group.shared.userId">
+                      <div class="kv" *ngIf="child.signal.userId && !isInMerged($any(item).group.merged, 'userId', child.signal.userId)">
                         <span class="kv-label">User ID</span><span class="kv-val mono kv-copiable">{{ child.signal.userId }}<mat-icon class="kv-copy" (click)="copyToClipboard(child.signal.userId, $event)" matTooltip="Copy">content_copy</mat-icon><mat-icon class="kv-link-icon" (click)="navigateToEntity('user', child.signal.userId); $event.stopPropagation()" matTooltip="Open user">open_in_new</mat-icon></span>
                       </div>
-                      <div class="kv" *ngIf="child.signal.orgId && child.signal.orgId !== $any(item).group.shared.orgId">
+                      <div class="kv" *ngIf="child.signal.orgId && !isInMerged($any(item).group.merged, 'orgId', child.signal.orgId)">
                         <span class="kv-label">Organization</span><span class="kv-val mono kv-copiable">{{ child.signal.orgId }}<mat-icon class="kv-copy" (click)="copyToClipboard(child.signal.orgId, $event)" matTooltip="Copy">content_copy</mat-icon></span>
                       </div>
-                      <div class="kv" *ngIf="child.signal.ip && child.signal.ip !== $any(item).group.shared.ip">
+                      <div class="kv" *ngIf="child.signal.ip && !isInMerged($any(item).group.merged, 'ip', child.signal.ip)">
                         <span class="kv-label">IP</span><span class="kv-val mono kv-copiable">{{ child.signal.ip }}<mat-icon class="kv-copy" (click)="copyToClipboard(child.signal.ip, $event)" matTooltip="Copy">content_copy</mat-icon></span>
                       </div>
                       <div class="kv">

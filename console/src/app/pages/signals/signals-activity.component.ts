@@ -32,17 +32,8 @@ interface TraceGroup {
   traceId: string;
   traceColor: string;
   signals: TimelineEntry[];
-  // Shared context computed from all signals in the trace
-  shared: {
-    userId?: string;
-    orgId?: string;
-    clientId?: string;
-    sessionId?: string;
-    projectId?: string;
-    ip?: string;
-    country?: string;
-    userAgent?: string;
-  };
+  // Merged context: all unique non-empty values across the trace per field
+  merged: Record<string, string[]>;
   // Trace summary
   operations: string[];
   streams: string[];
@@ -336,7 +327,7 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
 
         const signals = traceEntries.get(tid)!;
         const traceColor = traceColorMap.get(tid) ?? '';
-        const shared = this.computeShared(signals.map(e => e.signal));
+        const merged = this.computeMerged(signals.map(e => e.signal));
 
         // Compute trace summary
         const ops = new Set<string>();
@@ -367,7 +358,7 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
         this.timelineItems.push({
           type: 'trace',
           group: {
-            traceId: tid, traceColor, signals, shared,
+            traceId: tid, traceColor, signals, merged,
             operations: Array.from(ops),
             streams: Array.from(streams),
             successCount, failureCount,
@@ -391,16 +382,20 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
     }
   }
 
-  private computeShared(signals: Signal[]): TraceGroup['shared'] {
-    const shared: TraceGroup['shared'] = {};
+  private computeMerged(signals: Signal[]): Record<string, string[]> {
+    const merged: Record<string, string[]> = {};
     const fields = ['userId', 'orgId', 'clientId', 'sessionId', 'projectId', 'ip', 'country', 'userAgent'] as const;
     for (const field of fields) {
-      const values = signals.map(s => (s as any)[field]).filter((v: any) => v);
-      if (values.length > 0 && values.every((v: any) => v === values[0])) {
-        (shared as any)[field] = values[0];
+      const unique = new Set<string>();
+      for (const s of signals) {
+        const v = (s as any)[field];
+        if (v) unique.add(v);
+      }
+      if (unique.size > 0) {
+        merged[field] = Array.from(unique);
       }
     }
-    return shared;
+    return merged;
   }
 
   formatDuration(ms: number | null): string {
@@ -454,8 +449,13 @@ export class SignalsActivityComponent implements OnInit, OnDestroy {
     }
   }
 
-  hasAnyShared(shared: TraceGroup['shared']): boolean {
-    return !!(shared.userId || shared.orgId || shared.clientId || shared.sessionId || shared.projectId || shared.ip);
+  hasAnyMerged(merged: Record<string, string[]>): boolean {
+    return Object.keys(merged).length > 0;
+  }
+
+  /** Check if a child signal's field value is already shown in the merged root */
+  isInMerged(merged: Record<string, string[]>, field: string, value: string): boolean {
+    return !!(merged[field] && merged[field].includes(value));
   }
 
   copyToClipboard(value: string, event: MouseEvent): void {
