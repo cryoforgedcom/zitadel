@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/zitadel/zitadel/backend/v3/domain"
 	"github.com/zitadel/zitadel/backend/v3/storage/database"
 	"github.com/zitadel/zitadel/backend/v3/storage/database/repository"
 	"github.com/zitadel/zitadel/internal/repository/permission"
@@ -29,7 +28,7 @@ func TestAdministratorRolePermissionReducers(t *testing.T) {
 
 	t.Run("added event inserts a permission row", func(t *testing.T) {
 		event := permission.NewAddedEvent(ctx, permission.NewAggregate("SYSTEM"), "ORG_OWNER", "org.read")
-		require.True(t, callReduce(t, ctx, rawTx, handler, event))
+		require.True(t, callReduce(t, rawTx, handler, event))
 		assert.Equal(t,
 			[]administratorRolePermission{{RoleName: "ORG_OWNER", Permission: "org.read"}},
 			listReducedAdministratorRolePermissions(t, tx),
@@ -37,13 +36,11 @@ func TestAdministratorRolePermissionReducers(t *testing.T) {
 	})
 
 	t.Run("removed event deletes only the matching permission row", func(t *testing.T) {
-		require.NoError(t, repo.Set(ctx, tx, &domain.AdministratorRole{
-			Name:        "INSTANCE_OWNER",
-			Permissions: []string{"instance.read", "instance.write"},
-		}))
+		_, err := repo.AddPermissions(ctx, tx, "INSTANCE_OWNER", "instance.read", "instance.write")
+		require.NoError(t, err)
 
 		event := permission.NewRemovedEvent(ctx, permission.NewAggregate("SYSTEM"), "INSTANCE_OWNER", "instance.read")
-		require.True(t, callReduce(t, ctx, rawTx, handler, event))
+		require.True(t, callReduce(t, rawTx, handler, event))
 		assert.Equal(t,
 			[]administratorRolePermission{{RoleName: "INSTANCE_OWNER", Permission: "instance.write"}},
 			listReducedAdministratorRolePermissions(t, tx, repo.NameCondition(database.TextOperationEqual, "INSTANCE_OWNER")),
@@ -51,6 +48,7 @@ func TestAdministratorRolePermissionReducers(t *testing.T) {
 	})
 }
 
+//nolint:contextcheck // we use the [testing.T.Context] for all operations in this function, so we don't need to pass a separate context parameter
 func listReducedAdministratorRolePermissions(t *testing.T, tx database.QueryExecutor, conditions ...database.Condition) []administratorRolePermission {
 	t.Helper()
 
