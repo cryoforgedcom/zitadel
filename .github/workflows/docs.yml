@@ -3,19 +3,13 @@ name: Docs
 on:
   push:
     branches:
-      - main
-    paths:
-      - 'apps/docs/**'
-      - '.github/workflows/docs.yml'
+      - dagger-prototype
   pull_request:
-    paths:
-      - 'apps/docs/**'
-      - '.github/workflows/docs.yml'
 
 jobs:
   build:
     name: Build Docs with Dagger
-    runs-on: depot-ubuntu-22.04-16
+    runs-on: depot-ubuntu-22.04-8
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4

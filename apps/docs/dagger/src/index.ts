@@ -29,15 +29,13 @@ export class Docs {
       .withEnvVariable("CI", "true")
       .withExec(["pnpm", "install", "--filter", "@zitadel/docs..."])
 
-    // Execute the build steps using Turborepo (replacing hardcoded sequential steps)
+    // Persist Turbo's local cache across Dagger runs so unchanged tasks are not re-executed
     builder = builder
-      // 1. Install proto plugins (downloads to /src/.artifacts/bin/linux/amd64)
-      .withExec(["bash", "./apps/docs/scripts/install-proto-plugins.sh"])
-      
-      // 2. Build Next.js application using turbo from the monorepo root
-      // Requires the downloaded binary in PATH for the generate steps turbo will run
+      .withMountedCache("/src/.turbo/cache", dag.cacheVolume("turbo-cache"))
+
+    // Ensure proto plugin binaries are on PATH for Turbo's generate tasks
+    builder = builder
       .withEnvVariable("PATH", "/src/.artifacts/bin/linux/amd64:$PATH", { expand: true })
-      // Notice we are in /src (the workspace root) when running turbo
       .withExec(["turbo", "run", "build", "--filter=@zitadel/docs"])
 
     // Export the built .next directory
