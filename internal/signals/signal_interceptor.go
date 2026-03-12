@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/felixge/httpsnoop"
 	otel_trace "go.opentelemetry.io/otel/trace"
 
 	"github.com/zitadel/zitadel/internal/api/authz"
@@ -90,8 +91,7 @@ func SignalHTTPMiddleware(emitter *Emitter, geoCountryHeader string) func(http.H
 			}
 
 			start := time.Now()
-			rw := &statusCapture{ResponseWriter: w, status: http.StatusOK}
-			next.ServeHTTP(rw, r)
+			metrics := httpsnoop.CaptureMetrics(next, w, r)
 
 			if strings.HasPrefix(r.URL.Path, "/zitadel.signal.") ||
 				strings.HasPrefix(r.URL.Path, "/v2/signals") ||
@@ -111,7 +111,7 @@ func SignalHTTPMiddleware(emitter *Emitter, geoCountryHeader string) func(http.H
 			ctxData := authz.GetCtxData(ctx)
 
 			outcome := OutcomeSuccess
-			if rw.status >= 400 {
+			if metrics.Code >= 400 {
 				outcome = OutcomeFailure
 			}
 
@@ -129,7 +129,7 @@ func SignalHTTPMiddleware(emitter *Emitter, geoCountryHeader string) func(http.H
 				UserAgent:      truncateString(r.Header.Get("User-Agent"), maxUserAgentLen),
 				Outcome:        outcome,
 				Timestamp:      start.UTC(),
-				DurationMs:     time.Since(start).Milliseconds(),
+				DurationMs:     metrics.Duration.Milliseconds(),
 				AcceptLanguage: hctx.AcceptLanguage,
 				Country:        hctx.Country,
 				ForwardedChain: hctx.ForwardedChain,
@@ -152,17 +152,6 @@ func spanIDFromCtx(ctx context.Context) string {
 	return ""
 }
 
-// statusCapture wraps http.ResponseWriter to capture the written status code.
-type statusCapture struct {
-	http.ResponseWriter
-	status int
-}
-
-func (s *statusCapture) WriteHeader(code int) {
-	s.status = code
-	s.ResponseWriter.WriteHeader(code)
-}
-
 // stripPort returns the IP address without the port suffix.
 func stripPort(addr string) string {
 	host, _, err := net.SplitHostPort(addr)
@@ -171,3 +160,4 @@ func stripPort(addr string) string {
 	}
 	return host
 }
+
