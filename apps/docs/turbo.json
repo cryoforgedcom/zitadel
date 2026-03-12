@@ -2,30 +2,63 @@
   "$schema": "https://turbo.build/schema.json",
   "extends": ["//"],
   "tasks": {
-    "install-proto-plugins": {},
+    "install-proto-plugins": {
+      "outputs": [".artifacts/bin/**/protoc-gen-connect-openapi"]
+    },
+    "check:remote-tags": {
+      "outputs": [".remote-tags.json"],
+      "cache": false
+    },
     "fetch:remote-content": {
-      "outputs": ["content/versions.json"]
+      "dependsOn": ["check:remote-tags"],
+      "inputs": [".remote-tags.json", "scripts/fetch-remote-content.mjs"],
+      "outputs": ["content/v*", "content/versions.json", "public/v*"]
     },
     "generate:proto-docs": {
       "dependsOn": ["fetch:remote-content", "install-proto-plugins"],
-      "outputs": ["openapi/**"]
+      "outputs": ["openapi/**"],
+      "inputs": ["$TURBO_DEFAULT$", "../../proto/**"]
     },
     "generate:api-reference": {
       "dependsOn": ["generate:proto-docs"],
-      "outputs": ["content/reference/api/**", "content/**/reference/api/**"]
-    },
-    "fix:api-links": {
-      "dependsOn": ["generate:api-reference"]
+      "outputs": ["content/reference/api/**", "content/v*/reference/api/**"]
     },
     "generate:index-pages": {
-      "dependsOn": ["fix:api-links"]
+      "dependsOn": ["fetch:remote-content"],
+      "outputs": ["content/**/index.mdx"]
     },
     "build:mdx-source": {
-      "dependsOn": ["generate:index-pages"],
+      "dependsOn": ["generate:api-reference", "generate:index-pages"],
       "outputs": [".source/**"]
     },
     "generate": {
       "dependsOn": ["build:mdx-source"]
+    },
+    "check:links": {
+      "dependsOn": ["generate"],
+      "inputs": ["$TURBO_DEFAULT$", "../../proto/**"]
+    },
+    "check:types": {
+      "dependsOn": ["generate"]
+    },
+    "test:scripts": {
+      "dependsOn": ["check:types", "check:links"]
+    },
+    "lint": {
+      "dependsOn": ["generate"],
+      "inputs": ["$TURBO_DEFAULT$", "../../.eslintrc.json"]
+    },
+    "build": {
+      "dependsOn": ["^build", "check:links"],
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
+    "dev": {
+      "dependsOn": ["generate"],
+      "cache": false
+    },
+    "start": {
+      "dependsOn": ["build"],
+      "cache": false
     }
   }
 }

@@ -58,7 +58,9 @@ case "$_uname_arch" in
   *) echo "Unsupported arch: $_uname_arch" >&2; exit 1 ;;
 esac
 
-BIN_DIR="${PWD}/.artifacts/bin/${GOOS}/${GOARCH}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+BIN_DIR="${ROOT_DIR}/.artifacts/bin/${GOOS}/${GOARCH}"
 mkdir -p "$BIN_DIR"
 
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/zitadel-docs-proto-plugins.XXXXXX")

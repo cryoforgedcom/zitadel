@@ -83,51 +83,7 @@ export function resetCache() {
   cachedRef = null;
 }
 
-async function fetchTags() {
-  const token = process.env.GITHUB_TOKEN;
-  const headers = { 'User-Agent': 'node-fetch' };
-  if (token) headers['Authorization'] = `token ${token}`;
-
-  const url = `https://api.github.com/repos/${REPO}/tags?per_page=100`;
-  console.log(`Fetching tags from ${url}...`);
-  const res = await fetch(url, { headers });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Failed to fetch tags: ${res.statusText} - ${body}`);
-  }
-  const tags = await res.json();
-  console.log(`Fetched ${tags.length} tags.`);
-  return tags;
-}
-
-export function filterVersions(tags) {
-  console.log(`Filtering tags with cutoff strictly > ${CUTOFF}...`);
-  const versions = tags
-    .map(t => t.name)
-    .filter(v => {
-      const valid = semver.valid(v);
-      if (!valid) return false;
-      // Strict cutoff: Do not fetch or build anything older (including that version)
-      return semver.gt(v, CUTOFF);
-    })
-    .sort((a, b) => semver.rcompare(a, b));
-
-  console.log(`Found ${versions.length} versions matching criteria.`);
-
-  const groups = new Map();
-  for (const v of versions) {
-    const majorMinor = `${semver.major(v)}.${semver.minor(v)}`;
-    if (!groups.has(majorMinor)) {
-      groups.set(majorMinor, v);
-    }
-  }
-
-  const result = Array.from(groups.values()).slice(0, 3);
-  console.log(`Selected versions: ${result.join(', ')}`);
-  return result;
-}
-
-// Safely copy a directory, avoiding recursive version folders
+// --- Helper Functions ---
 function copyDirectorySafely(src, dest) {
   if (!fs.existsSync(src)) return;
   fs.mkdirSync(dest, { recursive: true });
@@ -473,9 +429,15 @@ function getLocalVersion() {
 }
 
 async function run() {
-  console.log('Starting version discovery...');
-  const tags = await fetchTags();
-  const selectedTags = filterVersions(tags);
+  console.log('Starting version fetch from .remote-tags.json...');
+  
+  const REMOTE_TAGS_FILE = join(ROOT_DIR, '.remote-tags.json');
+  if (!fs.existsSync(REMOTE_TAGS_FILE)) {
+    console.error(`[error] ${REMOTE_TAGS_FILE} not found. Ensure check:remote-tags runs first.`);
+    process.exit(1);
+  }
+
+  const selectedTags = JSON.parse(fs.readFileSync(REMOTE_TAGS_FILE, 'utf8'));
 
   let localVer = getLocalVersion();
   let others = selectedTags;

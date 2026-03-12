@@ -295,28 +295,20 @@ async function fixAllGeneratedLinks() {
 }
 
 async function run() {
-  const args = process.argv.slice(2);
-  const onlyGenerate = args.includes('--only-generate');
-  const onlyFix = args.includes('--only-fix');
-  // Default to both if no specific flag is set
-  const runAll = !onlyGenerate && !onlyFix;
-
-  if (runAll || onlyGenerate) {
-    if (!existsSync(OPENAPI_ROOT)) {
-      console.error('OpenAPI root not found. Run generate-buf.mjs first.');
-      process.exit(1);
-    }
-
-    const versions = readdirSync(OPENAPI_ROOT).filter(f => lstatSync(join(OPENAPI_ROOT, f)).isDirectory() && f !== 'zitadel');
-
-    for (const version of versions) {
-      await generateVersionApiDocs(version);
-    }
+  if (!existsSync(OPENAPI_ROOT)) {
+    console.error('OpenAPI root not found. Run generate-buf.mjs first.');
+    process.exit(1);
   }
 
-  if (runAll || onlyFix) {
-    await fixAllGeneratedLinks();
+  const versions = readdirSync(OPENAPI_ROOT).filter(f => lstatSync(join(OPENAPI_ROOT, f)).isDirectory() && f !== 'zitadel');
+
+  // Step 1: Generate all files
+  for (const version of versions) {
+    await generateVersionApiDocs(version);
   }
+
+  // Step 2: Fix all generated links in place
+  await fixAllGeneratedLinks();
 }
 
 run().catch(err => {

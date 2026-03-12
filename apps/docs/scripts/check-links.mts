@@ -73,8 +73,6 @@ try {
       fallbackUrls: [],
     };
 
-    writeFileSync('scanned-urls.json', JSON.stringify(Array.from(scanned.urls.keys()), null, 2));
-
     console.log(`Manually populated URLs count: ${scanned.urls.size}`);
 
     console.time('validateFiles');

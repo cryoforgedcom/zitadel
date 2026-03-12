@@ -10,9 +10,13 @@ export class Docs {
     /** The root of the ZITADEL monorepo to get protos and scripts */
     source: Directory
   ): Promise<Directory> {
+    // Infer Node version from .nvmrc
+    const nvmrc = await source.file(".nvmrc").contents();
+    const nodeVersion = nvmrc.trim() || "22";
+
     // We use a debian-based node image because the proto install script uses bash, curl, and tar
     let builder = dag.container()
-      .from("node:22-bookworm")
+      .from(`node:${nodeVersion}-bookworm`)
       .withExec(["npm", "install", "-g", "pnpm", "turbo", "@bufbuild/buf@1.66.1"])
       
     // Mount the monorepo root
