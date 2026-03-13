@@ -1,5 +1,5 @@
 import { defineConfig } from "cypress";
-import { startMockContainer } from "./integration/mock-container";
+import { startMockContainer, stopMockContainer } from "./integration/mock-container";
 
 export default defineConfig({
   reporter: "list",
@@ -19,6 +19,11 @@ export default defineConfig({
       // matching the login app's ZITADEL_API_URL configuration.
       const mock = await startMockContainer();
       config.env.API_MOCK_STUBS_URL = mock.stubsUrl;
+
+      on("after:run", async () => {
+        await stopMockContainer();
+      });
+
       return config;
     },
     env: {

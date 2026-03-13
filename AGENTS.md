@@ -113,12 +113,39 @@ Docker images are built using GoReleaser's `dockers_v2` feature. Key conventions
 
 ### Local Snapshot Build
 
-```bash
-# Register QEMU for cross-platform builds (once per boot)
-docker run --privileged --rm tonistiigi/binfmt --install all
+To verify your configuration without pushing artifacts or making public releases, use these strategies:
 
-# Run GoReleaser snapshot (no publish)
-goreleaser release --snapshot --clean --skip=publish
+**1. Snapshot Mode (Fastest check)**
+This checks if builds and archives are configured correctly. It does not require a git tag.
+```bash
+# Run GoReleaser snapshot
+goreleaser release --snapshot --clean
+```
+
+**2. Full Dry Run (Logic check)**
+To test the entire process (changelog, image building) without uploading.
+```bash
+# 1. Create a local test tag
+git tag -a v0.0.0-test -m "test release"
+
+# 2. Run GoReleaser skipping the upload phase
+# This builds Docker images locally but does NOT push them.
+goreleaser release --skip=publish --clean
+
+# 3. Cleanup: Delete the local tag when done
+git tag -d v0.0.0-test
+```
+
+**3. Draft Release (UI check)**
+To see the release on GitHub without it being public.
+```bash
+# Combine with --skip=push to avoid registry uploads
+goreleaser release --draft --skip=push --clean
+```
+
+**Note:** Cross-platform Docker builds (amd64/arm64) require QEMU binfmt registration:
+```bash
+docker run --privileged --rm tonistiigi/binfmt --install all
 ```
 
 ### CI Workflow

@@ -197,6 +197,14 @@ func (c *Client) pollHealth(ctx context.Context) (err error) {
 
 // Deprecated: use CreateUserTypeHuman instead
 func (i *Instance) CreateHumanUser(ctx context.Context) *user_v2.AddHumanUserResponse {
+	resp, err := i.AddHumanUser(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return resp
+}
+
+func (i *Instance) AddHumanUser(ctx context.Context) (*user_v2.AddHumanUserResponse, error) {
 	resp, err := i.Client.UserV2.AddHumanUser(ctx, &user_v2.AddHumanUserRequest{
 		Organization: &object.Organization{
 			Org: &object.Organization_OrgId{
@@ -222,13 +230,23 @@ func (i *Instance) CreateHumanUser(ctx context.Context) *user_v2.AddHumanUserRes
 			},
 		},
 	})
-	logging.OnError(err).Panic("create human user")
+	if err != nil {
+		return nil, err
+	}
 	i.TriggerUserByID(ctx, resp.GetUserId())
-	return resp
+	return resp, nil
 }
 
 // Deprecated: user CreateUserTypeHuman instead
 func (i *Instance) CreateHumanUserNoPhone(ctx context.Context) *user_v2.AddHumanUserResponse {
+	resp, err := i.AddHumanUserNoPhone(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return resp
+}
+
+func (i *Instance) AddHumanUserNoPhone(ctx context.Context) (*user_v2.AddHumanUserResponse, error) {
 	resp, err := i.Client.UserV2.AddHumanUser(ctx, &user_v2.AddHumanUserRequest{
 		Organization: &object.Organization{
 			Org: &object.Organization_OrgId{
@@ -248,13 +266,23 @@ func (i *Instance) CreateHumanUserNoPhone(ctx context.Context) *user_v2.AddHuman
 			},
 		},
 	})
-	logging.OnError(err).Panic("create human user")
+	if err != nil {
+		return nil, err
+	}
 	i.TriggerUserByID(ctx, resp.GetUserId())
-	return resp
+	return resp, nil
 }
 
 // Deprecated: user CreateUserTypeHuman instead
 func (i *Instance) CreateHumanUserWithTOTP(ctx context.Context, secret string) *user_v2.AddHumanUserResponse {
+	resp, err := i.AddHumanUserWithTOTP(ctx, secret)
+	if err != nil {
+		panic(err)
+	}
+	return resp
+}
+
+func (i *Instance) AddHumanUserWithTOTP(ctx context.Context, secret string) (*user_v2.AddHumanUserResponse, error) {
 	resp, err := i.Client.UserV2.AddHumanUser(ctx, &user_v2.AddHumanUserRequest{
 		Organization: &object.Organization{
 			Org: &object.Organization_OrgId{
@@ -281,9 +309,11 @@ func (i *Instance) CreateHumanUserWithTOTP(ctx context.Context, secret string) *
 		},
 		TotpSecret: gu.Ptr(secret),
 	})
-	logging.OnError(err).Panic("create human user")
+	if err != nil {
+		return nil, err
+	}
 	i.TriggerUserByID(ctx, resp.GetUserId())
-	return resp
+	return resp, nil
 }
 
 func (i *Instance) SetUserMetadata(ctx context.Context, id, key, value string) *user_v2.SetUserMetadataResponse {

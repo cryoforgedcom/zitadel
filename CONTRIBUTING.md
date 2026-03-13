@@ -431,17 +431,26 @@ Fix the quality checks, add new checks that cover your changes and mark your pul
 
 #### Build Release Artifacts (GoReleaser)
 
-To build all release artifacts locally (binaries, packages, Docker images for amd64 and arm64):
+To build all release artifacts locally (binaries, packages, Docker images for amd64 and arm64) without publishing them:
 
 ```bash
 # Register QEMU for cross-platform Docker builds (once per boot)
 docker run --privileged --rm tonistiigi/binfmt --install all
 
-# Run GoReleaser snapshot (no publish)
-goreleaser release --snapshot --clean --skip=publish
+# Option A: Fast snapshot check (no tag required)
+goreleaser release --snapshot --clean
+
+# Option B: Full dry-run (requires a tag, but won't upload)
+git tag -a v0.0.0-test -m "test"
+goreleaser release --skip=publish --clean
+git tag -d v0.0.0-test
 ```
 
-This produces Docker images for both `linux/amd64` and `linux/arm64` using GoReleaser's `dockers_v2` feature. QEMU is required because arm64 Dockerfile `RUN` commands are emulated on amd64 hosts.
+**Testing Flags Cheat Sheet:**
+- `--snapshot`: Skips validation (like git state) and publishing. Fast for local testing.
+- `--skip=publish`: Performs a full run but skips uploading to GitHub/Docker registries.
+- `--skip=push`: Specifically skips pushing Docker images.
+- `--draft`: Creates the GitHub release as a draft (hidden from public).
 
 See `.goreleaser.yml` for the full configuration.
 

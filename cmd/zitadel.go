@@ -29,13 +29,6 @@ var (
 	defaultConfig []byte
 )
 
-// DefaultConfig returns the embedded defaults.yaml content.
-// This is used by integration test orchestrators to configure
-// ZITADEL without going through cobra/viper.
-func DefaultConfig() []byte {
-	return defaultConfig
-}
-
 func New(out io.Writer, in io.Reader, args []string, server chan<- *start.Server) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "zitadel",
