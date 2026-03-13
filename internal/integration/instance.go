@@ -21,6 +21,7 @@ import (
 	"github.com/zitadel/zitadel/pkg/grpc/admin"
 	"github.com/zitadel/zitadel/pkg/grpc/auth"
 	"github.com/zitadel/zitadel/pkg/grpc/instance"
+	internal_permission_v2 "github.com/zitadel/zitadel/pkg/grpc/internal_permission/v2"
 	"github.com/zitadel/zitadel/pkg/grpc/management"
 	"github.com/zitadel/zitadel/pkg/grpc/org"
 	"github.com/zitadel/zitadel/pkg/grpc/system"
@@ -236,7 +237,10 @@ func (i *Instance) setupInstance(ctx context.Context, token string) error {
 	if _, err := i.createMachineUser(ctx, UserTypeOrgOwner); err != nil {
 		return err
 	}
-	if _, err := i.Client.Mgmt.AddOrgMember(ctx, &management.AddOrgMemberRequest{
+	if _, err := i.Client.InternalPermissionV2.CreateAdministrator(ctx, &internal_permission_v2.CreateAdministratorRequest{
+		Resource: &internal_permission_v2.ResourceType{
+			Resource: &internal_permission_v2.ResourceType_OrganizationId{OrganizationId: i.DefaultOrg.GetId()},
+		},
 		UserId: i.Users.Get(UserTypeOrgOwner).ID,
 		Roles:  []string{"ORG_OWNER"},
 	}); err != nil {
@@ -245,7 +249,10 @@ func (i *Instance) setupInstance(ctx context.Context, token string) error {
 	if _, err := i.createMachineUser(ctx, UserTypeLogin); err != nil {
 		return err
 	}
-	if _, err := i.Client.Admin.AddIAMMember(ctx, &admin.AddIAMMemberRequest{
+	if _, err := i.Client.InternalPermissionV2.CreateAdministrator(ctx, &internal_permission_v2.CreateAdministratorRequest{
+		Resource: &internal_permission_v2.ResourceType{
+			Resource: &internal_permission_v2.ResourceType_Instance{Instance: true},
+		},
 		UserId: i.Users.Get(UserTypeLogin).ID,
 		Roles:  []string{"IAM_LOGIN_CLIENT"},
 	}); err != nil {

@@ -205,8 +205,33 @@ jobs:
         env:
           INTEGRATION_PACKAGE_FILTER: ${{ matrix.package }}
 
-  # ─── Build ──────────────────────────────────────────────────────────
+  # ─── Build: Console (must complete before API) ──────────────────────
+  # TODO: Remove this separate job once the console is no longer embedded
+  # in the zitadel binary and ships as its own container.
+  build-console:
+    runs-on: ubuntu-24.04
+    name: "build · console"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - uses: pnpm/action-setup@v4
+        with:
+          cache: true
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm nx run @zitadel/console:build
+
+  # ─── Build: API + Login ────────────────────────────────────────────
   build:
+    needs: build-console
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -217,9 +242,6 @@ jobs:
             go: true
           - project: "@zitadel/login"
             label: login
-            go: false
-          - project: "@zitadel/console"
-            label: console
             go: false
 
     name: "build · ${{ matrix.label }}"
