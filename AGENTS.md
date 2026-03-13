@@ -92,6 +92,39 @@ When generating deployment-related content:
 - Always reference the correct deployment method for the user's context
 - The same `ZITADEL_*` environment variable model applies across all deployment methods
 
+## Release & Docker Images
+
+Release artifacts (binaries, packages, Docker images) are produced by [GoReleaser](https://goreleaser.com/) via `.goreleaser.yml`.
+
+### GoReleaser `dockers_v2`
+
+Docker images are built using GoReleaser's `dockers_v2` feature. Key conventions:
+
+- **Build context layout**: `dockers_v2` preserves directory structure for `extra_files` and places binaries under `<GOOS>/<GOARCH>/`. Dockerfiles must use these paths in `COPY` commands (e.g., `COPY apps/api/entrypoint.sh`, `COPY linux/arm64/zitadel`).
+- **Multi-platform**: Images are built for `linux/amd64` and `linux/arm64`. Cross-platform builds require QEMU binfmt registration.
+- **NX daemon**: The before-hook disables the NX daemon (`env NX_DAEMON=false`) to prevent false exit-code-1 failures caused by daemon crashes after cached replays.
+
+### Images
+
+| ID | Dockerfile | Image Names |
+|----|-----------|-------------|
+| `zitadel` | `apps/api/Dockerfile` | `ghcr.io/zitadel/zitadel`, `ghcr.io/zitadel/api` |
+| `login` | `apps/login/Dockerfile` | `ghcr.io/zitadel/login`, `ghcr.io/zitadel/zitadel-login` |
+
+### Local Snapshot Build
+
+```bash
+# Register QEMU for cross-platform builds (once per boot)
+docker run --privileged --rm tonistiigi/binfmt --install all
+
+# Run GoReleaser snapshot (no publish)
+goreleaser release --snapshot --clean --skip=publish
+```
+
+### CI Workflow
+
+The `.github/workflows/generate.yml` `release-snapshot` job includes `docker/setup-qemu-action` and `docker/setup-buildx-action` steps before GoReleaser.
+
 ## Command Rules
 Run commands from the repository root.
 
@@ -105,7 +138,7 @@ Run commands from the repository root.
 - `@zitadel/login`: `dev`, `build`, `pack`, `lint`, `test`, `test-unit`, `test-integration`
 - `@zitadel/docs`: `dev`, `build`, `generate`, `install-proto-plugins`, `check-links`, `check-types`, `test`, `lint`
 - `@zitadel/console`: `dev`, `build`, `generate`, `install-proto-plugins`, `lint`
-- `@zitadel/compose`: `test-config`, `test-run`, `test-e2e`, `test`, `test-full`, `stop`
+- `@zitadel/compose`: `test-config`, `test-run`, `test-e2e`, `test`, `test-integration`, `stop`
 
 ## Proto Plugin Binaries
 All proto plugins are installed to `.artifacts/bin/<GOOS>/<GOARCH>/` and Nx-cached. `generate` targets wire up the correct install dependency and prepend `.artifacts/bin/` to `$PATH` — no manual install step is needed.
