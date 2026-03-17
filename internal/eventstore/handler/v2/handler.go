@@ -58,13 +58,13 @@ type Handler struct {
 	bulkLimit  uint16
 	eventTypes map[eventstore.AggregateType][]eventstore.EventType
 
-	maxFailureCount  uint8
-	retryFailedAfter time.Duration
-	requeueEvery     time.Duration
-	txDuration       time.Duration
-	now              nowFunc
-	queryGlobal      bool
-	skipV3Events     bool
+	maxFailureCount      uint8
+	retryFailedAfter     time.Duration
+	requeueEvery         time.Duration
+	txDuration           time.Duration
+	now                  nowFunc
+	queryGlobal          bool
+	skipRelationalEvents bool
 
 	triggeredInstancesSync sync.Map
 
@@ -160,7 +160,7 @@ type GlobalProjection interface {
 // and should skip events already reduced by the v3 storage adapter.
 type RelationalProjection interface {
 	Projection
-	SkipV3ReducedEvents()
+	SkipRelationalReducedEvents()
 }
 
 func NewHandler(
@@ -211,7 +211,7 @@ func NewHandler(
 	}
 
 	if _, ok := projection.(RelationalProjection); ok {
-		handler.skipV3Events = true
+		handler.skipRelationalEvents = true
 	}
 
 	return handler
@@ -769,7 +769,7 @@ func (h *Handler) eventQuery(currentState *state) *eventstore.SearchQueryBuilder
 		}
 	}
 
-	if h.skipV3Events {
+	if h.skipRelationalEvents {
 		builder = builder.ExcludeRelationalEvents()
 	}
 
