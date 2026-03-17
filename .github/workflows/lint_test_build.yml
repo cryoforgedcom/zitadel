@@ -86,21 +86,12 @@ jobs:
           name: api-test-integration
           flags: api-test-integration
           token: ${{ secrets.CODECOV_TOKEN }}
-      - name: Upload API Integration Test Race Logs
-        if: failure() || cancelled()
-        uses: actions/upload-artifact@v4
-        with:
-          name: api-integration-test-race-logs
-          path: |
-            profile.api.test-integration-race.log.*
-      - name: Upload API Integration Test Server Logs
+      - name: Upload Test Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: api-integration-test-server-logs
-          path: |
-            .artifacts/api/integration/server.log
-            .artifacts/api/integration/orchestrator.log
+          name: test-artifacts
+          path: .artifacts/
           if-no-files-found: ignore
       - name: Upload Functional UI Test Artifacts
         uses: actions/upload-artifact@v4
