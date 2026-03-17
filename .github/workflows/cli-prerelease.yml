@@ -42,7 +42,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate proto code
-        run: pnpm nx run @zitadel/api:generate && pnpm nx run @zitadel/cli:generate
+        run: pnpm nx run @zitadel/cli:generate
 
       - name: Run GoReleaser Snapshot
         uses: goreleaser/goreleaser-action@v6
