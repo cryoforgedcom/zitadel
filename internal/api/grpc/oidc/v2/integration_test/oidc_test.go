@@ -169,7 +169,7 @@ func TestServer_CreateCallback(t *testing.T) {
 			ctx:  CTXLoginClient,
 			req: &oidc_pb.CreateCallbackRequest{
 				AuthRequestId: func() string {
-					org := Instance.CreateOrganization(IAMCTX, integration.OrganizationName(), integration.Email())
+					org := Instance.CreateOrganization(IAMCTX, gofakeit.Name(), gofakeit.Email())
 					_, authRequestID, err := Instance.CreateOIDCAuthRequest(CTXLoginClient, client.GetClientId(), Instance.Users.Get(integration.UserTypeLogin).ID, redirectURI, oidc.ScopeOpenID, domain.OrgIDScope+org.OrganizationId)
 					require.NoError(t, err)
 					return authRequestID
@@ -847,7 +847,7 @@ func TestServer_AuthorizeOrDenyDeviceAuthorization(t *testing.T) {
 			ctx:  CTXLoginClient,
 			req: &oidc_pb.AuthorizeOrDenyDeviceAuthorizationRequest{
 				DeviceAuthorizationId: func() string {
-					org := Instance.CreateOrganization(IAMCTX, integration.OrganizationName(), integration.Email())
+					org := Instance.CreateOrganization(IAMCTX, gofakeit.Name(), gofakeit.Email())
 					req, err := Instance.CreateDeviceAuthorizationRequest(CTXLoginClient, client.GetClientId(), oidc.ScopeOpenID, domain.OrgIDScope+org.OrganizationId)
 					require.NoError(t, err)
 					var id string

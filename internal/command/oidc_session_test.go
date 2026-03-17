@@ -621,6 +621,7 @@ func TestCommands_CreateOIDCSessionFromAuthRequest(t *testing.T) {
 								gu.Ptr("hintUserID"),
 								true,
 								"issuer",
+								"",
 							),
 						),
 						eventFromEventPusher(
