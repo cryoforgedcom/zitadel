@@ -19,11 +19,6 @@ permissions:
   issues: write
   pull-requests: write
 
-env:
-  NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
-  NX_DAEMON: "false"
-  NX_DISABLE_DB: "true"
-
 jobs:
   # ---------------------------------------------------------------------------
   # Lint
@@ -32,6 +27,7 @@ jobs:
     name: "lint · ${{ matrix.project }}"
     runs-on: ubuntu-24.04
     if: ${{ github.ref != 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    environment: ${{ github.ref_protected == true && 'Protected' || null }}
     permissions:
       contents: read
     strategy:
@@ -41,6 +37,10 @@ jobs:
           - "@zitadel/api"
           - "@zitadel/login"
           - "@zitadel/console"
+    env:
+      NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
+      NX_DAEMON: "false"
+      NX_DISABLE_DB: "true"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,12 +66,13 @@ jobs:
         run: pnpm nx run ${{ matrix.project }}:lint
 
   # ---------------------------------------------------------------------------
-  # Test
+  # Test (unit tests only — integration tests deferred to #11701)
   # ---------------------------------------------------------------------------
   test:
     name: "test · ${{ matrix.name }}"
     runs-on: ubuntu-24.04
     if: ${{ github.ref != 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    environment: ${{ github.ref_protected == true && 'Protected' || null }}
     permissions:
       contents: read
     strategy:
@@ -92,6 +93,10 @@ jobs:
             needs_docker: false
             coverage_file: ""
             coverage_name: ""
+    env:
+      NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
+      NX_DAEMON: "false"
+      NX_DISABLE_DB: "true"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -138,8 +143,13 @@ jobs:
     name: "build · console"
     runs-on: ubuntu-24.04
     if: ${{ github.ref != 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    environment: ${{ github.ref_protected == true && 'Protected' || null }}
     permissions:
       contents: read
+    env:
+      NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
+      NX_DAEMON: "false"
+      NX_DISABLE_DB: "true"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -164,27 +174,20 @@ jobs:
         run: pnpm nx run @zitadel/console:build
 
   # ---------------------------------------------------------------------------
-  # Build (API + Login)
+  # Build API (depends on console — console static files are embedded)
   # ---------------------------------------------------------------------------
-  build:
-    name: "build · ${{ matrix.name }}"
+  build-api:
+    name: "build · api"
     runs-on: ubuntu-24.04
     if: ${{ github.ref != 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     needs: build-console
+    environment: ${{ github.ref_protected == true && 'Protected' || null }}
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: api
-            project: "@zitadel/api"
-            target: build
-            needs_go: true
-          - name: login
-            project: "@zitadel/login"
-            target: build
-            needs_go: false
+    env:
+      NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
+      NX_DAEMON: "false"
+      NX_DISABLE_DB: "true"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -194,7 +197,6 @@ jobs:
         if: ${{ github.ref != 'refs/heads/main' }}
         run: git fetch origin main:main
       - uses: actions/setup-go@v5
-        if: matrix.needs_go
         with:
           go-version-file: go.mod
       - uses: pnpm/action-setup@v4
@@ -206,8 +208,42 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - uses: nrwl/nx-set-shas@v4
-      - name: Build ${{ matrix.name }}
-        run: pnpm nx run ${{ matrix.project }}:${{ matrix.target }}
+      - name: Build API
+        run: pnpm nx run @zitadel/api:build
+
+  # ---------------------------------------------------------------------------
+  # Build Login (independent — no console dependency)
+  # ---------------------------------------------------------------------------
+  build-login:
+    name: "build · login"
+    runs-on: ubuntu-24.04
+    if: ${{ github.ref != 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    environment: ${{ github.ref_protected == true && 'Protected' || null }}
+    permissions:
+      contents: read
+    env:
+      NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
+      NX_DAEMON: "false"
+      NX_DISABLE_DB: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: tree:0
+      - name: Fetch main branch
+        if: ${{ github.ref != 'refs/heads/main' }}
+        run: git fetch origin main:main
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: nrwl/nx-set-shas@v4
+      - name: Build Login
+        run: pnpm nx run @zitadel/login:build
 
   # ---------------------------------------------------------------------------
   # E2E / Functional Tests (require Docker for compose/containers)
@@ -216,7 +252,10 @@ jobs:
     name: "e2e · ${{ matrix.name }}"
     runs-on: ubuntu-24.04
     if: ${{ github.ref != 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
-    needs: build
+    needs:
+      - build-api
+      - build-login
+    environment: ${{ github.ref_protected == true && 'Protected' || null }}
     permissions:
       contents: read
     strategy:
@@ -229,6 +268,10 @@ jobs:
           - name: compose
             project: "@zitadel/compose"
             target: test
+    env:
+      NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
+      NX_DAEMON: "false"
+      NX_DISABLE_DB: "true"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -257,10 +300,6 @@ jobs:
         with:
           version: v2.38.2
       - run: pnpm install --frozen-lockfile
-      - name: Install Cypress binary
-        if: matrix.name == 'functional-ui'
-        run: pnpm cypress install
-        working-directory: tests/functional-ui
       - uses: nrwl/nx-set-shas@v4
       - name: Run ${{ matrix.name }}
         run: pnpm nx run ${{ matrix.project }}:${{ matrix.target }}
@@ -307,7 +346,8 @@ jobs:
     needs:
       - lint
       - test
-      - build
+      - build-api
+      - build-login
       - pack
     if: ${{ github.event_name == 'workflow_dispatch' }}
     secrets:
