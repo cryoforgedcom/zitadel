@@ -146,7 +146,7 @@ var (
 					Type: textType,
 				},
 				{
-					Name: "written_by_v3",
+					Name: "written_by_relational",
 					Type: &pgtype.Type{
 						Name:  "bool",
 						OID:   pgtype.BoolOID,
@@ -181,6 +181,10 @@ func registerCommandType[T interface{ command | command2 }](ctx context.Context,
 		err := conn.QueryRow(ctx, "select oid, typarray from pg_type where typname = $1 and typnamespace = (select oid from pg_namespace where nspname = $2)", name, "eventstore").
 			Scan(&typeCodec.OID, &arrayCodec.OID)
 		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				// type does not exist in this schema; nothing to register
+				return
+			}
 			logging.WithError(err).Debug("failed to get oid for command type")
 			return
 		}

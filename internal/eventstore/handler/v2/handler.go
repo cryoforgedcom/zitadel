@@ -770,7 +770,7 @@ func (h *Handler) eventQuery(currentState *state) *eventstore.SearchQueryBuilder
 	}
 
 	if h.skipV3Events {
-		builder = builder.ExcludeV3Events()
+		builder = builder.ExcludeRelationalEvents()
 	}
 
 	if h.queryGlobal {

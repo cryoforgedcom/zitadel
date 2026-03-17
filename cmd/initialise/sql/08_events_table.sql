@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS eventstore.events2 (
     
     , "position" DECIMAL NOT NULL
     , in_tx_order INTEGER NOT NULL
-    , written_by_v3 BOOLEAN NOT NULL DEFAULT false
+    , written_by_relational BOOLEAN NOT NULL DEFAULT false
 
     , PRIMARY KEY (instance_id, aggregate_type, aggregate_id, "sequence")
 );
@@ -33,7 +33,7 @@ DO $$ BEGIN
         , payload JSONB
         , creator TEXT
         , owner TEXT
-        , written_by_v3 BOOLEAN
+        , written_by_relational BOOLEAN
     );
 EXCEPTION
     WHEN duplicate_object THEN null;
@@ -53,7 +53,7 @@ SELECT
     , cs.owner
     , EXTRACT(EPOCH FROM NOW()) AS position
     , c.in_tx_order
-    , c.written_by_v3
+    , c.written_by_relational
 FROM (
     SELECT
         c.instance_id
@@ -65,7 +65,7 @@ FROM (
         , c.creator
         , c.owner
         , ROW_NUMBER() OVER () AS in_tx_order
-        , COALESCE(c.written_by_v3, false) AS written_by_v3
+        , COALESCE(c.written_by_relational, false) AS written_by_relational
     FROM
         UNNEST(commands) AS c
 ) AS c

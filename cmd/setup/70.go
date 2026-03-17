@@ -23,5 +23,5 @@ func (mig *AddWrittenByV3Column) Execute(ctx context.Context, _ eventstore.Event
 }
 
 func (mig *AddWrittenByV3Column) String() string {
-	return "70_add_written_by_v3_column"
+	return "70_add_written_by_relational_column"
 }

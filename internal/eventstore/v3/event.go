@@ -90,8 +90,8 @@ func commandsToEvents(ctx context.Context, cmds []eventstore.Command) (_ []event
 		if cmd.Aggregate().InstanceID == "" {
 			cmd.Aggregate().InstanceID = authz.GetInstance(ctx).InstanceID()
 		}
-		_, isV3Command := cmd.(eventstore.V3Command)
-		events[i], err = commandToEvent(cmd, isV3Command)
+		_, isRelationalCommand := cmd.(eventstore.RelationalCommand)
+		events[i], err = commandToEvent(cmd, isRelationalCommand)
 		if err != nil {
 			return nil, nil, err
 		}

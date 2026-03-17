@@ -21,17 +21,17 @@ type SearchQuery struct {
 	Offset                uint32
 	Desc                  bool
 
-	InstanceID          *Filter
-	InstanceIDs         *Filter
-	ExcludedInstances   *Filter
-	Creator             *Filter
-	Owner               *Filter
-	Position            *Filter
-	Sequence            *Filter
-	CreatedAfter        *Filter
-	CreatedBefore       *Filter
-	ExcludeAggregateIDs []*Filter
-	ExcludeV3Events     bool
+	InstanceID              *Filter
+	InstanceIDs             *Filter
+	ExcludedInstances       *Filter
+	Creator                 *Filter
+	Owner                   *Filter
+	Position                *Filter
+	Sequence                *Filter
+	CreatedAfter            *Filter
+	CreatedBefore           *Filter
+	ExcludeAggregateIDs     []*Filter
+	ExcludeRelationalEvents bool
 }
 
 // Filter represents all fields needed to compare a field of an event with a value
@@ -126,14 +126,14 @@ func QueryFromBuilder(builder *eventstore.SearchQueryBuilder) (*SearchQuery, err
 	}
 
 	query := &SearchQuery{
-		Columns:               builder.GetColumns(),
-		Limit:                 builder.GetLimit(),
-		Offset:                builder.GetOffset(),
-		Desc:                  builder.GetDesc(),
-		Tx:                    builder.GetTx(),
-		AwaitOpenTransactions: builder.GetAwaitOpenTransactions(),
-		SubQueries:            make([][]*Filter, len(builder.GetQueries())),
-		ExcludeV3Events:       builder.GetExcludeV3Events(),
+		Columns:                 builder.GetColumns(),
+		Limit:                   builder.GetLimit(),
+		Offset:                  builder.GetOffset(),
+		Desc:                    builder.GetDesc(),
+		Tx:                      builder.GetTx(),
+		AwaitOpenTransactions:   builder.GetAwaitOpenTransactions(),
+		SubQueries:              make([][]*Filter, len(builder.GetQueries())),
+		ExcludeRelationalEvents: builder.GetExcludeRelationalEvents(),
 	}
 
 	for _, f := range []func(builder *eventstore.SearchQueryBuilder, query *SearchQuery) *Filter{

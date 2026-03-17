@@ -14,23 +14,23 @@ import (
 // SearchQueryBuilder represents the builder for your filter
 // if invalid data are set the filter will fail
 type SearchQueryBuilder struct {
-	columns               Columns
-	limit                 uint64
-	offset                uint32
-	desc                  bool
-	resourceOwner         string
-	instanceID            *string
-	instanceIDs           []string
-	editorUser            string
-	queries               []*SearchQuery
-	excludeAggregateIDs   *ExclusionQuery
-	tx                    *sql.Tx
-	positionAtLeast       decimal.Decimal
-	awaitOpenTransactions bool
-	creationDateAfter     time.Time
-	creationDateBefore    time.Time
-	eventSequenceGreater  uint64
-	excludeV3Events       bool
+	columns                 Columns
+	limit                   uint64
+	offset                  uint32
+	desc                    bool
+	resourceOwner           string
+	instanceID              *string
+	instanceIDs             []string
+	editorUser              string
+	queries                 []*SearchQuery
+	excludeAggregateIDs     *ExclusionQuery
+	tx                      *sql.Tx
+	positionAtLeast         decimal.Decimal
+	awaitOpenTransactions   bool
+	creationDateAfter       time.Time
+	creationDateBefore      time.Time
+	eventSequenceGreater    uint64
+	excludeRelationalEvents bool
 }
 
 func (b *SearchQueryBuilder) GetColumns() Columns {
@@ -97,8 +97,8 @@ func (q SearchQueryBuilder) GetCreationDateBefore() time.Time {
 	return q.creationDateBefore
 }
 
-func (q SearchQueryBuilder) GetExcludeV3Events() bool {
-	return q.excludeV3Events
+func (q SearchQueryBuilder) GetExcludeRelationalEvents() bool {
+	return q.excludeRelationalEvents
 }
 
 // ensureInstanceID makes sure that the instance id is always set
@@ -297,9 +297,9 @@ func (builder *SearchQueryBuilder) AwaitOpenTransactions() *SearchQueryBuilder {
 	return builder
 }
 
-// ExcludeV3Events filters out events that were written through the v3 storage adapter
-func (builder *SearchQueryBuilder) ExcludeV3Events() *SearchQueryBuilder {
-	builder.excludeV3Events = true
+// ExcludeRelationalEvents filters out events that were written through the v3 storage adapter
+func (builder *SearchQueryBuilder) ExcludeRelationalEvents() *SearchQueryBuilder {
+	builder.excludeRelationalEvents = true
 	return builder
 }
 

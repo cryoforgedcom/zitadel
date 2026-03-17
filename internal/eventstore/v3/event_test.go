@@ -12,6 +12,12 @@ import (
 	"github.com/zitadel/zitadel/internal/eventstore"
 )
 
+type mockRelationalCommand struct {
+	*mockCommand
+}
+
+func (m *mockRelationalCommand) IsRelationalCommand() {}
+
 func Test_commandToEvent(t *testing.T) {
 	payload := struct {
 		ID string
@@ -381,6 +387,51 @@ func Test_commandsToEvents(t *testing.T) {
 			},
 		},
 		{
+			name: "single relational command marks written by v3",
+			args: args{
+				ctx: ctx,
+				cmds: []eventstore.Command{
+					&mockRelationalCommand{
+						mockCommand: &mockCommand{
+							aggregate: mockAggregate("V3-Red9I"),
+							payload:   nil,
+						},
+					},
+				},
+			},
+			want: want{
+				events: []eventstore.Event{
+					&event{command: &command2{
+						InstanceID:    "instance",
+						AggregateType: "type",
+						AggregateID:   "V3-Red9I",
+						Owner:         "ro",
+						CommandType:   "event.type",
+						Revision:      1,
+						Payload:       nil,
+						Creator:       "creator",
+						WrittenByV3:   true,
+					}},
+				},
+				commands: []*command2{
+					{
+						InstanceID:    "instance",
+						AggregateType: "type",
+						AggregateID:   "V3-Red9I",
+						Owner:         "ro",
+						CommandType:   "event.type",
+						Revision:      1,
+						Payload:       nil,
+						Creator:       "creator",
+						WrittenByV3:   true,
+					},
+				},
+				err: func(t *testing.T, err error) {
+					require.NoError(t, err)
+				},
+			},
+		},
+		{
 			name: "multiple commands",
 			args: args{
 				ctx: ctx,
@@ -479,4 +530,5 @@ func assertCommand(t *testing.T, want, got *command2) {
 	assert.Equal(t, want.AggregateType, got.AggregateType)
 	assert.Equal(t, want.InstanceID, got.InstanceID)
 	assert.Equal(t, want.Revision, got.Revision)
+	assert.Equal(t, want.WrittenByV3, got.WrittenByV3)
 }

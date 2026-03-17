@@ -1,4 +1,4 @@
-ALTER TABLE IF EXISTS eventstore.events2 ADD COLUMN IF NOT EXISTS written_by_v3 BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE IF EXISTS eventstore.events2 ADD COLUMN IF NOT EXISTS written_by_relational BOOLEAN NOT NULL DEFAULT false;
 
 -- represents an event to be created.
 DO $$ BEGIN
@@ -11,7 +11,7 @@ DO $$ BEGIN
         , payload JSONB
         , creator TEXT
         , owner TEXT
-        , written_by_v3 BOOLEAN
+        , written_by_relational BOOLEAN
     );
 EXCEPTION
     WHEN duplicate_object THEN null;
@@ -62,7 +62,7 @@ BEGIN
             , COALESCE(current_owner, c.owner) -- AS owner
             , EXTRACT(EPOCH FROM created_at) -- AS position
             , c.ordinality::INTEGER -- AS in_tx_order
-            , COALESCE(c.written_by_v3, false) -- AS written_by_v3
+            , COALESCE(c.written_by_relational, false) -- AS written_by_relational
         FROM
             UNNEST(commands) WITH ORDINALITY AS c
         WHERE
@@ -124,7 +124,7 @@ BEGIN
                         , COALESCE(current_owner, c.owner) -- AS owner
                         , EXTRACT(EPOCH FROM created_at) -- AS position
                         , c.ordinality::INTEGER -- AS in_tx_order
-                        , false -- AS written_by_v3
+                        , false -- AS written_by_relational
                     FROM
                         UNNEST(commands) WITH ORDINALITY AS c
                     WHERE

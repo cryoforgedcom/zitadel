@@ -12,7 +12,7 @@ type LegacyEventstore interface {
 }
 
 // Publish writes events to the eventstore using the provided pusher and database client.
-// All commands are wrapped with the V3Command marker to indicate they were written through the v3 storage adapter.
+// All commands are wrapped with the [eventstore.RelationalCommand] marker to indicate they were written through the relational storage adapter.
 func Publish(ctx context.Context, es LegacyEventstore, client database.QueryExecutor, commands ...eventstore.Command) error {
 	v3Commands := make([]eventstore.Command, len(commands))
 	for i, cmd := range commands {
@@ -22,10 +22,10 @@ func Publish(ctx context.Context, es LegacyEventstore, client database.QueryExec
 	return err
 }
 
-// v3CommandWrapper wraps a Command to implement the V3Command marker interface.
+// v3CommandWrapper wraps a Command to implement the [eventstore.RelationalCommand] marker interface.
 type v3CommandWrapper struct {
 	eventstore.Command
 }
 
-// IsV3Command implements eventstore.V3Command marker interface.
-func (*v3CommandWrapper) IsV3Command() {}
+// IsRelationalCommand implements [eventstore.RelationalCommand] marker interface.
+func (*v3CommandWrapper) IsRelationalCommand() {}
