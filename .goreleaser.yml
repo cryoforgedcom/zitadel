@@ -2,6 +2,8 @@ version: 2
 
 project_name: zitadel
 
+dist: .artifacts/cli
+
 builds:
   - id: zitadel-cli
     dir: apps/cli
