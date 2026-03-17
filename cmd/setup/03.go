@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"golang.org/x/text/language"
@@ -52,6 +53,9 @@ type FirstInstance struct {
 func (mig *FirstInstance) Execute(ctx context.Context, _ eventstore.Event) error {
 	if mig.Skip {
 		return nil
+	}
+	if err := mig.validatePassword(); err != nil {
+		return err
 	}
 	keyStorage, err := mig.verifyEncryptionKeys(ctx)
 	if err != nil {
@@ -198,6 +202,46 @@ func outputStdoutOrPath(path string, content string) (err error) {
 
 func (mig *FirstInstance) String() string {
 	return "03_default_instance"
+}
+
+var (
+	hasLower  = regexp.MustCompile(`[a-z]`).MatchString
+	hasUpper  = regexp.MustCompile(`[A-Z]`).MatchString
+	hasDigit  = regexp.MustCompile(`[0-9]`).MatchString
+	hasSymbol = regexp.MustCompile(`[^A-Za-z0-9]`).MatchString
+)
+
+// validatePassword checks the configured first-instance admin password
+// against the instance's own password complexity policy and returns a
+// human-readable error referencing the environment variable name.
+func (mig *FirstInstance) validatePassword() error {
+	password := ""
+	if mig.Org.Human != nil {
+		password = mig.Org.Human.Password
+	}
+	if password == "" {
+		return nil
+	}
+	policy := mig.instanceSetup.PasswordComplexityPolicy
+	if policy.MinLength > 0 && uint64(len(password)) < policy.MinLength {
+		return fmt.Errorf(
+			"ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: password must be at least %d characters long (got %d)",
+			policy.MinLength, len(password),
+		)
+	}
+	if policy.HasLowercase && !hasLower(password) {
+		return fmt.Errorf("ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: password must contain at least one lowercase letter")
+	}
+	if policy.HasUppercase && !hasUpper(password) {
+		return fmt.Errorf("ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: password must contain at least one uppercase letter")
+	}
+	if policy.HasNumber && !hasDigit(password) {
+		return fmt.Errorf("ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: password must contain at least one number")
+	}
+	if policy.HasSymbol && !hasSymbol(password) {
+		return fmt.Errorf("ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: password must contain at least one symbol")
+	}
+	return nil
 }
 
 func verifyKey(ctx context.Context, key *crypto.KeyConfig, storage crypto.KeyStorage) (err error) {
