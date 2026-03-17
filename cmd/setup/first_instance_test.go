@@ -88,7 +88,7 @@ func TestFirstInstance_validatePassword(t *testing.T) {
 			name:     "error references env var name",
 			password: "short",
 			setup:    policy(8, false, false, false, false),
-			wantErr:  "ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD",
+			wantErr:  FirstInstancePasswordEnvVar,
 		},
 	}
 

@@ -211,6 +211,10 @@ var (
 	hasSymbol = regexp.MustCompile(`[^A-Za-z0-9]`).MatchString
 )
 
+// FirstInstancePasswordEnvVar is the environment variable name for the
+// first instance admin password, used in error messages for easy identification.
+const FirstInstancePasswordEnvVar = "ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD"
+
 // validatePassword checks the configured first-instance admin password
 // against the instance's own password complexity policy and returns a
 // human-readable error referencing the environment variable name.
@@ -225,21 +229,21 @@ func (mig *FirstInstance) validatePassword() error {
 	policy := mig.instanceSetup.PasswordComplexityPolicy
 	if policy.MinLength > 0 && uint64(len(password)) < policy.MinLength {
 		return fmt.Errorf(
-			"ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: password must be at least %d characters long (got %d)",
-			policy.MinLength, len(password),
+			"%s: password must be at least %d characters long (got %d)",
+			FirstInstancePasswordEnvVar, policy.MinLength, len(password),
 		)
 	}
 	if policy.HasLowercase && !hasLower(password) {
-		return fmt.Errorf("ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: password must contain at least one lowercase letter")
+		return fmt.Errorf("%s: password must contain at least one lowercase letter", FirstInstancePasswordEnvVar)
 	}
 	if policy.HasUppercase && !hasUpper(password) {
-		return fmt.Errorf("ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: password must contain at least one uppercase letter")
+		return fmt.Errorf("%s: password must contain at least one uppercase letter", FirstInstancePasswordEnvVar)
 	}
 	if policy.HasNumber && !hasDigit(password) {
-		return fmt.Errorf("ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: password must contain at least one number")
+		return fmt.Errorf("%s: password must contain at least one number", FirstInstancePasswordEnvVar)
 	}
 	if policy.HasSymbol && !hasSymbol(password) {
-		return fmt.Errorf("ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: password must contain at least one symbol")
+		return fmt.Errorf("%s: password must contain at least one symbol", FirstInstancePasswordEnvVar)
 	}
 	return nil
 }
