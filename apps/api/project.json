@@ -124,7 +124,7 @@
         "lint-install": {
             "description": "Installs golangci-lint binary for linting. Using go install is not recommended in the official docs, because this can produce non-deterministic results.",
             "cache": true,
-            "command": "curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b .artifacts/bin/$(go env GOOS)/$(go env GOARCH) v2.5.0",
+            "command": "curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b .artifacts/bin/$(go env GOOS)/$(go env GOARCH) v2.11.3",
             "inputs": [
                 {
                     "runtime": "go env GOOS"
@@ -164,13 +164,25 @@
                 "generate"
             ],
             "cache": true,
-            "command": "go test -race -coverprofile=profile.api.test-unit.cov -coverpkg=./internal/...,./backend/...  ./...",
+            "command": "go test -coverprofile=profile.api.test-unit.cov -coverpkg=./internal/...,./backend/...  ./...",
             "inputs": [
                 "sources",
                 "{workspaceRoot}/go*"
             ],
             "outputs": [
                 "{workspaceRoot}/profile.api.test-unit.cov"
+            ]
+        },
+        "test-unit-race": {
+            "description": "Runs the unit tests with race detection (no coverage, for speed)",
+            "dependsOn": [
+                "generate"
+            ],
+            "cache": true,
+            "command": "go test -race ./...",
+            "inputs": [
+                "sources",
+                "{workspaceRoot}/go*"
             ]
         },
         "test-integration-build": {
