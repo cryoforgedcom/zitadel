@@ -1,6 +1,13 @@
 name: CLI Pre-Release (Snapshot)
 
 on:
+  push:
+    branches:
+      - poc-cli
+    paths:
+      - "apps/cli/**"
+      - ".goreleaser.yml"
+      - ".github/workflows/cli-prerelease.yml"
   workflow_dispatch:
 
 permissions:
