@@ -19,7 +19,7 @@ func (p *relationalTablesProjection) reduceOrganizationMetadataSet(event eventst
 	if !ok {
 		return nil, zerrors.ThrowInvalidArgumentf(nil, "HANDL-xOO4e", "reduce.wrong.event.type %s", org.MetadataSetType)
 	}
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-xg4IJ", "reduce.wrong.db.pool %T", ex)
@@ -42,7 +42,7 @@ func (p *relationalTablesProjection) reduceOrganizationMetadataRemoved(event eve
 	if !ok {
 		return nil, zerrors.ThrowInvalidArgumentf(nil, "HANDL-XE6TF", "reduce.wrong.event.type %s", org.MetadataRemovedType)
 	}
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-QKMlz", "reduce.wrong.db.pool %T", ex)
@@ -64,7 +64,7 @@ func (p *relationalTablesProjection) reduceOrganizationMetadataRemovedAll(event 
 	if !ok {
 		return nil, zerrors.ThrowInvalidArgumentf(nil, "HANDL-EmyAe", "reduce.wrong.event.type %s", org.MetadataRemovedAllType)
 	}
-	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, projectionName string) error {
+	return handler.NewStatement(e, func(ctx context.Context, ex handler.Executer, _ string) error {
 		tx, ok := ex.(*sql.Tx)
 		if !ok {
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-hjEHg", "reduce.wrong.db.pool %T", ex)
