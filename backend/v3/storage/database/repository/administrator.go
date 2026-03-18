@@ -41,9 +41,9 @@ const queryAdministratorStmt = "SELECT administrators.instance_id " +
 	", administrators.updated_at " +
 	", ARRAY_AGG(administrator_roles.role_name ORDER BY administrator_roles.role_name) FILTER (WHERE administrator_roles.administrator_id IS NOT NULL) AS roles " +
 	"FROM zitadel.administrators " +
-	"LEFT JOIN zitadel.administrator_roles " +
-	"ON administrators.instance_id = administrator_roles.instance_id " +
-	"AND administrators.id = administrator_roles.administrator_id"
+	"LEFT JOIN zitadel.administrator_roles" +
+	" ON administrators.instance_id = administrator_roles.instance_id" +
+	" AND administrators.id = administrator_roles.administrator_id"
 
 func (a administrator) Get(ctx context.Context, client database.QueryExecutor, opts ...database.QueryOption) (*domain.Administrator, error) {
 	builder, err := a.prepareQuery(opts)
@@ -217,34 +217,38 @@ func (a administrator) ScopeCondition(scope domain.AdministratorScope) database.
 	return database.NewTextCondition(a.ScopeColumn(), database.TextOperationEqual, scope.String())
 }
 
-func (a administrator) InstanceAdministratorCondition(instanceID string) database.Condition {
+func (a administrator) InstanceAdministratorCondition(instanceID, userID string) database.Condition {
 	return database.And(
 		a.InstanceIDCondition(instanceID),
 		a.ScopeCondition(domain.AdministratorScopeInstance),
+		a.UserIDCondition(userID),
 	)
 }
 
-func (a administrator) OrganizationAdministratorCondition(instanceID, organizationID string) database.Condition {
+func (a administrator) OrganizationAdministratorCondition(instanceID, organizationID, userID string) database.Condition {
 	return database.And(
 		a.InstanceIDCondition(instanceID),
 		a.ScopeCondition(domain.AdministratorScopeOrganization),
 		a.OrganizationIDCondition(organizationID),
+		a.UserIDCondition(userID),
 	)
 }
 
-func (a administrator) ProjectAdministratorCondition(instanceID, projectID string) database.Condition {
+func (a administrator) ProjectAdministratorCondition(instanceID, projectID, userID string) database.Condition {
 	return database.And(
 		a.InstanceIDCondition(instanceID),
 		a.ScopeCondition(domain.AdministratorScopeProject),
 		a.ProjectIDCondition(projectID),
+		a.UserIDCondition(userID),
 	)
 }
 
-func (a administrator) ProjectGrantAdministratorCondition(instanceID, projectGrantID string) database.Condition {
+func (a administrator) ProjectGrantAdministratorCondition(instanceID, projectGrantID, userID string) database.Condition {
 	return database.And(
 		a.InstanceIDCondition(instanceID),
 		a.ScopeCondition(domain.AdministratorScopeProjectGrant),
 		a.ProjectGrantIDCondition(projectGrantID),
+		a.UserIDCondition(userID),
 	)
 }
 
