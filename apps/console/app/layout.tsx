@@ -1,0 +1,65 @@
+import type { Metadata } from 'next'
+import { Geist, Geist_Mono } from 'next/font/google'
+import './globals.css'
+import { AppProvider } from '@/lib/context/app-context'
+import { PermissionProvider } from '@/lib/permissions/context'
+import { DeploymentProvider } from '@/lib/deployment/context'
+import { ConsoleLayout } from '@/components/layout/console-layout'
+import { ErrorBoundary } from '@/components/error-boundary'
+import { Toaster } from '@/components/ui/toaster'
+import { discoverUserRoles } from '@/lib/api/auth'
+import { listOrganizations } from '@/lib/api/organizations'
+import { toJson } from '@zitadel/client'
+import { ListOrganizationsResponseSchema } from '@zitadel/proto/zitadel/org/v2/org_service_pb'
+
+const _geist = Geist({ subsets: ["latin"] })
+const _geistMono = Geist_Mono({ subsets: ["latin"] })
+
+export const metadata: Metadata = {
+  title: 'ZITADEL Console',
+  description: 'IAM Admin & Management Console for ZITADEL',
+}
+
+export default async function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode
+}>) {
+  // Fetch roles and organizations in parallel
+  const [roles, orgs] = await Promise.all([
+    discoverUserRoles(),
+    listOrganizations({ pageSize: 10 })
+      .then((res) => {
+        const json = toJson(ListOrganizationsResponseSchema, res) as any
+        return (json.result ?? []).map((org: any) => ({
+          id: org.id ?? "",
+          name: org.name ?? "",
+          primaryDomain: org.primaryDomain ?? "",
+          isDefault: false,
+        }))
+      })
+      .catch((e) => {
+        console.error("Failed to load organizations:", e)
+        return []
+      }),
+  ])
+
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className="font-sans antialiased" suppressHydrationWarning>
+        <ErrorBoundary>
+          <DeploymentProvider>
+            <PermissionProvider initialRoles={roles}>
+              <AppProvider initialOrganizations={orgs}>
+                <ConsoleLayout>
+                  {children}
+                </ConsoleLayout>
+                <Toaster />
+              </AppProvider>
+            </PermissionProvider>
+          </DeploymentProvider>
+        </ErrorBoundary>
+      </body>
+    </html>
+  )
+}
