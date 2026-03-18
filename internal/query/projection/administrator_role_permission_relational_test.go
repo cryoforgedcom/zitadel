@@ -1,11 +1,14 @@
 package projection
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	repoDomain "github.com/zitadel/zitadel/backend/v3/domain"
 	"github.com/zitadel/zitadel/backend/v3/storage/database"
 	"github.com/zitadel/zitadel/backend/v3/storage/database/repository"
 	"github.com/zitadel/zitadel/internal/repository/permission"
@@ -22,12 +25,13 @@ func TestAdministratorRolePermissionReducers(t *testing.T) {
 	t.Cleanup(func() {
 		require.NoError(t, rawTx.Rollback())
 	})
-	ctx := t.Context()
+
+	instanceID := seedAdministratorRolePermissions(t, tx)
 
 	repo := repository.AdministratorRoleRepository()
 
 	t.Run("added event inserts a permission row", func(t *testing.T) {
-		event := permission.NewAddedEvent(ctx, permission.NewAggregate("SYSTEM"), "ORG_OWNER", "org.read")
+		event := permission.NewAddedEvent(t.Context(), permission.NewAggregate(instanceID), "ORG_OWNER", "org.read")
 		require.True(t, callReduce(t, rawTx, handler, event))
 		assert.Equal(t,
 			[]administratorRolePermission{{RoleName: "ORG_OWNER", Permission: "org.read"}},
@@ -36,10 +40,10 @@ func TestAdministratorRolePermissionReducers(t *testing.T) {
 	})
 
 	t.Run("removed event deletes only the matching permission row", func(t *testing.T) {
-		_, err := repo.AddPermissions(ctx, tx, "INSTANCE_OWNER", "instance.read", "instance.write")
+		_, err := repo.AddPermissions(t.Context(), tx, instanceID, "INSTANCE_OWNER", "instance.read", "instance.write")
 		require.NoError(t, err)
 
-		event := permission.NewRemovedEvent(ctx, permission.NewAggregate("SYSTEM"), "INSTANCE_OWNER", "instance.read")
+		event := permission.NewRemovedEvent(t.Context(), permission.NewAggregate(instanceID), "INSTANCE_OWNER", "instance.read")
 		require.True(t, callReduce(t, rawTx, handler, event))
 		assert.Equal(t,
 			[]administratorRolePermission{{RoleName: "INSTANCE_OWNER", Permission: "instance.write"}},
@@ -53,9 +57,9 @@ func listReducedAdministratorRolePermissions(t *testing.T, tx database.QueryExec
 	t.Helper()
 
 	builder := database.NewStatementBuilder(`SELECT role_name, permission FROM zitadel.administrator_role_permissions`)
-	if len(conditions) > 0 && conditions[0] != nil {
+	if len(conditions) > 0 {
 		builder.WriteString(" WHERE ")
-		conditions[0].Write(builder)
+		database.And(conditions...).Write(builder)
 	}
 	builder.WriteString(" ORDER BY role_name, permission")
 
@@ -70,4 +74,22 @@ func listReducedAdministratorRolePermissions(t *testing.T, tx database.QueryExec
 		out[i] = *row
 	}
 	return out
+}
+
+func seedAdministratorRolePermissions(t *testing.T, tx database.QueryExecutor) string {
+	t.Helper()
+
+	instanceID := fmt.Sprintf("instance-%d", time.Now().UnixNano())
+	err := repository.InstanceRepository().Create(t.Context(), tx, &repoDomain.Instance{
+		ID:              instanceID,
+		Name:            "instance",
+		DefaultOrgID:    "default-org",
+		IAMProjectID:    "iam-project",
+		ConsoleClientID: "console-client",
+		ConsoleAppID:    "console-app",
+		DefaultLanguage: "en",
+	})
+	require.NoError(t, err)
+
+	return instanceID
 }

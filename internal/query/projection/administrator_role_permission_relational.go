@@ -23,7 +23,7 @@ func (p *relationalTablesProjection) reduceAdministratorRolePermissionAdded(even
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-v3ARP01", "reduce.wrong.db.pool %T", ex)
 		}
 		repo := repository.AdministratorRoleRepository()
-		_, err := repo.AddPermissions(ctx, v3_sql.SQLTx(tx), e.Role, e.Permission)
+		_, err := repo.AddPermissions(ctx, v3_sql.SQLTx(tx), e.Aggregate().InstanceID, e.Role, e.Permission)
 		return err
 	}), nil
 }
@@ -39,7 +39,7 @@ func (p *relationalTablesProjection) reduceAdministratorRolePermissionRemoved(ev
 			return zerrors.ThrowInvalidArgumentf(nil, "HANDL-v3ARP02", "reduce.wrong.db.pool %T", ex)
 		}
 		repo := repository.AdministratorRoleRepository()
-		_, err := repo.RemovePermissions(ctx, v3_sql.SQLTx(tx), e.Role, e.Permission)
+		_, err := repo.RemovePermissions(ctx, v3_sql.SQLTx(tx), e.Aggregate().InstanceID, e.Role, e.Permission)
 		return err
 	}), nil
 }

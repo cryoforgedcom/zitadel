@@ -11,6 +11,7 @@ import (
 )
 
 type administratorRolePermissionRow struct {
+	InstanceID string `db:"instance_id"`
 	RoleName   string `db:"role_name"`
 	Permission string `db:"permission"`
 }
@@ -19,26 +20,62 @@ func TestAdministratorRoleRepository_AddPermissions(t *testing.T) {
 	tx, rollback := transactionForRollback(t)
 	defer rollback()
 
+	instanceID := createInstance(t, tx)
 	repo := repository.AdministratorRoleRepository()
 
-	count, err := repo.AddPermissions(t.Context(), tx, "ORG_OWNER", "org.read", "org.write", "org.read")
-	require.NoError(t, err)
-	assert.Equal(t, int64(2), count)
-	assert.Equal(t,
-		[]administratorRolePermissionRow{
-			{RoleName: "ORG_OWNER", Permission: "org.read"},
-			{RoleName: "ORG_OWNER", Permission: "org.write"},
+	tests := []struct {
+		name        string
+		role        string
+		permissions []string
+		wantRows    []administratorRolePermissionRow
+		wantErr     error
+		wantCount   int64
+	}{
+		{
+			name:        "add deduplicated permissions",
+			role:        "ORG_OWNER",
+			permissions: []string{"org.read", "org.write", "org.read"},
+			wantCount:   2,
+			wantRows: []administratorRolePermissionRow{
+				{InstanceID: instanceID, RoleName: "ORG_OWNER", Permission: "org.read"},
+				{InstanceID: instanceID, RoleName: "ORG_OWNER", Permission: "org.write"},
+			},
 		},
-		listAdministratorRolePermissions(t, tx, repo.NameCondition(database.TextOperationEqual, "ORG_OWNER")),
-	)
+		{
+			name:      "no permissions",
+			role:      "ORG_OWNER",
+			wantErr:   database.ErrNoChanges,
+			wantCount: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			savepoint, rollbackSavepoint := savepointForRollback(t, tx)
+			defer rollbackSavepoint()
+
+			count, err := repo.AddPermissions(t.Context(), savepoint, instanceID, tt.role, tt.permissions...)
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Equal(t, tt.wantCount, count)
+
+			if tt.wantErr == nil {
+				assert.Equal(t,
+					tt.wantRows,
+					listAdministratorRolePermissions(t, savepoint, repo.NameCondition(database.TextOperationEqual, tt.role)),
+				)
+			}
+		})
+	}
 }
 
 func TestAdministratorRoleRepository_RemovePermissions(t *testing.T) {
 	tx, rollback := transactionForRollback(t)
 	defer rollback()
 
+	instanceID := createInstance(t, tx)
+
 	repo := repository.AdministratorRoleRepository()
-	count, err := repo.AddPermissions(t.Context(), tx, "INSTANCE_OWNER", "instance.read", "instance.write")
+	count, err := repo.AddPermissions(t.Context(), tx, instanceID, "INSTANCE_OWNER", "instance.read", "instance.write")
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), count)
 
@@ -61,7 +98,7 @@ func TestAdministratorRoleRepository_RemovePermissions(t *testing.T) {
 			permissions: []string{"instance.read"},
 			wantCount:   1,
 			wantRows: []administratorRolePermissionRow{
-				{RoleName: "INSTANCE_OWNER", Permission: "instance.write"},
+				{InstanceID: instanceID, RoleName: "INSTANCE_OWNER", Permission: "instance.write"},
 			},
 		},
 		{
@@ -69,7 +106,7 @@ func TestAdministratorRoleRepository_RemovePermissions(t *testing.T) {
 			role:        "INSTANCE_OWNER",
 			permissions: []string{"instance.write", "missing"},
 			wantCount:   1,
-			wantRows:    []administratorRolePermissionRow{{RoleName: "INSTANCE_OWNER", Permission: "instance.read"}},
+			wantRows:    []administratorRolePermissionRow{{InstanceID: instanceID, RoleName: "INSTANCE_OWNER", Permission: "instance.read"}},
 		},
 	}
 
@@ -78,11 +115,7 @@ func TestAdministratorRoleRepository_RemovePermissions(t *testing.T) {
 			savepoint, rollbackSavepoint := savepointForRollback(t, tx)
 			defer rollbackSavepoint()
 
-			count, err := repo.AddPermissions(t.Context(), savepoint, "INSTANCE_OWNER", "instance.read", "instance.write")
-			require.NoError(t, err)
-			assert.Equal(t, int64(2), count)
-
-			count, err = repo.RemovePermissions(t.Context(), savepoint, tt.role, tt.permissions...)
+			count, err = repo.RemovePermissions(t.Context(), savepoint, instanceID, tt.role, tt.permissions...)
 			require.ErrorIs(t, err, tt.wantErr)
 			assert.Equal(t, tt.wantCount, count)
 			if tt.wantErr == nil {
@@ -99,52 +132,46 @@ func TestAdministratorRoleRepository_AddAndRemoveAcrossCalls(t *testing.T) {
 	tx, rollback := transactionForRollback(t)
 	defer rollback()
 
+	instanceID := createInstance(t, tx)
+
 	repo := repository.AdministratorRoleRepository()
 
-	count, err := repo.AddPermissions(t.Context(), tx, "INSTANCE_OWNER", "instance.read", "instance.write")
+	count, err := repo.AddPermissions(t.Context(), tx, instanceID, "INSTANCE_OWNER", "instance.read", "instance.write")
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), count)
 
-	count, err = repo.AddPermissions(t.Context(), tx, "INSTANCE_OWNER", "instance.manage", "instance.audit", "instance.write")
+	count, err = repo.AddPermissions(t.Context(), tx, instanceID, "INSTANCE_OWNER", "instance.manage", "instance.audit", "instance.write")
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), count)
 
-	count, err = repo.RemovePermissions(t.Context(), tx, "INSTANCE_OWNER", "instance.read")
+	count, err = repo.RemovePermissions(t.Context(), tx, instanceID, "INSTANCE_OWNER", "instance.read")
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), count)
 
 	assert.Equal(t,
 		[]administratorRolePermissionRow{
-			{RoleName: "INSTANCE_OWNER", Permission: "instance.audit"},
-			{RoleName: "INSTANCE_OWNER", Permission: "instance.manage"},
-			{RoleName: "INSTANCE_OWNER", Permission: "instance.write"},
+			{InstanceID: instanceID, RoleName: "INSTANCE_OWNER", Permission: "instance.audit"},
+			{InstanceID: instanceID, RoleName: "INSTANCE_OWNER", Permission: "instance.manage"},
+			{InstanceID: instanceID, RoleName: "INSTANCE_OWNER", Permission: "instance.write"},
 		},
 		listAdministratorRolePermissions(t, tx, repo.NameCondition(database.TextOperationEqual, "INSTANCE_OWNER")),
 	)
-}
-
-func TestAdministratorRoleRepository_AddPermissionsNoChanges(t *testing.T) {
-	tx, rollback := transactionForRollback(t)
-	defer rollback()
-
-	repo := repository.AdministratorRoleRepository()
-	count, err := repo.AddPermissions(t.Context(), tx, "INSTANCE_OWNER")
-	require.ErrorIs(t, err, database.ErrNoChanges)
-	assert.Equal(t, int64(0), count)
 }
 
 func TestAdministratorRoleRepository_PrimaryKeyCondition(t *testing.T) {
 	tx, rollback := transactionForRollback(t)
 	defer rollback()
 
+	instanceID := createInstance(t, tx)
+
 	repo := repository.AdministratorRoleRepository()
-	count, err := repo.AddPermissions(t.Context(), tx, "PROJECT_OWNER", "project.read", "project.write")
+	count, err := repo.AddPermissions(t.Context(), tx, instanceID, "PROJECT_OWNER", "project.read", "project.write")
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), count)
 
-	rows := listAdministratorRolePermissions(t, tx, repo.PrimaryKeyCondition("PROJECT_OWNER", "project.read"))
+	rows := listAdministratorRolePermissions(t, tx, repo.PrimaryKeyCondition(instanceID, "PROJECT_OWNER", "project.read"))
 	assert.Equal(t,
-		[]administratorRolePermissionRow{{RoleName: "PROJECT_OWNER", Permission: "project.read"}},
+		[]administratorRolePermissionRow{{InstanceID: instanceID, RoleName: "PROJECT_OWNER", Permission: "project.read"}},
 		rows,
 	)
 }
@@ -152,12 +179,12 @@ func TestAdministratorRoleRepository_PrimaryKeyCondition(t *testing.T) {
 func listAdministratorRolePermissions(t *testing.T, tx database.QueryExecutor, condition database.Condition) []administratorRolePermissionRow {
 	t.Helper()
 
-	builder := database.NewStatementBuilder(`SELECT role_name, permission FROM zitadel.administrator_role_permissions`)
+	builder := database.NewStatementBuilder(`SELECT instance_id, role_name, permission FROM zitadel.administrator_role_permissions`)
 	if condition != nil {
 		builder.WriteString(" WHERE ")
 		condition.Write(builder)
 	}
-	builder.WriteString(" ORDER BY role_name, permission")
+	builder.WriteString(" ORDER BY instance_id, role_name, permission")
 
 	rows, err := tx.Query(t.Context(), builder.String(), builder.Args()...)
 	require.NoError(t, err)
