@@ -13,7 +13,7 @@ export type AppSecretDialogData = {
   standalone: false,
 })
 export class AppSecretDialogComponent {
-  protected readonly dialogRef = inject<MatDialogRef<AppSecretDialogComponent>>(MatDialogRef)
+  protected readonly dialogRef = inject<MatDialogRef<AppSecretDialogComponent>>(MatDialogRef);
   protected readonly data = inject<AppSecretDialogData>(MAT_DIALOG_DATA);
 
   public copied: string = '';
