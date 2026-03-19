@@ -796,7 +796,10 @@ export const guidesSidebar: readonly SidebarItem[] = [
                       type: "doc",
                       id: "self-hosting/manage/metrics/overview",
                     },
-                    items: ["self-hosting/manage/metrics/prometheus"],
+                    items: [
+                      "self-hosting/manage/metrics/prometheus",
+                      "self-hosting/manage/metrics/opentelemetry",
+                    ],
                   },
                 ],
               },
