@@ -9,11 +9,28 @@
  * once the endpoint is available on target ZITADEL instances.
  */
 export async function discoverUserRoles(): Promise<string[]> {
-  const baseUrl = process.env.ZITADEL_INSTANCE_URL;
-  const pat = process.env.ZITADEL_PAT;
+  // Resolve instance config: ZITADEL_INSTANCES first, then ZITADEL_INSTANCE_URL/PAT
+  let baseUrl: string | undefined;
+  let pat: string | undefined;
+
+  try {
+    const raw = process.env.ZITADEL_INSTANCES;
+    if (raw) {
+      const instances = JSON.parse(raw);
+      if (instances.length > 0 && instances[0].url && instances[0].pat) {
+        baseUrl = instances[0].url;
+        pat = instances[0].pat;
+      }
+    }
+  } catch {}
 
   if (!baseUrl || !pat) {
-    console.warn("Missing ZITADEL_INSTANCE_URL or ZITADEL_PAT — cannot discover roles");
+    baseUrl = process.env.ZITADEL_INSTANCE_URL;
+    pat = process.env.ZITADEL_PAT;
+  }
+
+  if (!baseUrl || !pat) {
+    console.warn("No ZITADEL instance configured — cannot discover roles");
     return [];
   }
 

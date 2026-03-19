@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useConsoleRouter } from "@/hooks/use-console-router"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -51,7 +51,7 @@ export function ProjectsClient({
   totalResult: initialTotalResult,
   error,
 }: ProjectsClientProps) {
-  const router = useRouter()
+  const router = useConsoleRouter()
   const [searchQuery, setSearchQuery] = useState("")
   const [projects, setProjects] = useState(initialProjects)
   const [totalResult, setTotalResult] = useState(initialTotalResult)

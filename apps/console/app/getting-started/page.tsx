@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import { ConsoleLink as Link } from "@/lib/context/link-context"
 import { 
   Info, 
   BookOpen,

@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import { ConsoleLink as Link } from "@/lib/context/link-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"

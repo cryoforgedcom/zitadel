@@ -1,83 +1,93 @@
 # ZITADEL Frontend Architecture Plan
 
-## Target Monorepo Structure (Option B — Everything in One Repo)
+## Target Monorepo Structure
 
 ```
 apps/
-├── console/        # Single-instance admin (AGPL-3.0)
+├── console/        # Single-instance admin, self-hosted (AGPL-3.0)
 ├── login/          # Product login, ships in containers (MIT)
 ├── docs/           # Documentation (Apache 2.0)
-├── cloud/          # Cloud app — multi-instance console + admin + billing + cloud login (Source Available)
-└── website/        # Marketing site (Source Available)
+├── cloud/          # zitadel.com — everything for cloud (Source Available)
+│   └── app/
+│       ├── (website)/     # Marketing pages (Sanity CMS)
+│       ├── (docs)/        # Docs with authenticated API explorer (fumadocs)
+│       ├── (auth)/        # Cloud login with customizations
+│       ├── (console)/     # Multi-instance console (imports from apps/console)
+│       ├── (admin)/       # Instance management, billing, usage
+│       └── layout.tsx     # Shared: Mixpanel, auth, instance context
+└── website/        # (placeholder — may merge into cloud)
 
 packages/
-├── zitadel-client/  # API client (MIT, exists)
-├── zitadel-proto/   # Proto definitions (MIT, exists)
-└── zitadel-ui/      # Shared design system (Apache 2.0, new)
+├── zitadel-client/  # API client (MIT)
+├── zitadel-proto/   # Proto definitions (MIT)
+└── zitadel-ui/      # Shared design system (Apache 2.0)
 ```
 
 > [!IMPORTANT]
-> `apps/cloud` and `apps/website` are **source-available but not open source** — viewable but not usable without written permission. `packages/zitadel-ui` is Apache 2.0 (matching the contribution license). All other apps follow their existing licenses. See `LICENSING.md`.
+> `apps/cloud` is **source-available but not open source**. `packages/zitadel-ui` is Apache 2.0 (industry standard for UI libraries). See `LICENSING.md`.
 
 ---
 
-## Phase 1: Cloud App Skeleton
+## Phase 1: Cloud App Skeleton ✅
 
-**Goal**: `apps/cloud` as a real Next.js app that embeds console with multi-instance support.
-
-- [ ] Scaffold `apps/cloud` as a Next.js app with its own `next.config.ts`, `package.json`, `project.json`
-- [ ] Import and re-use console page components (not copy — import from `../../console/`)
-- [ ] Multi-instance routing: `/instances/{id}/users`, `/instances/{id}/organizations`, etc.
-- [ ] Instance switcher in top bar
-- [ ] Instance context provider that resolves API target from URL params
-- [ ] `pnpm nx dev cloud` runs alongside `pnpm nx dev console-next`
-
-### Solves the Login Build Problem
-
-Instead of nasty Nx build targets to differentiate cloud-login from product-login:
-- `apps/login` → clean product login, ships in containers (stays MIT)
-- `apps/cloud` → includes its own login routes with cloud customizations (AGPL-3.0)
-
-No build flags, no conditional compilation. Two separate deployable apps.
+- [x] Scaffold `apps/cloud` as Next.js app (port 3001)
+- [x] `package.json`, `next.config.mjs`, `tsconfig.json`, `project.json`
+- [x] `@console/*` path alias for cross-app imports
+- [x] `(console)` route group with placeholder
+- [x] Verified: `pnpm nx dev cloud` starts successfully
 
 ---
 
-## Phase 2: Shared Design System (`packages/zitadel-ui`)
+## Phase 2: Wire Console into Cloud
 
-- [ ] Reconcile `new-website/packages/theme` tokens with console's shadcn tokens
-- [ ] Extract shared components: `StatusBadge`, `TablePagination`, `TableSkeleton`, sidebar, top bar
-- [ ] Both `apps/console` and `apps/cloud` consume `@zitadel/ui`
+- [ ] Import console client components via `@console/*` path alias
+- [ ] Create `InstanceContext` provider — resolves API target from URL params or cookie
+- [ ] Modify server actions to accept instance URL + token as params (instead of env vars only)
+- [ ] Cloud sidebar with instance switcher
 
 ---
 
-## Phase 3: Cloud-Specific Features
+## Phase 3: Cross-Cutting Cloud Features
 
-- [ ] Instance management pages (list, create, status, region, version)
-- [ ] Billing & subscription management
+- [ ] **Mixpanel** — single init in cloud root layout, track user journey across all sections
+- [ ] **Auth state** — shared login session across console, docs, website
+- [ ] **Authenticated API docs** — fumadocs routes with "Try it" that picks user's instance
+- [ ] **Debug page** — `/debug` route (preview/dev only) for test instance configuration
+
+---
+
+## Phase 4: Cloud-Specific Pages
+
+- [ ] Instance management (list, create, configure)
+- [ ] Billing & subscriptions
 - [ ] Usage metrics
 - [ ] Cloud signup flow
 
 ---
 
-## Phase 4: Debug Page (Vercel Preview Testing)
+## Phase 5: Design System Extraction
 
-- [ ] `/debug` route in `apps/cloud` — only when `NEXT_PUBLIC_VERCEL_ENV === "preview"` or `NODE_ENV === "development"`
-- [ ] Enter instance URL + PAT → stored in cookie + localStorage
-- [ ] Persistent banner showing active test instance
-- [ ] Save/switch between multiple test instances
+- [ ] Reconcile website theme tokens with console's shadcn tokens
+- [ ] Extract shared components (`StatusBadge`, `TablePagination`, etc.) to `packages/zitadel-ui`
+- [ ] All apps consume `@zitadel/ui`
 
 ---
 
-## Phase 5: Website Migration
+## Key Decisions
 
-- [ ] Move `new-website/apps/website` into `apps/website/`
-- [ ] Consume `@zitadel/ui` for shared tokens and components
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Cloud deployment | Single Next.js app | Shared Mixpanel, auth, instance context across all sections |
+| Console import | `@console/*` path alias | No package publishing, direct cross-app imports |
+| Login build problem | Separate routes in cloud app | No more build flags — cloud has own login routes |
+| UI package license | Apache 2.0 | Industry standard (Supabase MIT, GitLab MIT, Grafana Apache) |
+| Cloud/website license | Source available | Clear restriction in LICENSING.md |
 
 ---
 
 ## Open Questions
 
-1. **Instance API**: Which API provides the list of instances for the cloud instance switcher?
-2. **Console import strategy**: Should cloud import console pages directly (`../../console/app/users/page`), or should shared pages be extracted to `packages/`?
-3. **Auth for cloud**: Same OIDC flow as console, or separate?
-4. **Tailwind version alignment**: Website uses v4, console uses v3
+1. **Naming**: Should `apps/cloud` be `apps/web` or stay as `cloud`?
+2. **Instance API**: Which API provides the instance list for the switcher?
+3. **Auth flow**: Same OIDC as console, or separate for cloud?
+4. **Tailwind version**: Website uses v4, console uses v4 — confirm alignment

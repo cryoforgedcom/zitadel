@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import Link from "next/link"
+import { ConsoleLink as Link } from "@/lib/context/link-context"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"

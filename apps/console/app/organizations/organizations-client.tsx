@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useConsoleRouter } from "@/hooks/use-console-router"
 import { Building2, Plus, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -50,7 +50,7 @@ export function OrganizationsClient({
   totalResult: initialTotalResult,
   error,
 }: OrganizationsClientProps) {
-  const router = useRouter()
+  const router = useConsoleRouter()
   const [searchQuery, setSearchQuery] = useState("")
   const [organizations, setOrganizations] = useState(initialOrgs)
   const [totalResult, setTotalResult] = useState(initialTotalResult)

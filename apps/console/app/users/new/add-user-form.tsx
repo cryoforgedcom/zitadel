@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
+import { useConsoleRouter } from "@/hooks/use-console-router"
+import { ConsoleLink as Link } from "@/lib/context/link-context"
 import { ArrowLeft, Loader2, UserPlus, Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,7 +17,7 @@ interface AddUserFormProps {
 }
 
 export function AddUserForm({ organizations }: AddUserFormProps) {
-  const router = useRouter()
+  const router = useConsoleRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)

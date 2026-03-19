@@ -7,6 +7,7 @@ import { DeploymentProvider } from '@/lib/deployment/context'
 import { ConsoleLayout } from '@/components/layout/console-layout'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { Toaster } from '@/components/ui/toaster'
+import { ConsoleLinkProvider } from '@/lib/context/link-context'
 import { discoverUserRoles } from '@/lib/api/auth'
 import { listOrganizations } from '@/lib/api/organizations'
 import { toJson } from '@zitadel/client'
@@ -52,7 +53,9 @@ export default async function RootLayout({
             <PermissionProvider initialRoles={roles}>
               <AppProvider initialOrganizations={orgs}>
                 <ConsoleLayout>
-                  {children}
+                  <ConsoleLinkProvider base="">
+                    {children}
+                  </ConsoleLinkProvider>
                 </ConsoleLayout>
                 <Toaster />
               </AppProvider>

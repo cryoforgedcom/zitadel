@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/tooltip"
 import { useAppContext } from "@/lib/context/app-context"
 import { users, projects, applications, sessions, getRoleAssignmentsByOrganization, getActivityLogByOrganization } from "@/lib/mock-data"
-import Link from "next/link"
+import { ConsoleLink as Link } from "@/lib/context/link-context"
 import { OrganizationSelectorPrompt } from "@/components/organization-selector-prompt"
 import { useMemo } from "react"
 

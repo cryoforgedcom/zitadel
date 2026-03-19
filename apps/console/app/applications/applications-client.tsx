@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useConsoleRouter } from "@/hooks/use-console-router"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -100,7 +100,7 @@ export function ApplicationsClient({
   totalResult: initialTotalResult,
   error,
 }: ApplicationsClientProps) {
-  const router = useRouter()
+  const router = useConsoleRouter()
   const [searchQuery, setSearchQuery] = useState("")
   const [applications, setApplications] = useState(initialApplications)
   const [totalResult, setTotalResult] = useState(initialTotalResult)

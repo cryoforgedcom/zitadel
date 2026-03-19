@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // In cloud mode, the console is served under /admin on zitadel.com
-  basePath: process.env.NEXT_PUBLIC_DEPLOYMENT_MODE === "cloud" ? "/admin" : "",
+  // Console always serves under /console — both self-hosted and in cloud
+  basePath: "/console",
   typescript: {
     ignoreBuildErrors: true,
   },

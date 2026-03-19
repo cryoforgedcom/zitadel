@@ -17,7 +17,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import Link from "next/link"
+import { ConsoleLink as Link } from "@/lib/context/link-context"
 import { useDeployment } from "@/lib/deployment/context"
 import { useAppContext } from "@/lib/context/app-context"
 import { fetchOverviewStats, type OverviewStats } from "@/lib/api/fetch-overview"

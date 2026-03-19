@@ -32,7 +32,7 @@ import {
   AlertTriangle,
   Crown
 } from "lucide-react"
-import Link from "next/link"
+import { ConsoleLink as Link } from "@/lib/context/link-context"
 import { useAppContext } from "@/lib/context/app-context"
 import { OrganizationSelectorPrompt } from "@/components/organization-selector-prompt"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"

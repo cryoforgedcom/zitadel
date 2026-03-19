@@ -1,7 +1,7 @@
 "use client"
 
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { ConsoleLink as Link } from "@/lib/context/link-context"
+import { useConsoleRouter } from "@/hooks/use-console-router"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -39,7 +39,7 @@ function formatDate(dateStr?: string) {
 }
 
 export function ProjectDetailClient({ project, projectId, applications, error }: ProjectDetailClientProps) {
-  const router = useRouter()
+  const router = useConsoleRouter()
 
   if (error || !project) {
     return (

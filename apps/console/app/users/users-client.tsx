@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useConsoleRouter } from "@/hooks/use-console-router"
 import {
   Users,
   Plus,
@@ -111,7 +111,7 @@ export function UsersClient({
   totalResult: initialTotalResult,
   error,
 }: UsersClientProps) {
-  const router = useRouter()
+  const router = useConsoleRouter()
   const { currentOrganization } = useAppContext()
   const [searchQuery, setSearchQuery] = useState("")
   const [addUserOpen, setAddUserOpen] = useState(false)

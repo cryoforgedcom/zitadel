@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { MoreHorizontal, Plus, ArrowUpDown, Edit, Trash2, UserCog } from "lucide-react"
-import Link from "next/link"
+import { ConsoleLink as Link } from "@/lib/context/link-context"
 import { useAppContext } from "@/lib/context/app-context"
 import { OrganizationSelectorPrompt } from "@/components/organization-selector-prompt"
 

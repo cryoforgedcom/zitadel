@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useAppContext } from "@/lib/context/app-context"
 import { HelpCircle, BookOpen, MessageCircle, Mail, ExternalLink } from "lucide-react"
-import Link from "next/link"
+import { ConsoleLink as Link } from "@/lib/context/link-context"
 
 export default function SupportPage() {
   const { currentInstance } = useAppContext()

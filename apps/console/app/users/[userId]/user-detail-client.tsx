@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useTransition, useEffect } from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { ConsoleLink as Link } from "@/lib/context/link-context"
+import { useConsoleRouter } from "@/hooks/use-console-router"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -148,7 +148,7 @@ function getSessionFactors(session: any) {
 const PAGE_SIZE = 10
 
 export function UserDetailClient({ user, userId, initialSessions, totalSessions, initialAuthMethods, initialAuthFactors, initialPasskeys, initialMetadata, error }: UserDetailClientProps) {
-  const router = useRouter()
+  const router = useConsoleRouter()
   const [sessions, setSessions] = useState(initialSessions)
   const [total, setTotal] = useState(totalSessions)
   const [page, setPage] = useState(0)

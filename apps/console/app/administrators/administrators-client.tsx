@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useConsoleRouter } from "@/hooks/use-console-router"
 import { Shield, Search, X, Plus, Building2, FolderKanban } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -78,7 +78,7 @@ export function AdministratorsClient({
   totalResult: initialTotalResult,
   error,
 }: AdministratorsClientProps) {
-  const router = useRouter()
+  const router = useConsoleRouter()
   const { currentOrganization } = useAppContext()
   const [administrators, setAdministrators] = useState(initialAdministrators)
   const [totalResult, setTotalResult] = useState(initialTotalResult)
