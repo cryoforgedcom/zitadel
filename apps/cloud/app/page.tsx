@@ -15,7 +15,7 @@ export default function CloudHomePage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 max-w-3xl w-full">
+      <div className="grid gap-4 sm:grid-cols-2 max-w-2xl w-full">
         <Link
           href="/console"
           className="rounded-lg border p-6 hover:bg-accent transition-colors"
@@ -23,26 +23,6 @@ export default function CloudHomePage() {
           <h2 className="font-semibold mb-1">Console</h2>
           <p className="text-sm text-muted-foreground">
             Instance admin — users, organizations, billing
-          </p>
-        </Link>
-
-        <Link
-          href="/login"
-          className="rounded-lg border p-6 hover:bg-accent transition-colors"
-        >
-          <h2 className="font-semibold mb-1">Login</h2>
-          <p className="text-sm text-muted-foreground">
-            Authentication flows — sign in, register, MFA
-          </p>
-        </Link>
-
-        <Link
-          href="/docs"
-          className="rounded-lg border p-6 hover:bg-accent transition-colors"
-        >
-          <h2 className="font-semibold mb-1">Documentation</h2>
-          <p className="text-sm text-muted-foreground">
-            Guides, API reference, and more
           </p>
         </Link>
 
@@ -55,13 +35,6 @@ export default function CloudHomePage() {
             Configure test instances for preview testing
           </p>
         </Link>
-
-        <div className="rounded-lg border p-6 opacity-50">
-          <h2 className="font-semibold mb-1">Website</h2>
-          <p className="text-sm text-muted-foreground">
-            Marketing pages (coming soon)
-          </p>
-        </div>
       </div>
     </div>
   )
