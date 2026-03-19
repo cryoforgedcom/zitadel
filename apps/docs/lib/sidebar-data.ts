@@ -798,9 +798,9 @@ export const guidesSidebar: readonly SidebarItem[] = [
                     },
                     items: [
                       "self-hosting/manage/metrics/prometheus",
-                      "self-hosting/manage/metrics/opentelemetry",
                     ],
                   },
+                  "self-hosting/manage/opentelemetry",
                 ],
               },
               {

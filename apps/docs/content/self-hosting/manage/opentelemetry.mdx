@@ -3,8 +3,6 @@ title: OpenTelemetry
 description: "Export ZITADEL metrics, traces, and logs using OpenTelemetry."
 ---
 
-# OpenTelemetry Observability
-
 Zitadel is often deployed as a critical component in modern, distributed infrastructures — Kubernetes, microservices, service meshes, and beyond. As an identity provider sitting in the critical path of every authentication and authorization flow, understanding what Zitadel is doing at any given moment is essential for debugging, performance tuning, and incident response.
 
 OpenTelemetry has become the de-facto standard for observability in cloud-native environments. Zitadel supports it natively across all three signals — traces, metrics, and logs — giving you end-to-end visibility into authentication flows, the ability to correlate Zitadel requests with upstream reverse proxies and downstream services, and seamless integration with any OTel-compatible backend: Jaeger, Grafana Tempo, Honeycomb, Datadog, New Relic, and more.
