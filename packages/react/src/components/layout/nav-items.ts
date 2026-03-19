@@ -37,13 +37,13 @@ export interface NavItem {
 export const coreNavItems: NavItem[] = [
   {
     title: "Overview",
-    path: "overview",
+    path: "/overview",
     icon: LayoutDashboard,
     context: "both",
   },
   {
     title: "Organizations",
-    path: "organizations",
+    path: "/organizations",
     icon: Building2,
     permission: "org.read",
     context: "instance",
@@ -51,7 +51,7 @@ export const coreNavItems: NavItem[] = [
   },
   {
     title: "Users",
-    path: "users",
+    path: "/users",
     icon: Users,
     permission: "user.read",
     context: "both",
@@ -59,7 +59,7 @@ export const coreNavItems: NavItem[] = [
   },
   {
     title: "Projects",
-    path: "projects",
+    path: "/projects",
     icon: FolderKanban,
     permission: "project.read",
     context: "both",
@@ -67,7 +67,7 @@ export const coreNavItems: NavItem[] = [
   },
   {
     title: "Applications",
-    path: "applications",
+    path: "/applications",
     icon: AppWindow,
     permission: "project.app.read",
     context: "both",
@@ -75,35 +75,35 @@ export const coreNavItems: NavItem[] = [
   },
   {
     title: "Actions",
-    path: "actions",
+    path: "/actions",
     icon: Zap,
     anyPermission: ["iam.action.read", "org.action.read"],
     context: "both",
   },
   {
     title: "Sessions",
-    path: "sessions",
+    path: "/sessions",
     icon: KeyRound,
     permission: "session.read",
     context: "instance",
   },
   {
     title: "Administrators",
-    path: "administrators",
+    path: "/administrators",
     icon: UserCog,
     anyPermission: ["iam.member.read", "org.member.read"],
     context: "both",
   },
   {
     title: "Activity Log",
-    path: "activity",
+    path: "/activity",
     icon: Activity,
     permission: "events.read",
     context: "both",
   },
   {
     title: "Settings & Policies",
-    path: "settings",
+    path: "/settings",
     icon: Shield,
     anyPermission: ["iam.policy.read", "policy.read"],
     context: "both",

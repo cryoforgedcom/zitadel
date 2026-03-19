@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useConsoleRouter as useRouter } from "../../hooks/use-console-router"
 import { Loader2, UserPlus, Eye, EyeOff, Check } from "lucide-react"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"

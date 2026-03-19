@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   BarChart3,
@@ -28,6 +27,7 @@ import { Badge } from "../ui/badge"
 import { AccountDropdown } from "./account-dropdown"
 import { useNavCounts } from "../../hooks/use-nav-counts"
 import { type NavItem, coreNavItems, filterByContext } from "./nav-items"
+import { ConsoleLink as Link } from "../../context/link-context"
 
 const cloudOnlyItems: NavItem[] = [
   {

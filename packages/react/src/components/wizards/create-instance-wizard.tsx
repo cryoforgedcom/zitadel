@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import { useConsoleRouter as useRouter } from "../../hooks/use-console-router"
 import { Cloud, Server, Globe, Shield, Zap } from "lucide-react"
 import {
   StepWizard,

@@ -49,6 +49,8 @@ interface DataTableProps<TData, TValue> {
   filterOptions?: FilterConfig[]
   searchKey?: string
   searchPlaceholder?: string
+  rowSelection?: Record<string, boolean>
+  onRowSelectionChange?: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
 }
 
 export function DataTable<TData, TValue>({
@@ -57,11 +59,16 @@ export function DataTable<TData, TValue>({
   filterOptions = [],
   searchKey,
   searchPlaceholder = "Search...",
+  rowSelection: externalRowSelection,
+  onRowSelectionChange: externalOnRowSelectionChange,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
-  const [rowSelection, setRowSelection] = React.useState({})
+  const [internalRowSelection, setInternalRowSelection] = React.useState({})
+
+  const rowSelection = externalRowSelection ?? internalRowSelection
+  const setRowSelection = externalOnRowSelectionChange ?? setInternalRowSelection
 
   const table = useReactTable({
     data,

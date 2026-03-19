@@ -6,7 +6,7 @@ import { Input } from "./ui/input"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { useAppContext } from "../context/app-context"
-import { useRouter } from "next/navigation"
+import { useConsoleRouter as useRouter } from "../hooks/use-console-router"
 
 interface InstanceSelectorPromptProps {
   title: string

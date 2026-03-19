@@ -304,15 +304,17 @@ interface InfoBoxProps {
   description?: string
   children?: React.ReactNode
   variant?: "default" | "success" | "warning"
+  className?: string
 }
 
-export function InfoBox({ title, description, children, variant = "default" }: InfoBoxProps) {
+export function InfoBox({ title, description, children, variant = "default", className }: InfoBoxProps) {
   return (
     <div className={cn(
       "rounded-lg border p-4",
       variant === "success" && "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-900",
       variant === "warning" && "bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900",
-      variant === "default" && "bg-muted/50"
+      variant === "default" && "bg-muted/50",
+      className
     )}>
       <div className="font-medium text-sm">{title}</div>
       {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}

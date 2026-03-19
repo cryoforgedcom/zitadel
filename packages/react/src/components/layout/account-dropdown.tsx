@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
+import { ConsoleLink as Link } from "../../context/link-context"
 import {
   ChevronUp,
   Settings,

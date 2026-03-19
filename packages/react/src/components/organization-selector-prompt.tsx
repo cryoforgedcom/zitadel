@@ -5,7 +5,7 @@ import { Building2, Plus, Cloud, Server } from "lucide-react"
 import { Input } from "./ui/input"
 import { Badge } from "./ui/badge"
 import { useAppContext } from "../context/app-context"
-import { useRouter } from "next/navigation"
+import { useConsoleRouter as useRouter } from "../hooks/use-console-router"
 import { getOrganizationsByInstance, instances} from "../mock-data"
 
 interface OrganizationSelectorPromptProps {

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useConsoleRouter as useRouter } from "../../../hooks/use-console-router"
 import { ConsoleLink as Link } from "../../../context/link-context"
 import { Save, X } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card"

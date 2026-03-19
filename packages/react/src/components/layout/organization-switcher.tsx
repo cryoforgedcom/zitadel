@@ -30,7 +30,8 @@ import {
 } from "../ui/dialog"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
-import { useRouter, usePathname } from "next/navigation"
+import { usePathname } from "next/navigation"
+import { useConsoleRouter as useRouter } from "../../hooks/use-console-router"
 import { createOrganization } from "../../api/create-organization"
 
 /** Pages that are only visible at instance level (no org selected) */
