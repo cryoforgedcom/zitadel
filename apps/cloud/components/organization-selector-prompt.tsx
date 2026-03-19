@@ -1,1 +1,0 @@
-../../console/components/organization-selector-prompt.tsx

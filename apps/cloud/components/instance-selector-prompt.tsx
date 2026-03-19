@@ -1,1 +1,0 @@
-../../console/components/instance-selector-prompt.tsx

@@ -1,1 +1,0 @@
-../../console/lib/mock-data.ts

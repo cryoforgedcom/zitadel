@@ -1,1 +1,0 @@
-../../console/components/error-boundary.tsx
