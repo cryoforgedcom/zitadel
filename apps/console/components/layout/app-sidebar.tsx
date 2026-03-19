@@ -1,20 +1,9 @@
 "use client"
 
-
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  Users,
-  FolderKanban,
-  AppWindow,
-  Building2,
-  Zap,
   BarChart3,
-  KeyRound,
-  UserCog,
-  Activity,
-  LayoutDashboard,
-  Shield,
   Sparkles,
   CreditCard,
   LifeBuoy,
@@ -38,124 +27,30 @@ import { useDeployment } from "@/lib/deployment/context"
 import { Badge } from "@/components/ui/badge"
 import { AccountDropdown } from "./account-dropdown"
 import { useNavCounts } from "@/lib/hooks/use-nav-counts"
-
-/**
- * Nav item configuration with permission and deployment requirements.
- */
-interface NavItem {
-  title: string
-  href: string
-  icon: React.ComponentType<{ className?: string }>
-  /** Required permission to show this nav item */
-  permission?: string
-  /** Alternative: any of these permissions */
-  anyPermission?: string[]
-  /** Only show in cloud mode */
-  cloudOnly?: boolean
-  /** Key into NavCounts for dynamic badge */
-  countKey?: string
-  /** Context: 'instance' = only when no org selected, 'org' = only when org selected, 'both' = always */
-  context?: "instance" | "org" | "both"
-}
-
-const navItems: NavItem[] = [
-  {
-    title: "Overview",
-    href: "/overview",
-    icon: LayoutDashboard,
-    context: "both",
-  },
-  {
-    title: "Organizations",
-    href: "/organizations",
-    icon: Building2,
-    permission: "org.read",
-    context: "instance",
-    countKey: "organizations",
-  },
-  {
-    title: "Users",
-    href: "/users",
-    icon: Users,
-    permission: "user.read",
-    context: "both",
-    countKey: "users",
-  },
-  {
-    title: "Projects",
-    href: "/projects",
-    icon: FolderKanban,
-    permission: "project.read",
-    context: "both",
-    countKey: "projects",
-  },
-  {
-    title: "Applications",
-    href: "/applications",
-    icon: AppWindow,
-    permission: "project.app.read",
-    context: "both",
-    countKey: "applications",
-  },
-  {
-    title: "Actions",
-    href: "/actions",
-    icon: Zap,
-    anyPermission: ["iam.action.read", "org.action.read"],
-    context: "both",
-  },
-  {
-    title: "Sessions",
-    href: "/sessions",
-    icon: KeyRound,
-    permission: "session.read",
-    context: "instance",
-  },
-  {
-    title: "Administrators",
-    href: "/administrators",
-    icon: UserCog,
-    anyPermission: ["iam.member.read", "org.member.read"],
-    context: "both",
-  },
-  {
-    title: "Activity Log",
-    href: "/activity",
-    icon: Activity,
-    permission: "events.read",
-    context: "both",
-  },
-  {
-    title: "Settings & Policies",
-    href: "/settings",
-    icon: Shield,
-    anyPermission: ["iam.policy.read", "policy.read"],
-    context: "both",
-  },
-]
+import { type NavItem, coreNavItems, filterByContext } from "./nav-items"
 
 const cloudOnlyItems: NavItem[] = [
   {
     title: "Instances",
-    href: "/instances",
+    path: "/instances",
     icon: Server,
     cloudOnly: true,
   },
   {
     title: "Analytics",
-    href: "/analytics",
+    path: "/analytics",
     icon: BarChart3,
     cloudOnly: true,
   },
   {
     title: "Billing",
-    href: "/billing",
+    path: "/billing",
     icon: CreditCard,
     cloudOnly: true,
   },
   {
     title: "Support",
-    href: "/support",
+    path: "/support",
     icon: LifeBuoy,
     cloudOnly: true,
   },
@@ -170,22 +65,14 @@ export function AppSidebar() {
 
   const hasOrgSelected = currentOrganization != null
 
-  /**
-   * Check if a nav item should be visible based on permissions, deployment mode,
-   * and org context.
-   */
   const isVisible = (item: NavItem): boolean => {
     if (item.cloudOnly && !isCloud) return false
     if (item.permission && !can(item.permission)) return false
     if (item.anyPermission && !canAny(item.anyPermission)) return false
-    // Context filtering
-    const ctx = item.context ?? "both"
-    if (ctx === "instance" && hasOrgSelected) return false
-    if (ctx === "org" && !hasOrgSelected) return false
     return true
   }
 
-  const visibleItems = navItems.filter(isVisible)
+  const visibleItems = filterByContext(coreNavItems, hasOrgSelected).filter(isVisible)
   const visibleCloudItems = cloudOnlyItems.filter(isVisible)
 
   return (
@@ -227,13 +114,13 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {visibleItems.map((item) => (
-                <SidebarMenuItem key={item.href}>
+                <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton
                     asChild
-                    isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
+                    isActive={pathname === item.path || pathname.startsWith(item.path + "/")}
                     className="h-9"
                   >
-                    <Link href={item.href} className="flex items-center justify-between">
+                    <Link href={item.path} className="flex items-center justify-between">
                       <span className="flex items-center gap-2.5">
                         <item.icon className="h-4 w-4" />
                         <span>{item.title}</span>
@@ -262,13 +149,13 @@ export function AppSidebar() {
               <SidebarGroupContent className="mt-1">
                 <SidebarMenu>
                   {visibleCloudItems.map((item) => (
-                    <SidebarMenuItem key={item.href}>
+                    <SidebarMenuItem key={item.path}>
                       <SidebarMenuButton
                         asChild
-                        isActive={pathname === item.href}
+                        isActive={pathname === item.path}
                         className="h-9"
                       >
-                        <Link href={item.href} className="flex items-center gap-2.5">
+                        <Link href={item.path} className="flex items-center gap-2.5">
                           <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
                         </Link>

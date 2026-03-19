@@ -1,25 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import {
-  Users,
-  FolderKanban,
-  AppWindow,
-  Building2,
-  Zap,
-  BarChart3,
-  KeyRound,
-  UserCog,
-  Activity,
-  LayoutDashboard,
-  Shield,
   Sparkles,
   CreditCard,
   LifeBuoy,
   Server,
-  ChevronDown,
-  Check,
 } from "lucide-react"
 import {
   Sidebar,
@@ -34,18 +21,10 @@ import {
   SidebarFooter,
   SidebarSeparator,
 } from "@/components/ui/sidebar"
-import { useState, useRef, useEffect } from "react"
-
-/**
- * Cloud-specific sidebar — instance-scoped paths.
- * Detects the current instance ID from the URL and prefixes all links.
- */
-
-interface NavItem {
-  title: string
-  path: string // relative to /console/instances/[id]/
-  icon: React.ComponentType<{ className?: string }>
-}
+import { Badge } from "@/components/ui/badge"
+import { useAppContext } from "@/lib/context/app-context"
+import { useNavCounts } from "@/lib/hooks/use-nav-counts"
+import { coreNavItems, filterByContext } from "@/components/layout/nav-items"
 
 interface InstanceInfo {
   id: string
@@ -53,27 +32,25 @@ interface InstanceInfo {
   url: string
 }
 
-const instanceItems: NavItem[] = [
-  { title: "Overview", path: "overview", icon: LayoutDashboard },
-  { title: "Organizations", path: "organizations", icon: Building2 },
-  { title: "Users", path: "users", icon: Users },
-  { title: "Projects", path: "projects", icon: FolderKanban },
-  { title: "Applications", path: "applications", icon: AppWindow },
-  { title: "Actions", path: "actions", icon: Zap },
-  { title: "Sessions", path: "sessions", icon: KeyRound },
-  { title: "Administrators", path: "administrators", icon: UserCog },
-  { title: "Activity Log", path: "activity", icon: Activity },
-  { title: "Settings & Policies", path: "settings", icon: Shield },
-]
-
+/**
+ * Cloud-specific sidebar — imports shared nav items from console,
+ * prefixes links with /console/instances/{id}/, and adds cloud-only footer items.
+ */
 export function CloudSidebar({ instances }: { instances: InstanceInfo[] }) {
   const pathname = usePathname()
+  const { currentOrganization } = useAppContext()
 
   // Detect instance from URL: /console/instances/{id}/...
   const instanceMatch = pathname.match(/^\/console\/instances\/([^/]+)/)
   const currentInstanceId = instanceMatch?.[1]
   const currentInstance = instances.find((i) => i.id === currentInstanceId)
   const instanceBase = currentInstanceId ? `/console/instances/${currentInstanceId}` : null
+
+  // Only fetch/show counts when an instance is selected
+  const navCounts = useNavCounts(currentInstanceId ? (currentOrganization?.id ?? null) : undefined)
+
+  const hasOrgSelected = currentOrganization != null
+  const visibleItems = filterByContext(coreNavItems, hasOrgSelected)
 
   return (
     <Sidebar>
@@ -111,7 +88,7 @@ export function CloudSidebar({ instances }: { instances: InstanceInfo[] }) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Instance section — always shown */}
+        {/* Instance section — shared nav items from console */}
         {instances.length > 0 && (
           <>
             <SidebarSeparator />
@@ -121,15 +98,22 @@ export function CloudSidebar({ instances }: { instances: InstanceInfo[] }) {
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {instanceItems.map((item) => {
+                  {visibleItems.map((item) => {
                     const base = instanceBase || `/console/instances/${instances[0]?.id}`
                     const href = `${base}/${item.path}`
                     return (
                       <SidebarMenuItem key={item.path}>
                         <SidebarMenuButton asChild isActive={pathname === href || pathname.startsWith(href + "/")}>
-                          <Link href={href}>
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
+                          <Link href={href} className="flex items-center justify-between">
+                            <span className="flex items-center gap-2">
+                              <item.icon className="h-4 w-4" />
+                              <span>{item.title}</span>
+                            </span>
+                            {item.countKey && navCounts && navCounts[item.countKey as keyof typeof navCounts] > 0 && (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal tabular-nums">
+                                {navCounts[item.countKey as keyof typeof navCounts]}
+                              </Badge>
+                            )}
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
