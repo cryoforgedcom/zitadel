@@ -1,12 +1,12 @@
 import { ConsoleLayout } from '@/components/layout/console-layout'
 import { getInstances } from '@/lib/instances'
-import { isInstanceConfigured } from '@/lib/api/transport'
-import { AppProvider } from '@/lib/context/app-context'
-import { PermissionProvider } from '@/lib/permissions/context'
-import { DeploymentProvider } from '@/lib/deployment/context'
-import { Toaster } from '@/components/ui/toaster'
-import { discoverUserRoles } from '@/lib/api/auth'
-import { listOrganizations } from '@/lib/api/organizations'
+import { isInstanceConfigured } from '@zitadel/react/api/transport'
+import { AppProvider } from '@zitadel/react/context/app-context'
+import { PermissionProvider } from '@zitadel/react/context/permissions'
+import { DeploymentProvider } from '@zitadel/react/context/deployment'
+import { Toaster } from '@zitadel/react/components/ui/toaster'
+import { discoverUserRoles } from '@zitadel/react/api/auth'
+import { listOrganizations } from '@zitadel/react/api/organizations'
 import { toJson } from '@zitadel/client'
 import { ListOrganizationsResponseSchema } from '@zitadel/proto/zitadel/org/v2/org_service_pb'
 
@@ -14,7 +14,7 @@ import { ListOrganizationsResponseSchema } from '@zitadel/proto/zitadel/org/v2/o
  * Console layout — wraps /console/* routes.
  * IMPORTANT: All imports use @/ (cloud's own modules) because the
  * re-exported console page components also resolve @/ to cloud.
- * Using @console/* here would create separate React Context objects.
+ * Using @zitadel/react/* here would create separate React Context objects.
  */
 export default async function ConsoleRouteLayout({
   children,

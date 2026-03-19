@@ -9,7 +9,7 @@ const nextConfig = {
   // Required for @connectrpc/connect-node (gRPC)
   serverExternalPackages: ["@connectrpc/connect-node"],
   // Allow importing components from the console app
-  transpilePackages: ["@zitadel/client", "@zitadel/proto", "@zitadel/console"],
+  transpilePackages: ["@zitadel/client", "@zitadel/proto", "@zitadel/react"],
   async rewrites() {
     // Console app pages use links like /users, /organizations etc.
     // (because the standalone console has basePath: "/console").

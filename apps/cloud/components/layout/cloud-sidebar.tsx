@@ -20,11 +20,11 @@ import {
   SidebarHeader,
   SidebarFooter,
   SidebarSeparator,
-} from "@/components/ui/sidebar"
-import { Badge } from "@/components/ui/badge"
-import { useAppContext } from "@/lib/context/app-context"
-import { useNavCounts } from "@/lib/hooks/use-nav-counts"
-import { coreNavItems, filterByContext } from "@/components/layout/nav-items"
+} from "@zitadel/react/components/ui/sidebar"
+import { Badge } from "@zitadel/react/components/ui/badge"
+import { useAppContext } from "@zitadel/react/context/app-context"
+import { useNavCounts } from "@zitadel/react/hooks/use-nav-counts"
+import { coreNavItems, filterByContext } from "@zitadel/react/components/layout/nav-items"
 
 interface InstanceInfo {
   id: string

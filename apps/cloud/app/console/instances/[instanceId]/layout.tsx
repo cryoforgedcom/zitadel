@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { getInstances } from "@/lib/instances"
-import { ConsoleLinkProvider } from "@/lib/context/link-context"
+import { ConsoleLinkProvider } from "@zitadel/react/context/link-context"
 
 /**
  * Instance-scoped layout.

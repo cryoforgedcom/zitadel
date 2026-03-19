@@ -1,19 +1,19 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@zitadel/react/components/ui/card"
+import { Button } from "@zitadel/react/components/ui/button"
+import { Input } from "@zitadel/react/components/ui/input"
+import { Textarea } from "@zitadel/react/components/ui/textarea"
+import { Label } from "@zitadel/react/components/ui/label"
+import { Badge } from "@zitadel/react/components/ui/badge"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@zitadel/react/components/ui/select"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,7 +22,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+} from "@zitadel/react/components/ui/alert-dialog"
 import {
   LifeBuoy,
   BookOpen,

@@ -8,8 +8,8 @@ import {
   Building2,
   Globe,
 } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@zitadel/react/components/ui/card"
+import { Badge } from "@zitadel/react/components/ui/badge"
 import { getInstances } from "@/lib/instances"
 
 /**

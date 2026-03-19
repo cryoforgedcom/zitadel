@@ -1,9 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
+import { SidebarProvider, SidebarInset } from "@zitadel/react/components/ui/sidebar"
 import { CloudSidebar } from "@/components/layout/cloud-sidebar"
-import { Header } from "@/components/layout/header"
+import { Header } from "@zitadel/react/components/layout/header"
 
 interface InstanceInfo {
   id: string

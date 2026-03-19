@@ -1,2 +1,1 @@
-"use client"
-export { useConsoleRouter } from "@console/hooks/use-console-router"
+export { useConsoleRouter } from "@zitadel/react/hooks/use-console-router"

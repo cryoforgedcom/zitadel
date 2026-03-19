@@ -1,1 +1,1 @@
-export { default } from "@console/app/sessions/page"
+export { default } from "@zitadel/react/pages/sessions/page"

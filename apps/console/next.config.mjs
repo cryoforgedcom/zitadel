@@ -10,6 +10,8 @@ const nextConfig = {
   },
   // Required for @connectrpc/connect-node (gRPC)
   serverExternalPackages: ["@connectrpc/connect-node"],
+  // Transpile workspace packages
+  transpilePackages: ["@zitadel/client", "@zitadel/proto", "@zitadel/react"],
 };
 
 export default nextConfig;
