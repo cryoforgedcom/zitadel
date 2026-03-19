@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useTransition } from "react"
 import { useConsoleRouter } from "../../hooks/use-console-router"
 import { StatusBadge } from "../../components/ui/status-badge"
 import { Button } from "../../components/ui/button"
-import { Input } from "../../components/ui/input"
+import { FilterBar, type FilterDef } from "../../components/ui/filter-bar"
 import {
   Table,
   TableBody,
@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "../../components/ui/table"
-import { FolderKanban, Plus, Search, X } from "lucide-react"
+import { FolderKanban, Plus } from "lucide-react"
 import { RequirePermission } from "../../components/auth/require-permission"
 import { TablePagination } from "../../components/ui/table-pagination"
 import { TableSkeleton } from "../../components/skeletons/table-skeleton"
@@ -53,6 +53,7 @@ export function ProjectsClient({
 }: ProjectsClientProps) {
   const router = useConsoleRouter()
   const [searchQuery, setSearchQuery] = useState("")
+  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({})
   const [projects, setProjects] = useState(initialProjects)
   const [totalResult, setTotalResult] = useState(initialTotalResult)
   const [page, setPage] = useState(0)
@@ -94,16 +95,47 @@ export function ProjectsClient({
   }, [organizations])
 
   const filteredProjects = useMemo(() => {
-    if (!searchQuery) return uniqueProjects
-    const q = searchQuery.toLowerCase()
-    return uniqueProjects.filter((p: any) => {
-      const orgName = orgNameMap[p.organizationId] ?? ""
-      return (
-        (p.name ?? "").toLowerCase().includes(q) ||
-        orgName.toLowerCase().includes(q)
-      )
-    })
-  }, [uniqueProjects, searchQuery, orgNameMap])
+    let result = uniqueProjects
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter((p: any) => {
+        const orgName = orgNameMap[p.organizationId] ?? ""
+        return (
+          (p.name ?? "").toLowerCase().includes(q) ||
+          orgName.toLowerCase().includes(q)
+        )
+      })
+    }
+    if (activeFilters.state) {
+      result = result.filter((p: any) => (p.state ?? "PROJECT_STATE_UNSPECIFIED") === activeFilters.state)
+    }
+    if (activeFilters.name) {
+      const v = activeFilters.name.toLowerCase()
+      result = result.filter((p: any) => (p.name ?? "").toLowerCase().includes(v))
+    }
+    if (activeFilters.org) {
+      const v = activeFilters.org.toLowerCase()
+      result = result.filter((p: any) => {
+        const orgName = orgNameMap[p.organizationId] ?? ""
+        return orgName.toLowerCase().includes(v) ||
+          (p.organizationId ?? "").toLowerCase().includes(v)
+      })
+    }
+    return result
+  }, [uniqueProjects, searchQuery, orgNameMap, activeFilters])
+
+  const projectFilters: FilterDef[] = [
+    { key: "name", label: "name" },
+    { key: "org", label: "org" },
+    {
+      key: "state",
+      label: "state",
+      options: [
+        { value: "PROJECT_STATE_ACTIVE", label: "active" },
+        { value: "PROJECT_STATE_INACTIVE", label: "inactive" },
+      ],
+    },
+  ]
 
   if (error) {
     return (
@@ -143,28 +175,23 @@ export function ProjectsClient({
         </RequirePermission>
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search projects..."
-            className="pl-9 pr-9"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
-              onClick={() => setSearchQuery("")}
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          )}
-        </div>
-      </div>
+      {/* Filters */}
+      <FilterBar
+        searchPlaceholder="Search projects..."
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        filters={projectFilters}
+        activeFilters={activeFilters}
+        onFilterChange={(key, value) => {
+          setActiveFilters((prev) => {
+            if (value === null) {
+              const { [key]: _, ...rest } = prev
+              return rest
+            }
+            return { ...prev, [key]: value }
+          })
+        }}
+      />
 
       {/* Table — Columns: Project | Organization | Status | Created | Updated */}
       {isRefetching ? (

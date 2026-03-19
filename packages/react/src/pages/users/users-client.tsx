@@ -15,7 +15,7 @@ import {
 } from "lucide-react"
 import { Button } from "../../components/ui/button"
 import { StatusBadge } from "../../components/ui/status-badge"
-import { Input } from "../../components/ui/input"
+import { FilterBar, type FilterDef } from "../../components/ui/filter-bar"
 import {
   Table,
   TableBody,
@@ -114,6 +114,7 @@ export function UsersClient({
   const router = useConsoleRouter()
   const { currentOrganization } = useAppContext()
   const [searchQuery, setSearchQuery] = useState("")
+  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({})
   const [addUserOpen, setAddUserOpen] = useState(false)
   const [users, setUsers] = useState(initialUsers)
   const [organizations, setOrganizations] = useState(initialOrgs)
@@ -149,19 +150,104 @@ export function UsersClient({
   }, [organizations])
 
   const filteredUsers = useMemo(() => {
-    if (!searchQuery) return users
-    const q = searchQuery.toLowerCase()
-    return users.filter((user: any) => {
-      const info = getUserDisplayInfo(user)
-      const orgName = orgNameMap[user.details?.resourceOwner] ?? ""
-      return (
-        info.displayName.toLowerCase().includes(q) ||
-        info.email.toLowerCase().includes(q) ||
-        (user.username ?? "").toLowerCase().includes(q) ||
-        orgName.toLowerCase().includes(q)
+    let result = users
+    // Free-text search
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter((user: any) => {
+        const info = getUserDisplayInfo(user)
+        const orgName = orgNameMap[user.details?.resourceOwner] ?? ""
+        return (
+          info.displayName.toLowerCase().includes(q) ||
+          info.email.toLowerCase().includes(q) ||
+          (user.username ?? "").toLowerCase().includes(q) ||
+          orgName.toLowerCase().includes(q)
+        )
+      })
+    }
+    // Filter tokens
+    if (activeFilters.state) {
+      result = result.filter((user: any) => user.state === activeFilters.state)
+    }
+    if (activeFilters.type) {
+      result = result.filter((user: any) => {
+        if (activeFilters.type === "human") return !!user.human
+        if (activeFilters.type === "machine") return !!user.machine
+        return true
+      })
+    }
+    if (activeFilters.username) {
+      const v = activeFilters.username.toLowerCase()
+      result = result.filter((u: any) => (u.username ?? "").toLowerCase().includes(v))
+    }
+    if (activeFilters.firstname) {
+      const v = activeFilters.firstname.toLowerCase()
+      result = result.filter((u: any) => (u.human?.profile?.givenName ?? "").toLowerCase().includes(v))
+    }
+    if (activeFilters.lastname) {
+      const v = activeFilters.lastname.toLowerCase()
+      result = result.filter((u: any) => (u.human?.profile?.familyName ?? "").toLowerCase().includes(v))
+    }
+    if (activeFilters.displayname) {
+      const v = activeFilters.displayname.toLowerCase()
+      result = result.filter((u: any) => {
+        const info = getUserDisplayInfo(u)
+        return info.displayName.toLowerCase().includes(v)
+      })
+    }
+    if (activeFilters.email) {
+      const v = activeFilters.email.toLowerCase()
+      result = result.filter((u: any) => (u.human?.email?.email ?? "").toLowerCase().includes(v))
+    }
+    if (activeFilters.phone) {
+      const v = activeFilters.phone.toLowerCase()
+      result = result.filter((u: any) => (u.human?.phone?.phone ?? "").toLowerCase().includes(v))
+    }
+    if (activeFilters.loginname) {
+      const v = activeFilters.loginname.toLowerCase()
+      result = result.filter((u: any) =>
+        (u.loginNames ?? []).some((ln: string) => ln.toLowerCase().includes(v))
       )
-    })
-  }, [users, searchQuery, orgNameMap])
+    }
+    if (activeFilters.org) {
+      const v = activeFilters.org.toLowerCase()
+      result = result.filter((u: any) => {
+        const orgName = orgNameMap[u.details?.resourceOwner] ?? ""
+        return orgName.toLowerCase().includes(v) ||
+          (u.details?.resourceOwner ?? "").toLowerCase().includes(v)
+      })
+    }
+    return result
+  }, [users, searchQuery, orgNameMap, activeFilters])
+
+  const userFilters: FilterDef[] = [
+    { key: "username", label: "username" },
+    { key: "firstname", label: "firstname" },
+    { key: "lastname", label: "lastname" },
+    { key: "displayname", label: "displayname" },
+    { key: "email", label: "email" },
+    { key: "phone", label: "phone" },
+    { key: "loginname", label: "loginname" },
+    { key: "org", label: "org" },
+    {
+      key: "state",
+      label: "state",
+      options: [
+        { value: "USER_STATE_ACTIVE", label: "active" },
+        { value: "USER_STATE_INACTIVE", label: "inactive" },
+        { value: "USER_STATE_LOCKED", label: "locked" },
+        { value: "USER_STATE_INITIAL", label: "initial" },
+      ],
+    },
+    {
+      key: "type",
+      label: "type",
+      options: [
+        { value: "human", label: "human" },
+        { value: "machine", label: "machine" },
+      ],
+    },
+  ]
 
   if (error) {
     return (
@@ -207,28 +293,23 @@ export function UsersClient({
         </RequirePermission>
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search users by name or email..."
-            className="pl-9 pr-9"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
-              onClick={() => setSearchQuery("")}
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          )}
-        </div>
-      </div>
+      {/* Filters */}
+      <FilterBar
+        searchPlaceholder="Search users by name or email..."
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        filters={userFilters}
+        activeFilters={activeFilters}
+        onFilterChange={(key, value) => {
+          setActiveFilters((prev) => {
+            if (value === null) {
+              const { [key]: _, ...rest } = prev
+              return rest
+            }
+            return { ...prev, [key]: value }
+          })
+        }}
+      />
 
       {/* Table */}
       {isRefetching ? (

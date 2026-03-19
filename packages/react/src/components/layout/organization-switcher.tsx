@@ -30,12 +30,16 @@ import {
 } from "../ui/dialog"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { createOrganization } from "../../api/create-organization"
+
+/** Pages that are only visible at instance level (no org selected) */
+const instanceOnlyPaths = ["/organizations", "/sessions"]
 
 export function OrganizationSwitcher() {
   const { currentOrganization, availableOrganizations, setCurrentOrganization } = useAppContext()
   const router = useRouter()
+  const pathname = usePathname()
   const [open, setOpen] = React.useState(false)
   const [showNewOrgDialog, setShowNewOrgDialog] = React.useState(false)
   const [newOrgName, setNewOrgName] = React.useState("")
@@ -110,6 +114,11 @@ export function OrganizationSwitcher() {
                     onSelect={() => {
                       setCurrentOrganization(org)
                       setOpen(false)
+                      // If on an instance-only page (e.g. /organizations), navigate to overview
+                      if (instanceOnlyPaths.some(p => pathname.endsWith(p) || pathname.endsWith(p + "/"))) {
+                        const overviewPath = pathname.replace(/\/[^/]+\/?$/, '/overview')
+                        router.push(overviewPath)
+                      }
                     }}
                     className="text-sm"
                   >

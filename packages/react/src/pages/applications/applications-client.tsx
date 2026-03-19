@@ -5,7 +5,7 @@ import { useConsoleRouter } from "../../hooks/use-console-router"
 import { StatusBadge } from "../../components/ui/status-badge"
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
-import { Input } from "../../components/ui/input"
+import { FilterBar, type FilterDef } from "../../components/ui/filter-bar"
 import {
   Table,
   TableBody,
@@ -16,8 +16,6 @@ import {
 } from "../../components/ui/table"
 import {
   AppWindow,
-  Search,
-  X,
   Globe,
   Server,
   Shield,
@@ -102,6 +100,7 @@ export function ApplicationsClient({
 }: ApplicationsClientProps) {
   const router = useConsoleRouter()
   const [searchQuery, setSearchQuery] = useState("")
+  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({})
   const [applications, setApplications] = useState(initialApplications)
   const [totalResult, setTotalResult] = useState(initialTotalResult)
   const [page, setPage] = useState(0)
@@ -121,14 +120,61 @@ export function ApplicationsClient({
   }, [page, pageSize])
 
   const filteredApps = useMemo(() => {
-    if (!searchQuery) return applications
-    const q = searchQuery.toLowerCase()
-    return applications.filter(
-      (app: any) =>
-        (app.name ?? "").toLowerCase().includes(q) ||
-        (getClientId(app) ?? "").toLowerCase().includes(q)
-    )
-  }, [applications, searchQuery])
+    let result = applications
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter(
+        (app: any) =>
+          (app.name ?? "").toLowerCase().includes(q) ||
+          (getClientId(app) ?? "").toLowerCase().includes(q)
+      )
+    }
+    if (activeFilters.type) {
+      result = result.filter((app: any) => {
+        const t = getAppType(app).label.toLowerCase()
+        return t === activeFilters.type
+      })
+    }
+    if (activeFilters.state) {
+      result = result.filter((app: any) => app.state === activeFilters.state)
+    }
+    if (activeFilters.name) {
+      const v = activeFilters.name.toLowerCase()
+      result = result.filter((app: any) => (app.name ?? "").toLowerCase().includes(v))
+    }
+    if (activeFilters.projectid) {
+      const v = activeFilters.projectid.toLowerCase()
+      result = result.filter((app: any) => (app.projectId ?? "").toLowerCase().includes(v))
+    }
+    if (activeFilters.clientid) {
+      const v = activeFilters.clientid.toLowerCase()
+      result = result.filter((app: any) => (getClientId(app) ?? "").toLowerCase().includes(v))
+    }
+    return result
+  }, [applications, searchQuery, activeFilters])
+
+  const appFilters: FilterDef[] = [
+    { key: "name", label: "name" },
+    { key: "projectid", label: "projectid" },
+    { key: "clientid", label: "clientid" },
+    {
+      key: "type",
+      label: "type",
+      options: [
+        { value: "oidc", label: "oidc" },
+        { value: "api", label: "api" },
+        { value: "saml", label: "saml" },
+      ],
+    },
+    {
+      key: "state",
+      label: "state",
+      options: [
+        { value: "APPLICATION_STATE_ACTIVE", label: "active" },
+        { value: "APPLICATION_STATE_INACTIVE", label: "inactive" },
+      ],
+    },
+  ]
 
   if (error) {
     return (
@@ -166,28 +212,23 @@ export function ApplicationsClient({
         </div>
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search applications..."
-            className="pl-9 pr-9"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
-              onClick={() => setSearchQuery("")}
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          )}
-        </div>
-      </div>
+      {/* Filters */}
+      <FilterBar
+        searchPlaceholder="Search applications..."
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        filters={appFilters}
+        activeFilters={activeFilters}
+        onFilterChange={(key, value) => {
+          setActiveFilters((prev) => {
+            if (value === null) {
+              const { [key]: _, ...rest } = prev
+              return rest
+            }
+            return { ...prev, [key]: value }
+          })
+        }}
+      />
 
       {/* Table */}
       {isRefetching ? (

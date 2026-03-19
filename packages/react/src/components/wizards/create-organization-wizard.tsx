@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Building2, Users, Settings, Globe } from "lucide-react"
+import { Building2, Plus, Trash2, User } from "lucide-react"
 import {
   StepWizard,
   StepContent,
@@ -14,23 +14,37 @@ import {
 } from "../ui/step-wizard"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
-import { Textarea } from "../ui/textarea"
-import { RadioGroup, RadioGroupItem } from "../ui/radio-group"
+import { Button } from "../ui/button"
 import { Checkbox } from "../ui/checkbox"
-import { cn } from "../../utils"
 import { useAppContext } from "../../context/app-context"
+import { createOrganization } from "../../api/create-organization"
+import { UserSearch } from "../ui/user-search"
+
+/** Available org member roles from ListOrgMemberRoles */
+const ORG_ROLES = [
+  { role: "ORG_OWNER", label: "Owner", description: "Full control over the organization" },
+  { role: "ORG_OWNER_VIEWER", label: "Owner Viewer", description: "Read-only view of org management" },
+  { role: "ORG_USER_MANAGER", label: "User Manager", description: "Manage users in the org" },
+  { role: "ORG_SETTINGS_MANAGER", label: "Settings Manager", description: "Manage org settings" },
+  { role: "ORG_USER_PERMISSION_EDITOR", label: "User Permission Editor", description: "Edit user permissions" },
+  { role: "ORG_PROJECT_PERMISSION_EDITOR", label: "Project Permission Editor", description: "Edit project permissions" },
+  { role: "ORG_PROJECT_CREATOR", label: "Project Creator", description: "Create projects" },
+  { role: "ORG_USER_SELF_MANAGER", label: "User Self Manager", description: "Self-manage user account" },
+  { role: "ORG_ADMIN_IMPERSONATOR", label: "Admin Impersonator", description: "Impersonate org admins" },
+  { role: "ORG_END_USER_IMPERSONATOR", label: "End User Impersonator", description: "Impersonate end users" },
+] as const
+
+interface AdminEntry {
+  userId: string
+  displayName: string
+  username: string
+  roles: string[]
+}
 
 const steps: WizardStep[] = [
-  { id: "details", title: "Organization Details", description: "Basic information" },
-  { id: "settings", title: "Settings", description: "Configure organization" },
-  { id: "admin", title: "Administrator", description: "Set up admin access" },
+  { id: "details", title: "Organization Details", description: "Name your organization" },
+  { id: "admins", title: "Administrators", description: "Add users and assign roles (optional)" },
   { id: "confirmation", title: "Confirmation", description: "Review and create" },
-]
-
-const orgTypes = [
-  { id: "company", name: "Company", description: "For business organizations", icon: Building2 },
-  { id: "team", name: "Team", description: "For departments or teams", icon: Users },
-  { id: "personal", name: "Personal", description: "For individual use", icon: Globe },
 ]
 
 interface CreateOrganizationWizardProps {
@@ -41,23 +55,54 @@ interface CreateOrganizationWizardProps {
 export function CreateOrganizationWizard({ open, onOpenChange }: CreateOrganizationWizardProps) {
   const router = useRouter()
   const { currentInstance } = useAppContext()
-  
-  const [orgName, setOrgName] = React.useState("")
-  const [orgType, setOrgType] = React.useState("company")
-  const [description, setDescription] = React.useState("")
-  const [domain, setDomain] = React.useState("")
-  const [verifyDomain, setVerifyDomain] = React.useState(false)
-  const [allowSelfRegistration, setAllowSelfRegistration] = React.useState(false)
-  const [adminEmail, setAdminEmail] = React.useState("")
-  const [adminName, setAdminName] = React.useState("")
-  const [createAsAdmin, setCreateAsAdmin] = React.useState(true)
 
-  const handleComplete = () => {
-    onOpenChange(false)
-    router.push("/organizations")
+  const [orgName, setOrgName] = React.useState("")
+  const [admins, setAdmins] = React.useState<AdminEntry[]>([])
+  const [isCreating, setIsCreating] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const addAdmin = () => {
+    setAdmins([...admins, { userId: "", displayName: "", username: "", roles: ["ORG_OWNER"] }])
   }
 
-  const selectedOrgType = orgTypes.find(t => t.id === orgType)
+  const removeAdmin = (index: number) => {
+    setAdmins(admins.filter((_, i) => i !== index))
+  }
+
+  const updateAdminUserId = (index: number, userId: string) => {
+    const updated = [...admins]
+    updated[index] = { ...updated[index], userId }
+    setAdmins(updated)
+  }
+
+  const toggleAdminRole = (index: number, role: string) => {
+    const updated = [...admins]
+    const current = updated[index].roles
+    if (current.includes(role)) {
+      updated[index] = { ...updated[index], roles: current.filter(r => r !== role) }
+    } else {
+      updated[index] = { ...updated[index], roles: [...current, role] }
+    }
+    setAdmins(updated)
+  }
+
+  const handleComplete = async () => {
+    if (!orgName.trim()) return
+    setIsCreating(true)
+    setError(null)
+    try {
+      // TODO: pass admins to createOrganization when API wrapper supports it
+      await createOrganization(orgName.trim())
+      onOpenChange(false)
+      setOrgName("")
+      setAdmins([])
+      router.refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create organization")
+    } finally {
+      setIsCreating(false)
+    }
+  }
 
   return (
     <StepWizard
@@ -67,11 +112,11 @@ export function CreateOrganizationWizard({ open, onOpenChange }: CreateOrganizat
       title="Create Organization"
       onComplete={handleComplete}
     >
-      {/* Step 1: Organization Details */}
+      {/* Step 1: Organization Name */}
       <StepContent stepId="details">
         <FormSection
           title="Organization Information"
-          description="Enter basic details about the organization"
+          description="The name must be unique across the instance."
         >
           <div className="space-y-4">
             <div className="space-y-2">
@@ -81,106 +126,11 @@ export function CreateOrganizationWizard({ open, onOpenChange }: CreateOrganizat
                 placeholder="Acme Corporation"
                 value={orgName}
                 onChange={(e) => setOrgName(e.target.value)}
+                maxLength={200}
               />
               <p className="text-xs text-muted-foreground">
-                This will be displayed across the platform
+                Max 200 characters. This will be displayed across the platform.
               </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Description (Optional)</Label>
-              <Textarea
-                id="description"
-                placeholder="A brief description of your organization..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-              />
-            </div>
-          </div>
-        </FormSection>
-
-        <FormSection title="Organization Type" className="mt-6">
-          <RadioGroup value={orgType} onValueChange={setOrgType} className="space-y-2">
-            {orgTypes.map((type) => {
-              const Icon = type.icon
-              return (
-                <label
-                  key={type.id}
-                  className={cn(
-                    "flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-colors",
-                    orgType === type.id ? "border-foreground bg-muted/50" : "border-border hover:bg-muted/30"
-                  )}
-                >
-                  <RadioGroupItem value={type.id} id={type.id} className="mt-0.5" />
-                  <div className="flex items-start gap-3">
-                    <Icon className="h-5 w-5 mt-0.5 text-muted-foreground" />
-                    <div>
-                      <span className="font-medium text-sm">{type.name}</span>
-                      <p className="text-xs text-muted-foreground">{type.description}</p>
-                    </div>
-                  </div>
-                </label>
-              )
-            })}
-          </RadioGroup>
-        </FormSection>
-
-        <StepActions nextDisabled={!orgName} />
-      </StepContent>
-
-      {/* Step 2: Settings */}
-      <StepContent stepId="settings">
-        <FormSection
-          title="Domain Settings"
-          description="Configure domain-based features for your organization"
-        >
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="domain">Primary Domain (Optional)</Label>
-              <Input
-                id="domain"
-                placeholder="acme.com"
-                value={domain}
-                onChange={(e) => setDomain(e.target.value.toLowerCase())}
-              />
-              <p className="text-xs text-muted-foreground">
-                Users with this email domain can be auto-assigned to this organization
-              </p>
-            </div>
-
-            {domain && (
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="verifyDomain"
-                  checked={verifyDomain}
-                  onCheckedChange={(checked) => setVerifyDomain(checked === true)}
-                />
-                <label htmlFor="verifyDomain" className="text-sm cursor-pointer leading-relaxed">
-                  <span className="font-medium">Verify domain ownership</span>
-                  <p className="text-xs text-muted-foreground">
-                    Required for domain-based user provisioning
-                  </p>
-                </label>
-              </div>
-            )}
-          </div>
-        </FormSection>
-
-        <FormSection title="User Management" className="mt-6">
-          <div className="space-y-4">
-            <div className="flex items-start gap-2">
-              <Checkbox
-                id="selfRegistration"
-                checked={allowSelfRegistration}
-                onCheckedChange={(checked) => setAllowSelfRegistration(checked === true)}
-              />
-              <label htmlFor="selfRegistration" className="text-sm cursor-pointer leading-relaxed">
-                <span className="font-medium">Allow self-registration</span>
-                <p className="text-xs text-muted-foreground">
-                  Users can sign up and join this organization without an invite
-                </p>
-              </label>
             </div>
           </div>
         </FormSection>
@@ -191,126 +141,153 @@ export function CreateOrganizationWizard({ open, onOpenChange }: CreateOrganizat
           variant="default"
         />
 
-        <StepActions />
+        <StepActions nextDisabled={!orgName.trim()} />
       </StepContent>
 
-      {/* Step 3: Administrator */}
-      <StepContent stepId="admin">
+      {/* Step 2: Administrators (optional) */}
+      <StepContent stepId="admins">
         <FormSection
-          title="Organization Administrator"
-          description="Set up the first admin for this organization"
+          title="Organization Administrators"
+          description="Optionally add users as administrators. If no admins are specified, the organization can still be managed by any instance administrator."
         >
           <div className="space-y-4">
-            <div className="flex items-start gap-2">
-              <Checkbox
-                id="createAsAdmin"
-                checked={createAsAdmin}
-                onCheckedChange={(checked) => setCreateAsAdmin(checked === true)}
-              />
-              <label htmlFor="createAsAdmin" className="text-sm cursor-pointer leading-relaxed">
-                <span className="font-medium">Set me as the administrator</span>
-                <p className="text-xs text-muted-foreground">
-                  You will have full control over this organization
-                </p>
-              </label>
-            </div>
-
-            {!createAsAdmin && (
-              <div className="space-y-4 pt-4 border-t">
-                <div className="space-y-2">
-                  <Label htmlFor="adminName">Administrator Name</Label>
-                  <Input
-                    id="adminName"
-                    placeholder="John Doe"
-                    value={adminName}
-                    onChange={(e) => setAdminName(e.target.value)}
-                  />
+            {admins.map((admin, index) => (
+              <div key={index} className="rounded-lg border p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 space-y-2">
+                    {admin.userId ? (
+                      <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 shrink-0">
+                          <User className="h-3 w-3 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium text-sm">{admin.displayName}</span>
+                          <span className="text-xs text-muted-foreground ml-1.5">@{admin.username}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <UserSearch
+                        placeholder="Search for a user..."
+                        onSelect={(user) => {
+                          const updated = [...admins]
+                          updated[index] = {
+                            ...updated[index],
+                            userId: user.userId,
+                            displayName: user.displayName,
+                            username: user.username,
+                          }
+                          setAdmins(updated)
+                        }}
+                      />
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-9 w-9 shrink-0 text-destructive hover:text-destructive ${admin.userId ? 'mt-0.5' : 'mt-0'}`}
+                    onClick={() => removeAdmin(index)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="adminEmail">Administrator Email</Label>
-                  <Input
-                    id="adminEmail"
-                    type="email"
-                    placeholder="admin@acme.com"
-                    value={adminEmail}
-                    onChange={(e) => setAdminEmail(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    An invitation will be sent to this email
-                  </p>
+                  <Label className="text-xs">Roles (defaults to ORG_OWNER if none selected)</Label>
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {ORG_ROLES.map(({ role, label, description }) => (
+                      <div key={role} className="flex items-start gap-2">
+                        <Checkbox
+                          id={`${index}-${role}`}
+                          checked={admin.roles.includes(role)}
+                          onCheckedChange={() => toggleAdminRole(index, role)}
+                        />
+                        <label htmlFor={`${index}-${role}`} className="text-sm cursor-pointer leading-relaxed">
+                          <span className="font-medium">{label}</span>
+                          <span className="text-muted-foreground ml-1">— {description}</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            )}
+            ))}
+
+            <Button variant="outline" onClick={addAdmin} className="w-full">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Administrator
+            </Button>
           </div>
         </FormSection>
 
         <InfoBox
-          title="Administrator Permissions"
+          title="Note"
+          description="Instance administrators (IAM_OWNER) can always manage organizations regardless of org membership."
           variant="default"
-        >
-          <ul className="space-y-1 text-xs text-muted-foreground">
-            <li className="flex items-center gap-1.5">
-              <span className="h-1 w-1 rounded-full bg-foreground" />
-              Manage organization settings and branding
-            </li>
-            <li className="flex items-center gap-1.5">
-              <span className="h-1 w-1 rounded-full bg-foreground" />
-              Add and remove users
-            </li>
-            <li className="flex items-center gap-1.5">
-              <span className="h-1 w-1 rounded-full bg-foreground" />
-              Create and manage projects
-            </li>
-            <li className="flex items-center gap-1.5">
-              <span className="h-1 w-1 rounded-full bg-foreground" />
-              Configure authentication policies
-            </li>
-          </ul>
-        </InfoBox>
+        />
 
-        <StepActions nextDisabled={!createAsAdmin && (!adminName || !adminEmail)} />
+        <StepActions />
       </StepContent>
 
-      {/* Step 4: Confirmation */}
+      {/* Step 3: Confirmation */}
       <StepContent stepId="confirmation">
         <FormSection title="Review Organization">
           <div className="rounded-lg border divide-y">
             <ParameterRow label="Name" value={orgName || "—"} />
-            <ParameterRow label="Type" value={selectedOrgType?.name || "—"} />
-            {description && <ParameterRow label="Description" value={description} />}
-            {domain && <ParameterRow label="Domain" value={domain} />}
-            <ParameterRow 
-              label="Self-Registration" 
-              value={allowSelfRegistration ? "Enabled" : "Disabled"} 
-            />
-            <ParameterRow 
-              label="Administrator" 
-              value={createAsAdmin ? "You" : adminName || "—"} 
+            <ParameterRow
+              label="Administrators"
+              value={
+                admins.length === 0
+                  ? "None — managed by instance admins"
+                  : `${admins.length} user${admins.length > 1 ? "s" : ""}`
+              }
             />
           </div>
         </FormSection>
 
+        {admins.length > 0 && (
+          <FormSection title="Admin Details" className="mt-4">
+            <div className="rounded-lg border divide-y">
+              {admins.map((admin, i) => (
+                <ParameterRow
+                  key={i}
+                  label={admin.displayName ? `${admin.displayName} (@${admin.username})` : "No user selected"}
+                  value={admin.roles.length > 0 ? admin.roles.join(", ") : "ORG_OWNER (default)"}
+                />
+              ))}
+            </div>
+          </FormSection>
+        )}
+
+        {error && (
+          <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
+            <p className="text-sm text-destructive">{error}</p>
+          </div>
+        )}
+
         <InfoBox
-          title="Organization Created"
+          title="What happens next"
           description="The organization will be immediately available after creation."
           variant="success"
         >
           <ul className="space-y-1 text-xs">
             <li className="flex items-center gap-1.5">
               <span className="h-1 w-1 rounded-full bg-green-600" />
-              {createAsAdmin ? "You" : adminName} will be set as owner
+              Organization is created with a generated domain
             </li>
-            {domain && (
+            {admins.length > 0 && (
               <li className="flex items-center gap-1.5">
                 <span className="h-1 w-1 rounded-full bg-green-600" />
-                Domain {domain} will be associated
+                {admins.length} admin{admins.length > 1 ? "s" : ""} will be assigned
               </li>
             )}
+            <li className="flex items-center gap-1.5">
+              <span className="h-1 w-1 rounded-full bg-green-600" />
+              Custom domains can be added afterwards
+            </li>
           </ul>
         </InfoBox>
 
-        <StepActions nextLabel="Create Organization" />
+        <StepActions nextLabel={isCreating ? "Creating..." : "Create Organization"} />
       </StepContent>
     </StepWizard>
   )

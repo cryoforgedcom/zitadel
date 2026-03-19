@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useMemo, useEffect, useTransition } from "react"
+import { CreateOrganizationWizard } from "../../components/wizards/create-organization-wizard"
 import { useConsoleRouter } from "../../hooks/use-console-router"
-import { Building2, Plus, Search, X } from "lucide-react"
+import { Building2, Plus } from "lucide-react"
 import { Button } from "../../components/ui/button"
 import { StatusBadge } from "../../components/ui/status-badge"
-import { Input } from "../../components/ui/input"
+import { FilterBar, type FilterDef } from "../../components/ui/filter-bar"
 import {
   Table,
   TableBody,
@@ -52,11 +53,19 @@ export function OrganizationsClient({
 }: OrganizationsClientProps) {
   const router = useConsoleRouter()
   const [searchQuery, setSearchQuery] = useState("")
+  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({})
   const [organizations, setOrganizations] = useState(initialOrgs)
   const [totalResult, setTotalResult] = useState(initialTotalResult)
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(10)
   const [isRefetching, startTransition] = useTransition()
+  const [showCreateWizard, setShowCreateWizard] = useState(false)
+
+  // Sync state when server-side props change (e.g. after router.refresh())
+  useEffect(() => {
+    setOrganizations(initialOrgs)
+    setTotalResult(initialTotalResult)
+  }, [initialOrgs, initialTotalResult])
 
   useEffect(() => {
     startTransition(async () => {
@@ -71,12 +80,37 @@ export function OrganizationsClient({
   }, [page, pageSize])
 
   const filteredOrgs = useMemo(() => {
-    if (!searchQuery) return organizations
-    const q = searchQuery.toLowerCase()
-    return organizations.filter((org: any) =>
-      org.name?.toLowerCase().includes(q)
-    )
-  }, [organizations, searchQuery])
+    let result = organizations
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter((org: any) => org.name?.toLowerCase().includes(q))
+    }
+    if (activeFilters.state) {
+      result = result.filter((org: any) => org.state === activeFilters.state)
+    }
+    if (activeFilters.name) {
+      const v = activeFilters.name.toLowerCase()
+      result = result.filter((org: any) => (org.name ?? "").toLowerCase().includes(v))
+    }
+    if (activeFilters.domain) {
+      const v = activeFilters.domain.toLowerCase()
+      result = result.filter((org: any) => (org.primaryDomain ?? "").toLowerCase().includes(v))
+    }
+    return result
+  }, [organizations, searchQuery, activeFilters])
+
+  const orgFilters: FilterDef[] = [
+    { key: "name", label: "name" },
+    { key: "domain", label: "domain" },
+    {
+      key: "state",
+      label: "state",
+      options: [
+        { value: "ORGANIZATION_STATE_ACTIVE", label: "active" },
+        { value: "ORGANIZATION_STATE_INACTIVE", label: "inactive" },
+      ],
+    },
+  ]
 
   if (error) {
     return (
@@ -113,35 +147,31 @@ export function OrganizationsClient({
           </p>
         </div>
         <RequirePermission permission="org.create">
-          <Button>
+          <Button onClick={() => setShowCreateWizard(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Create Organization
           </Button>
         </RequirePermission>
+        <CreateOrganizationWizard open={showCreateWizard} onOpenChange={setShowCreateWizard} />
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search organizations..."
-            className="pl-9 pr-9"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
-              onClick={() => setSearchQuery("")}
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          )}
-        </div>
-      </div>
+      {/* Filters */}
+      <FilterBar
+        searchPlaceholder="Search organizations..."
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        filters={orgFilters}
+        activeFilters={activeFilters}
+        onFilterChange={(key, value) => {
+          setActiveFilters((prev) => {
+            if (value === null) {
+              const { [key]: _, ...rest } = prev
+              return rest
+            }
+            return { ...prev, [key]: value }
+          })
+        }}
+      />
 
       {/* Table */}
       {isRefetching ? (
