@@ -102,6 +102,8 @@ type sessionConditions interface {
 	ExistsMetadata(condition database.Condition) database.Condition
 	// MetadataConditions returns the conditions for the metadata fields.
 	MetadataConditions() SessionMetadataConditions
+
+	Permission1CheckCondition(permission string, raiseIfDenied bool) database.Condition
 }
 
 type sessionChanges interface {

@@ -8,19 +8,19 @@ import (
 
 type CheckPermissionOpt func(*permissionCondition)
 
-func WithOrganizationID(organizationID string) CheckPermissionOpt {
+func WithOrganizationID(organizationID database.Column) CheckPermissionOpt {
 	return func(p *permissionCondition) {
 		p.organizationID = &organizationID
 	}
 }
 
-func WithProjectID(projectID string) CheckPermissionOpt {
+func WithProjectID(projectID database.Column) CheckPermissionOpt {
 	return func(p *permissionCondition) {
 		p.projectID = &projectID
 	}
 }
 
-func WithProjectGrantID(projectGrantID string) CheckPermissionOpt {
+func WithProjectGrantID(projectGrantID database.Column) CheckPermissionOpt {
 	return func(p *permissionCondition) {
 		p.projectGrantID = &projectGrantID
 	}
@@ -32,7 +32,7 @@ func WithRaiseIfDenied() CheckPermissionOpt {
 	}
 }
 
-func CheckPermission(instanceID, userID, permission string, opts ...CheckPermissionOpt) database.Condition {
+func CheckPermission(instanceID, userID database.Column, permission string, opts ...CheckPermissionOpt) database.Condition {
 	cond := &permissionCondition{
 		instanceID: instanceID,
 		userID:     userID,
@@ -45,13 +45,13 @@ func CheckPermission(instanceID, userID, permission string, opts ...CheckPermiss
 }
 
 type permissionCondition struct {
-	instanceID     string
-	userID         string
+	instanceID     database.Column
+	userID         database.Column
 	permission     string
 	raiseIfDenied  bool
-	organizationID *string
-	projectID      *string
-	projectGrantID *string
+	organizationID *database.Column
+	projectID      *database.Column
+	projectGrantID *database.Column
 }
 
 // IsRestrictingColumn implements [database.Condition].

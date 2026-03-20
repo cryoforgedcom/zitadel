@@ -73,7 +73,8 @@ func (cmd *DeleteSessionCommand) sessionDeletePermissionCheckCondition(ctx conte
 	}
 	return database.Or(
 		sessionRepo.UserIDCondition(authz.GetCtxData(ctx).UserID),
-		database.PermissionCheck(SessionDeletePermission, true), // TODO: implement check once permissions are implemented
+		sessionRepo.Permission1CheckCondition(SessionDeletePermission, true),
+		// database.PermissionCheck(SessionDeletePermission, true), // TODO: implement check once permissions are implemented
 	), nil
 }
 

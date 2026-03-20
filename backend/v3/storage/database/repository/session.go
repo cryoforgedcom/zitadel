@@ -513,6 +513,15 @@ func (s session) MetadataConditions() domain.SessionMetadataConditions {
 	return s.metadataRepo
 }
 
+func (s session) Permission1CheckCondition(permission string, raiseIfDenied bool) database.Condition {
+	opts := make([]CheckPermissionOpt, 0, 2)
+	opts = append(opts, WithOrganizationID(s.userOrganizationID()))
+	if raiseIfDenied {
+		opts = append(opts, WithRaiseIfDenied())
+	}
+	return CheckPermission(s.InstanceIDColumn(), s.UserIDColumn(), permission, opts...)
+}
+
 // -------------------------------------------------------------
 // columns
 // -------------------------------------------------------------
@@ -553,6 +562,10 @@ func (s session) ExpirationColumn() database.Column {
 // UserIDColumn implements [domain.sessionColumns].
 func (s session) UserIDColumn() database.Column {
 	return database.NewColumn(s.unqualifiedTableName(), "user_id")
+}
+
+func (s session) userOrganizationID() database.Column {
+	return database.NewColumn(user{}.unqualifiedTableName(), "organization_id")
 }
 
 // UserAgentIDColumn implements [domain.sessionColumns].
