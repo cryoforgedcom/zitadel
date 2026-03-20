@@ -103,7 +103,7 @@ type sessionConditions interface {
 	// MetadataConditions returns the conditions for the metadata fields.
 	MetadataConditions() SessionMetadataConditions
 
-	Permission1CheckCondition(permission string, raiseIfDenied bool) database.Condition
+	PermissionCondition(instanceID, userID, permission string, raiseIfDenied bool) database.Condition
 }
 
 type sessionChanges interface {

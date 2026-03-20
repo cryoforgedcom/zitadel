@@ -513,13 +513,14 @@ func (s session) MetadataConditions() domain.SessionMetadataConditions {
 	return s.metadataRepo
 }
 
-func (s session) Permission1CheckCondition(permission string, raiseIfDenied bool) database.Condition {
+// PermissionCondition implements [domain.sessionConditions].
+func (s session) PermissionCondition(instanceID, userID, permission string, raiseIfDenied bool) database.Condition {
 	opts := make([]CheckPermissionOpt, 0, 2)
-	opts = append(opts, WithOrganizationID(s.userOrganizationID()))
+	opts = append(opts, WithOrganizationIDColumn(s.userOrganizationID()))
 	if raiseIfDenied {
 		opts = append(opts, WithRaiseIfDenied())
 	}
-	return CheckPermission(s.InstanceIDColumn(), s.UserIDColumn(), permission, opts...)
+	return PermissionCondition(instanceID, userID, permission, opts...)
 }
 
 // -------------------------------------------------------------

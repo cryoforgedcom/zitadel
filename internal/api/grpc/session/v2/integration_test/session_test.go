@@ -995,8 +995,13 @@ func TestServer_DeleteSession_with_permission(t *testing.T) {
 			})
 			require.NoError(t, err)
 
+			//TODO: remove after create session also uses the relational tables directly
 			if stateCase.Enabled {
-				t.Skip("TODO: remove after permission checks are implemented in the relational tables")
+				time.Sleep(5 * time.Second)
+			}
+
+			if stateCase.Enabled {
+				// t.Skip("TODO: remove after permission checks are implemented in the relational tables")
 			}
 			// delete the new session by ORG_OWNER
 			_, err = stateCase.Inst.Client.SessionV2.DeleteSession(

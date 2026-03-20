@@ -164,7 +164,7 @@ func TestCheckPermission_DB(t *testing.T) {
 
 func executeCheckPermission(t *testing.T, executor database.QueryExecutor, instanceID, userID, permission string, opts ...repository.CheckPermissionOpt) (bool, error) {
 	t.Helper()
-	condition := repository.CheckPermission(instanceID, userID, permission, opts...)
+	condition := repository.PermissionCondition(instanceID, userID, permission, opts...)
 	builder := database.NewStatementBuilder("SELECT ")
 	condition.Write(builder)
 
