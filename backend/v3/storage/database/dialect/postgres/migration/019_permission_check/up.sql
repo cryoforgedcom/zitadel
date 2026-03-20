@@ -69,3 +69,18 @@ BEGIN
 	RETURN has_permission;
 END;
 $$;
+
+-- used to raise an error using a condition, 
+-- e.g. multiple OR conditions and last one calls this function to raise the error if all previous conditions failed.
+CREATE OR REPLACE FUNCTION zitadel.raise_exception(
+	p_id TEXT
+	, p_text TEXT
+) RETURNS VOID
+LANGUAGE plpgsql
+STABLE
+AS $$
+BEGIN
+	RAISE EXCEPTION p_text
+	USING ERRCODE = p_id;
+END;
+$$;

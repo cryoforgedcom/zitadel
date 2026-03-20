@@ -68,7 +68,7 @@ func (cmd *DeleteSessionCommand) sessionDeletePermissionCheckCondition(ctx conte
 		}
 		return database.Or(
 			sessionRepo.TokenIDCondition(tokenID),
-			database.PermissionCheck(SessionDeletePermission, true), // TODO(adlerhurst): database.RaiseException('ZIT01', 'blabla)
+			database.RaisePermissionDeniedException(),
 		), nil
 	}
 
