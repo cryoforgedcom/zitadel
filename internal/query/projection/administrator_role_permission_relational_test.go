@@ -47,7 +47,7 @@ func TestAdministratorRolePermissionReducers(t *testing.T) {
 		require.True(t, callReduce(t, rawTx, handler, event))
 		assert.Equal(t,
 			[]administratorRolePermission{{RoleName: "INSTANCE_OWNER", Permission: "instance.write"}},
-			listReducedAdministratorRolePermissions(t, tx, repo.NameCondition(database.TextOperationEqual, "INSTANCE_OWNER")),
+			listReducedAdministratorRolePermissions(t, tx, repo.RoleNameCondition(database.TextOperationEqual, "INSTANCE_OWNER")),
 		)
 	})
 }

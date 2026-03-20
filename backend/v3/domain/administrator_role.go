@@ -16,7 +16,7 @@ type administratorRoleColumns interface {
 type administratorRoleConditions interface {
 	PrimaryKeyCondition(instanceID, roleName, permission string) database.Condition
 	InstanceIDCondition(instanceID string) database.Condition
-	NameCondition(op database.TextOperation, name string) database.Condition
+	RoleNameCondition(op database.TextOperation, name string) database.Condition
 	PermissionCondition(op database.TextOperation, permission string) database.Condition
 }
 

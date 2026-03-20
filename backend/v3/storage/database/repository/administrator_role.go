@@ -52,7 +52,7 @@ func (a administratorRole) RemovePermissions(ctx context.Context, client databas
 func (a administratorRole) PrimaryKeyCondition(instanceID, roleName, permission string) database.Condition {
 	return database.And(
 		a.InstanceIDCondition(instanceID),
-		a.NameCondition(database.TextOperationEqual, roleName),
+		a.RoleNameCondition(database.TextOperationEqual, roleName),
 		a.PermissionCondition(database.TextOperationEqual, permission),
 	)
 }
@@ -62,8 +62,8 @@ func (a administratorRole) InstanceIDCondition(instanceID string) database.Condi
 	return database.NewTextCondition(a.InstanceIDColumn(), database.TextOperationEqual, instanceID)
 }
 
-// NameCondition implements [domain.AdministratorRoleRepository].
-func (a administratorRole) NameCondition(op database.TextOperation, name string) database.Condition {
+// RoleNameCondition implements [domain.AdministratorRoleRepository].
+func (a administratorRole) RoleNameCondition(op database.TextOperation, name string) database.Condition {
 	return database.NewTextCondition(a.RoleNameColumn(), op, name)
 }
 

@@ -61,7 +61,7 @@ func TestAdministratorRoleRepository_AddPermissions(t *testing.T) {
 			if tt.wantErr == nil {
 				assert.Equal(t,
 					tt.wantRows,
-					listAdministratorRolePermissions(t, savepoint, repo.NameCondition(database.TextOperationEqual, tt.role)),
+					listAdministratorRolePermissions(t, savepoint, repo.RoleNameCondition(database.TextOperationEqual, tt.role)),
 				)
 			}
 		})
@@ -121,7 +121,7 @@ func TestAdministratorRoleRepository_RemovePermissions(t *testing.T) {
 			if tt.wantErr == nil {
 				assert.Equal(t,
 					tt.wantRows,
-					listAdministratorRolePermissions(t, savepoint, repo.NameCondition(database.TextOperationEqual, "INSTANCE_OWNER")),
+					listAdministratorRolePermissions(t, savepoint, repo.RoleNameCondition(database.TextOperationEqual, "INSTANCE_OWNER")),
 				)
 			}
 		})
@@ -154,7 +154,7 @@ func TestAdministratorRoleRepository_AddAndRemoveAcrossCalls(t *testing.T) {
 			{InstanceID: instanceID, RoleName: "INSTANCE_OWNER", Permission: "instance.manage"},
 			{InstanceID: instanceID, RoleName: "INSTANCE_OWNER", Permission: "instance.write"},
 		},
-		listAdministratorRolePermissions(t, tx, repo.NameCondition(database.TextOperationEqual, "INSTANCE_OWNER")),
+		listAdministratorRolePermissions(t, tx, repo.RoleNameCondition(database.TextOperationEqual, "INSTANCE_OWNER")),
 	)
 }
 
