@@ -108,6 +108,8 @@ type Commands struct {
 	loginPaths        LoginPaths
 	ActionsV2DenyList []denylist.AddressChecker
 	IPLookupFunction  internal_net.IPLookupFunc
+
+	lockoutPolicyOPA *LockoutPolicyOPA
 }
 
 //go:generate mockgen -package command -destination ./mock_login_paths.go . LoginPaths
@@ -237,6 +239,14 @@ func StartCommands(
 	}
 	repo.phoneCodeVerifier = repo.phoneCodeVerifierFromConfig
 	repo.tarpit = defaults.Tarpit.Tarpit()
+
+	lockoutOPA, err := NewLockoutPolicyOPA()
+	if err != nil {
+		logging.WithError(err).Warn("OPA lockout policy initialization failed, running without OPA")
+	} else {
+		repo.lockoutPolicyOPA = lockoutOPA
+	}
+
 	return repo, nil
 }
 

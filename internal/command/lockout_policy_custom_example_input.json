@@ -1,0 +1,15 @@
+{
+  "check_type": "password",
+  "failed_attempts": 3,
+  "policy": {
+    "max_password_attempts": 5,
+    "max_otp_attempts": 3
+  },
+  "user": {
+    "type": "human",
+    "id": "user-123"
+  },
+  "request": {
+    "ip": "203.0.113.50"
+  }
+}

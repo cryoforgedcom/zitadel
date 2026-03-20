@@ -1,0 +1,8 @@
+{
+  "check_type": "password",
+  "failed_attempts": 4,
+  "policy": {
+    "max_password_attempts": 5,
+    "max_otp_attempts": 3
+  }
+}

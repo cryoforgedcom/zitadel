@@ -167,7 +167,7 @@ func (c *Commands) checkCurrentPassword(
 			// otherwise, let's directly verify and return the new generated hash, so we can reuse it in the event
 			return c.verifyAndUpdatePassword(ctx, hash, password, newPassword)
 		}
-		commands, updated, err := verifyPasswordWithLockoutPolicy(ctx, wm, currentPassword, c.eventstore, verify, nil, tarpit)
+		commands, updated, err := verifyPasswordWithLockoutPolicy(ctx, wm, currentPassword, c.eventstore, verify, nil, tarpit, c.lockoutPolicyOPA)
 		// The verification was successful, and we might have an updated hash.
 		if err == nil {
 			return updated, nil
@@ -261,7 +261,7 @@ func (c *Commands) verifyAndUpdatePassword(ctx context.Context, encodedHash, old
 	return updated, convertPasswapErr(err)
 }
 
-// checkPasswordComplexity checks uf the given password can be used to be the password of a user
+// checkPasswordComplexity checks if the given password can be used to be the password of a user
 func (c *Commands) checkPasswordComplexity(ctx context.Context, newPassword string, resourceOwner string) (err error) {
 	ctx, span := tracing.NewSpan(ctx)
 	defer func() { span.EndWithError(err) }()
@@ -374,7 +374,7 @@ func (c *Commands) HumanCheckPassword(ctx context.Context, orgID, userID, passwo
 	if !loginPolicy.IgnoreUnknownUsernames {
 		tarpit = c.tarpit
 	}
-	commands, err := checkPassword(ctx, userID, password, c.eventstore, c.userPasswordHasher, authRequestDomainToAuthRequestInfo(authRequest), tarpit)
+	commands, err := checkPassword(ctx, userID, password, c.eventstore, c.userPasswordHasher, authRequestDomainToAuthRequestInfo(authRequest), tarpit, c.lockoutPolicyOPA)
 	if len(commands) == 0 {
 		return err
 	}
@@ -383,7 +383,7 @@ func (c *Commands) HumanCheckPassword(ctx context.Context, orgID, userID, passwo
 	return err
 }
 
-func checkPassword(ctx context.Context, userID, password string, es *eventstore.Eventstore, hasher *crypto.Hasher, optionalAuthRequestInfo *user.AuthRequestInfo, tarpit func(failedAttempts uint64)) ([]eventstore.Command, error) {
+func checkPassword(ctx context.Context, userID, password string, es *eventstore.Eventstore, hasher *crypto.Hasher, optionalAuthRequestInfo *user.AuthRequestInfo, tarpit func(failedAttempts uint64), lockoutOPA *LockoutPolicyOPA) ([]eventstore.Command, error) {
 	if userID == "" {
 		return nil, zerrors.ThrowPreconditionFailed(nil, "COMMAND-Sfw3f", "Errors.User.UserIDMissing")
 	}
@@ -392,7 +392,7 @@ func checkPassword(ctx context.Context, userID, password string, es *eventstore.
 	if err != nil {
 		return nil, err
 	}
-	commands, _, err := verifyPasswordWithLockoutPolicy(ctx, wm, password, es, hasher.Verify, optionalAuthRequestInfo, tarpit)
+	commands, _, err := verifyPasswordWithLockoutPolicy(ctx, wm, password, es, hasher.Verify, optionalAuthRequestInfo, tarpit, lockoutOPA)
 	return commands, err
 }
 
@@ -404,6 +404,7 @@ func verifyPasswordWithLockoutPolicy(
 	verify func(hash string, password string) (newHash string, err error),
 	optionalAuthRequestInfo *user.AuthRequestInfo,
 	tarpit func(failedAttempts uint64),
+	lockoutOPA *LockoutPolicyOPA,
 ) ([]eventstore.Command, string, error) {
 	if !wm.GetUserState().Exists() {
 		return nil, "", zerrors.ThrowPreconditionFailed(nil, "COMMAND-3n77z", "Errors.User.NotFound")
@@ -449,8 +450,15 @@ func verifyPasswordWithLockoutPolicy(
 
 	lockoutPolicy, lockoutErr := getLockoutPolicy(ctx, wm.GetResourceOwner(), es.FilterToQueryReducer)
 	logging.OnError(lockoutErr).Error("unable to get lockout policy")
-	if lockoutPolicy != nil && lockoutPolicy.MaxPasswordAttempts > 0 && wm.GetPasswordCheckFailedCount()+1 >= lockoutPolicy.MaxPasswordAttempts {
+	goShouldLock := lockoutPolicy != nil && lockoutPolicy.MaxPasswordAttempts > 0 && wm.GetPasswordCheckFailedCount()+1 >= lockoutPolicy.MaxPasswordAttempts
+	if goShouldLock {
 		commands = append(commands, user.NewUserLockedEvent(ctx, userAgg))
+	}
+
+	// OPA parallel evaluation (POC: logged only, never blocks)
+	if lockoutOPA != nil && lockoutPolicy != nil {
+		opaResult := lockoutOPA.Evaluate(ctx, "password", wm.GetPasswordCheckFailedCount(), lockoutPolicy)
+		logOPALockoutComparison(goShouldLock, opaResult, "password", wm.GetPasswordCheckFailedCount(), wm.GetResourceOwner())
 	}
 	// in case the login policy ignores unknown usernames,
 	// we do not slow down the response time with a tarpit
