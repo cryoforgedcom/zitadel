@@ -62,8 +62,7 @@ BEGIN
 	) INTO has_permission;
 
 	IF NOT has_permission AND p_raise_if_denied THEN
-        RAISE EXCEPTION 'Permission denied: User does not have permission'
-        USING ERRCODE = 'ZIT01';
+		PERFORM zitadel.raise_exception('ZIT01', 'permission denied');
 	END IF;
 
 	RETURN has_permission;
@@ -71,6 +70,7 @@ END;
 $$;
 
 -- used to raise an error using a condition, 
+-- p_id must be a valid SQLSTATE code, e.g. 'ZIT01' for permission denied.
 -- e.g. multiple OR conditions and last one calls this function to raise the error if all previous conditions failed.
 CREATE OR REPLACE FUNCTION zitadel.raise_exception(
 	p_id TEXT
@@ -80,7 +80,6 @@ LANGUAGE plpgsql
 STABLE
 AS $$
 BEGIN
-	RAISE EXCEPTION p_text
-	USING ERRCODE = p_id;
+	RAISE EXCEPTION USING MESSAGE = p_text, ERRCODE = p_id;
 END;
 $$;

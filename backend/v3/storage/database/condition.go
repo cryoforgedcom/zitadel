@@ -398,6 +398,8 @@ func (p *raiseException) IsRestrictingColumn(_ Column) bool {
 	return false
 }
 
+// RaiseException creates a condition that raises an exception with the given id and text when evaluated.
+// Make sure that id is a valid SQL error code (5 characters, first character between 'A' and 'Z') to avoid unexpected errors.
 func RaiseException(id, text string) *raiseException {
 	return &raiseException{
 		id:   id,
