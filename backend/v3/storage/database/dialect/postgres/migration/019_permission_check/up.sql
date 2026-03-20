@@ -62,7 +62,7 @@ BEGIN
 	) INTO has_permission;
 
 	IF NOT has_permission AND p_raise_if_denied THEN
-		PERFORM zitadel.raise_exception('ZIT01', 'permission denied');
+		PERFORM zitadel.raise_exception('ZIT01', 'Permission denied');
 	END IF;
 
 	RETURN has_permission;

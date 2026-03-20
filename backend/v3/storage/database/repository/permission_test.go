@@ -31,7 +31,7 @@ func TestCheckPermission_DB(t *testing.T) {
 	adminRoleRepo := repository.AdministratorRoleRepository()
 	_, err := adminRoleRepo.AddPermissions(t.Context(), tx, instanceID, "instance_admin", "instance.read")
 	require.NoError(t, err)
-	_, err = adminRoleRepo.AddPermissions(t.Context(), tx, instanceID, "org_admin", "organization.read")
+	_, err = adminRoleRepo.AddPermissions(t.Context(), tx, instanceID, "org_admin", "organization.read", "project.read")
 	require.NoError(t, err)
 	_, err = adminRoleRepo.AddPermissions(t.Context(), tx, instanceID, "project_admin", "project.read")
 	require.NoError(t, err)
@@ -133,6 +133,13 @@ func TestCheckPermission_DB(t *testing.T) {
 			name:       "organization inheritance allows project when org context provided",
 			userID:     organizationUserID,
 			permission: "project.read",
+			opts:       []repository.CheckPermissionOpt{repository.WithOrganizationID(orgID)},
+			want:       true,
+		},
+		{
+			name:       "organization inheritance allows project when org and project context provided",
+			userID:     organizationUserID,
+			permission: "project.read",
 			opts: []repository.CheckPermissionOpt{
 				repository.WithOrganizationID(orgID),
 				repository.WithProjectID(projectID),
@@ -146,11 +153,24 @@ func TestCheckPermission_DB(t *testing.T) {
 			opts:       []repository.CheckPermissionOpt{repository.WithRaiseIfDenied()},
 			wantErr:    true,
 		},
+		{
+			name:       "raise if denied returns error because user does not exist",
+			userID:     "non-existing-user",
+			permission: "instance.read",
+			opts:       []repository.CheckPermissionOpt{repository.WithRaiseIfDenied()},
+			wantErr:    true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := executeCheckPermission(t, tx, instanceID, tt.userID, tt.permission, tt.opts...)
+			savepoint, err := tx.Begin(t.Context())
+			require.NoError(t, err)
+			defer func() {
+				assert.NoError(t, savepoint.Rollback(t.Context()))
+			}()
+
+			got, err := executeCheckPermission(t, savepoint, instanceID, tt.userID, tt.permission, tt.opts...)
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), "Permission denied")
