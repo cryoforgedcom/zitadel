@@ -52,7 +52,6 @@ func TestAdministratorRolePermissionReducers(t *testing.T) {
 	})
 }
 
-//nolint:contextcheck // we use the [testing.T.Context] for all operations in this function, so we don't need to pass a separate context parameter
 func listReducedAdministratorRolePermissions(t *testing.T, tx database.QueryExecutor, conditions ...database.Condition) []administratorRolePermission {
 	t.Helper()
 
