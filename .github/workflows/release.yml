@@ -111,7 +111,7 @@ jobs:
           ${{ inputs.image_name_google_login }}:${{ github.sha }}
     -
       name: Publish latest
-      if: ${{ github.ref_name == 'next' }}
+      if: ${{ github.ref_name == 'v4.x' }}
       run: |
         docker buildx imagetools create \
           --tag ${{ inputs.image_name_github_api }}:latest \
@@ -126,7 +126,7 @@ jobs:
   homebrew-tap:
     runs-on: ubuntu-22.04
     needs: version
-    if: needs.version.outputs.published == 'true' && github.ref_name == 'next'
+    if: needs.version.outputs.published == 'true' && github.ref_name == 'v4.x'
     continue-on-error: true
     steps:
     - name: generate token
@@ -146,7 +146,7 @@ jobs:
   helm-chart:
     runs-on: ubuntu-22.04
     needs: version
-    if: needs.version.outputs.published == 'true' && github.ref_name == 'next'
+    if: needs.version.outputs.published == 'true' && github.ref_name == 'v4.x'
     continue-on-error: true
     steps:
       - name: generate token
@@ -166,7 +166,7 @@ jobs:
   npm-packages:
     runs-on: ubuntu-latest
     needs: version
-    if: needs.version.outputs.published == 'true' && github.ref_name == 'next'
+    if: needs.version.outputs.published == 'true' && github.ref_name == 'v4.x'
     continue-on-error: true
     steps:
       - name: Checkout code
