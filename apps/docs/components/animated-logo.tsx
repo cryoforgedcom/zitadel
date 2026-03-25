@@ -3,21 +3,15 @@
 import React, { useRef, useEffect, useState } from 'react';
 import Lottie, { type LottieRefCurrentProps } from 'lottie-react';
 
-const LOGO_WIDTH = 160;
-const LOGO_HEIGHT = 40;
-
 export function AnimatedLogo() {
   const lottieRef = useRef<LottieRefCurrentProps>(null);
   const [animationData, setAnimationData] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
-    // Load the Lottie JSON statically from public/
     fetch('/docs/logos/zitadel-logo-animated.json')
       .then(res => res.json())
       .then(data => setAnimationData(data))
-      .catch(() => {
-        // Silently fail — static SVG fallback is rendered below
-      });
+      .catch(() => {});
   }, []);
 
   const handleMouseEnter = () => {
@@ -29,14 +23,12 @@ export function AnimatedLogo() {
     lottieRef.current?.goToAndStop(0, true);
   };
 
-  // While loading or on failure, show the static SVG
   if (!animationData) {
     return (
       <img
         src="/docs/logos/zitadel-logo.svg"
         alt="Zitadel"
-        width={LOGO_WIDTH}
-        height={LOGO_HEIGHT}
+        style={{ width: 140, height: 'auto' }}
         className="nav-logo"
       />
     );
@@ -47,14 +39,14 @@ export function AnimatedLogo() {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       className="nav-logo"
-      style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT }}
+      style={{ width: 140, height: 'auto' }}
     >
       <Lottie
         lottieRef={lottieRef}
         animationData={animationData}
         loop
         autoplay={false}
-        style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT }}
+        style={{ width: 140, height: 'auto' }}
         aria-label="Zitadel logo"
       />
     </div>
