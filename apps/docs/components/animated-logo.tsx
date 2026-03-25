@@ -3,8 +3,8 @@
 import React, { useRef, useEffect, useState } from 'react';
 import Lottie, { type LottieRefCurrentProps } from 'lottie-react';
 
-const LOGO_WIDTH = 89;
-const LOGO_HEIGHT = 22;
+const LOGO_WIDTH = 120;
+const LOGO_HEIGHT = 30;
 
 export function AnimatedLogo() {
   const lottieRef = useRef<LottieRefCurrentProps>(null);
