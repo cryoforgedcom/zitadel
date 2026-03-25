@@ -10,7 +10,9 @@ import type { BundledLanguage } from 'shiki';
 // @ts-ignore
 import remarkHeadingId from 'remark-heading-id';
 
-const isDev = process.env.NODE_ENV === 'development';
+// NODE_ENV isn't reliably set when fumadocs-mdx CLI runs.
+// Use FUMADOCS_DEV=1 to enable dev optimizations (set in package.json dev script).
+const isDev = process.env.FUMADOCS_DEV === '1' || process.env.NODE_ENV === 'development';
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
 // see https://fumadocs.dev/docs/mdx/collections
@@ -20,9 +22,11 @@ export const docs = defineDocs({
     schema: frontmatterSchema.extend({
       sidebar_label: z.string().optional(),
     }),
-    files: ['**/*.md', '**/*.mdx', '!v*/**/*', '!**/_*'], // Exclude versioned folders at root and partials
+    files: isDev
+      ? ['**/*.md', '**/*.mdx', '!v*/**/*', '!**/_*', '!reference/api/**/*'] // Exclude 788 API reference pages in dev
+      : ['**/*.md', '**/*.mdx', '!v*/**/*', '!**/_*'],
     postprocess: {
-      includeProcessedMarkdown: true,
+      includeProcessedMarkdown: !isDev, // Skip processed markdown in dev to save memory
     },
   },
   meta: {
