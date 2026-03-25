@@ -1,18 +1,14 @@
 ---
-title: ZITADEL OIDC Authentication Request Playground
-description: "The OIDC playground for testing and constructing authentication requests."
+title: OIDC Playground
+description: "Interactive playground for testing and constructing OIDC authentication requests with ZITADEL."
 sidebar_label: OIDC Playground
 ---
-
-import { ExternalLink } from "lucide-react";
 
 The OIDC Playground is for testing OpenID Authentication Requests, giving you more insight how OpenID Connect works and how you can customize ZITADEL behavior with different parameters.
 
 An OpenID Connect (OIDC) [authentication request](https://openid.net/specs/openid-connect-core-1_0.html) is an OAuth 2.0 Authorization Request using additional parameters and scopes to request that the end-user be authenticated by ZITADEL.
 
-<a href="https://zitadel.com/playgrounds/oidc" target="_blank" className="flex items-center gap-2 text-primary hover:underline">
-  Go to the OIDC Playground <ExternalLink className="h-4 w-4" />
-</a>
+<AuthRequestForm />
 
 ## Why this OIDC playground?
 
@@ -27,25 +23,25 @@ Not all request parameters are available in the playground. Please refer to the 
 
 ### Your Domain
 
-The <span className="text-yellow-500">Custom Domain</span> to your ZITADEL instance. Use the base-path, the playground will add the required path to the request.
+The <span className="text-yellow-600 dark:text-yellow-400">Instance URL</span> to your ZITADEL instance. Use the base-path, the playground will add the required path to the request.
 
 ### Required Parameters
 
 <p>
-  <span className="text-green-500">Client ID</span> is the resource id of an
+  <span className="text-green-600 dark:text-green-400">Client ID</span> is the resource id of an
   application. It's the application where you want your users to login. You can
   find the Client ID in the Console. When using project grants, use the
   Client ID from the origin organization.
 </p>
 
 <p>
-  <span className="text-blue-500">Redirect URI</span> be one of the
-  pre-configured redirect uris for your application. You must add the redirect
-  uri for your application, else you will receive an error.
+  <span className="text-blue-600 dark:text-blue-400">Redirect URI</span> must be one of the
+  pre-configured redirect URIs for your application. You must add the redirect
+  URI for your application, else you will receive an error.
 </p>
 
 <p>
-  <span className="text-orange-500">Response Type</span> defines whether a code,
+  <span className="text-orange-600 dark:text-orange-400">Response Type</span> defines whether a code,
   id_token token or just id_token will be returned. Most use cases will need
   code.
 </p>
@@ -56,18 +52,18 @@ More in the <a href="/apis/openidoauth/endpoints#required-request-parameters">do
 
 Depending on the authentication and authorization flow of your application you might need to append some information to the authentication request.
 
-<span className="text-teal-600">Authentication method</span> "(none) PKCE" is recommended
+<span className="text-teal-600 dark:text-teal-400">Authentication method</span> "(none) PKCE" is recommended
 for most application types. The playground appends automatically a code challenge
 for PKCE flows.
 
-You need to append a "Code Challenge" by providing a random <span className="text-teal-600">Code Verifier</span> that is being hashed and encoded in the request to the token endpoint, please see our [guide](/guides/integrate/login/oidc/oauth-recommended-flows#our-recommended-authorization-flows) for more details.
+You need to append a "Code Challenge" by providing a random <span className="text-teal-600 dark:text-teal-400">Code Verifier</span> that is being hashed and encoded in the request to the token endpoint, please see our [guide](/guides/integrate/login/oidc/oauth-recommended-flows#our-recommended-authorization-flows) for more details.
 
 More in the [documentation](/apis/openidoauth/authn-methods) about authentication methods.
 
 ### Additional Parameters
 
 <div>
-  <span className="text-cyan-500">Prompt</span> defines if and how the user
+  <span className="text-cyan-600 dark:text-cyan-400">Prompt</span> defines if and how the user
   should be prompted on login. For example:
   <ul>
     <li>
@@ -88,7 +84,7 @@ More in the [documentation](/apis/openidoauth/authn-methods) about authenticatio
 </div>
 
 <p>
-  <span className="text-rose-500">Login hint</span> must be a valid logon name
+  <span className="text-rose-600 dark:text-rose-400">Login hint</span> must be a valid logon name
   of a user. You can skip the account picker by providing the Login hint.
 </p>
 
@@ -109,7 +105,7 @@ Please refer to the [documentation](/apis/openidoauth/scopes#reserved-scopes) fo
 
 ### Organization policies and branding
 
-Enforce an organization's policies and branding as well as membership of the user by passing the scope `urn:zitadel:iam:org:id:{id}` with the required <span className="text-purple-500">Organization ID</span>.
+Enforce an organization's policies and branding as well as membership of the user by passing the scope `urn:zitadel:iam:org:id:{id}` with the required <span className="text-purple-600 dark:text-purple-400">Organization ID</span>.
 
 Please refer to the full [guide on branding](/guides/manage/customize/branding).
 
