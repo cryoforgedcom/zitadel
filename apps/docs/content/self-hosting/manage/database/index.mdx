@@ -1,6 +1,6 @@
 ---
 title: Database
-description: Configure and manage the ZITADEL database using PostgreSQL for persistent storage and audit logs
+description: Configure and manage the Zitadel database using PostgreSQL for persistent storage and audit logs
 ---
 
 ## Database Configuration
@@ -14,15 +14,15 @@ See the [Managed PostgreSQL / No Admin Access](#managed-postgresql--no-admin-acc
 The command is `zitadel init schema` (alias: `zitadel init zitadel` for backwards compatibility).
 </Callout>
 
-## ZITADEL with Postgres
+## Zitadel with Postgres
 
-PostgreSQL is the default database for ZITADEL due to its reliability, robustness, and adherence to SQL standards. It is well-suited for handling the complex data requirements of an identity management system.
+PostgreSQL is the default database for Zitadel due to its reliability, robustness, and adherence to SQL standards. It is well-suited for handling the complex data requirements of an identity management system.
 
 If you are using Zitadel v2 and want to use a PostgreSQL database, you can [overwrite the default configuration](/self-hosting/manage/configure/configure).
 
 Currently, versions 14 to 18 are supported.
 
-Connect ZITADEL to your PostgreSQL database by providing a DSN (connection URL) via the environment variable:
+Connect Zitadel to your PostgreSQL database by providing a DSN (connection URL) via the environment variable:
 
 ```bash
 export ZITADEL_DATABASE_POSTGRES_DSN=postgresql://zitadel:password@localhost:5432/zitadel?sslmode=disable
@@ -99,17 +99,17 @@ See the [phases guide](/self-hosting/manage/updating_scaling#separating-init-and
 
 ## Zitadel Credentials
 
-The [init phase](/self-hosting/manage/updating_scaling#separating-init-and-setup-from-the-runtime) of ZITADEL creates the ZITADEL database user if it does not exist and admin credentials are provided. **Init does not update or deprecate existing users or passwords.** If you need to change the ZITADEL database user or rotate its password, you must do this manually.
+The [init phase](/self-hosting/manage/updating_scaling#separating-init-and-setup-from-the-runtime) of Zitadel creates the Zitadel database user if it does not exist and admin credentials are provided. **Init does not update or deprecate existing users or passwords.** If you need to change the Zitadel database user or rotate its password, you must do this manually.
 
 <Callout type="warn">
-The `init` command is designed to be run **only once**, during the initial setup of ZITADEL. Running `init` again after changing the database user or credentials does **not** migrate database object ownerships, nor does it reassign permissions on schemas, tables, or other objects to a new user. You must update these permissions manually if you switch users.
+The `init` command is designed to be run **only once**, during the initial setup of Zitadel. Running `init` again after changing the database user or credentials does **not** migrate database object ownerships, nor does it reassign permissions on schemas, tables, or other objects to a new user. You must update these permissions manually if you switch users.
 </Callout>
 
 ### Rotating Database Credentials
 
 If you must rotate the credentials:
 
-- You can change the password for the existing ZITADEL user, but you must manually update the password wherever ZITADEL needs it.
+- You can change the password for the existing Zitadel user, but you must manually update the password wherever Zitadel needs it.
 - Creating a new database user requires manual reassignment of ownership and privileges for all required database objects (schemas, tables, etc.) to the new user.
 - After migration, remove or deprecate the old user using admin access and commands appropriate for your database provider.
 

@@ -1,12 +1,12 @@
 ---
-title: Next.js Multi-tenant B2B Application with ZITADEL
-description: "Authenticate users across multiple organizations using ZITADEL and the Next.js B2B template."
+title: Next.js Multi-tenant B2B Application with Zitadel
+description: "Authenticate users across multiple organizations using Zitadel and the Next.js B2B template."
 sidebar_label: Next.js – B2B
 ---
 
 # Next.js Web App with B2B Scenario
 
-This is our ZITADEL [Next.js](https://nextjs.org/) B2B template. It shows how to authenticate as a user with multiple organizations. The application shows your users' roles in the selected organizations, other projects your organization is allowed to use, and other users who have roles to use the application.
+This is our Zitadel [Next.js](https://nextjs.org/) B2B template. It shows how to authenticate as a user with multiple organizations. The application shows your users' roles in the selected organizations, other projects your organization is allowed to use, and other users who have roles to use the application.
 
 If you need more info on B2B use cases, consider reading our guide for the [B2B solution scenario](/guides/solution-scenarios/b2b).
 
@@ -19,7 +19,7 @@ If you need more info on B2B use cases, consider reading our guide for the [B2B 
 Users with `view` role can view granted projects on their organization which were granted by your organization (owning this portal application).
 Users with `admin` role can view granted projects and list users of the selected organization who are granted to use the portal application too.
 
-## Set up Vendor application and users in ZITADEL
+## Set up Vendor application and users in Zitadel
 
 First, we need to create an organization that holds the Vendor's users, projects, and applications.
 
@@ -39,7 +39,7 @@ Open the Management Console (`https://$CUSTOM_DOMAIN.zitadel.cloud/ui/console/pr
 Then on the project detail page click on new application and enter a name for this app.
 Let's call this one `portal-web`.
 Select `Web`, continue, `CODE`, then enter `http://localhost:3000/api/auth/callback/zitadel` for the redirect, and `http://localhost:3000` for the post redirect. Then press on `create`.
-Because the requests from your Next.js application to ZITADEL are made on the server side, you can safely select `CODE`. You will get a secret at the end of the stepper. With NextAuth your secret never gets exposed on the browser since it is kept in your Next.js server.
+Because the requests from your Next.js application to Zitadel are made on the server side, you can safely select `CODE`. You will get a secret at the end of the stepper. With NextAuth your secret never gets exposed on the browser since it is kept in your Next.js server.
 
 Copy the "Project ID" of the project `Portal` as you will need this in your environment configuration file later.
 
@@ -97,7 +97,7 @@ Replace the values as follows
 
 `NEXTAUTH_URL`: Base url of this demo app (B2B portal); runs per default on [http://localhost:3000](http://localhost:3000)
 
-`NEXT_PUBLIC_ZITADEL_ISSUER`: The url to your zitadel instance. When using zitadel.cloud for this demo, you can find the domain of your ZITADEL instance in the customer portal. You can also find this information by going to your application `portal-web` and click 'URLs' in the navigation. The variable is prefixed with `NEXT_PUBLIC_` such that it can be accessed from the application.
+`NEXT_PUBLIC_ZITADEL_ISSUER`: The url to your zitadel instance. When using zitadel.cloud for this demo, you can find the domain of your Zitadel instance in the customer portal. You can also find this information by going to your application `portal-web` and click 'URLs' in the navigation. The variable is prefixed with `NEXT_PUBLIC_` such that it can be accessed from the application.
 
 `ZITADEL_API`: URL of the Management API. Typically, the same as `ZITADEL_ISSUER`.
 
@@ -174,9 +174,9 @@ You can log out and log in with `Eric Employee` and you should only have access 
 
 ## What next
 
-You could create another project (eg, `Data Cube`) and grant that project to the customer organization. The granted project should appear after a reload automatically. This gives you an idea of how you could do Service Discovery with ZITADEL.
+You could create another project (eg, `Data Cube`) and grant that project to the customer organization. The granted project should appear after a reload automatically. This gives you an idea of how you could do Service Discovery with Zitadel.
 
 You could also build out the code (PRs welcome :wink:) for this application, for example:
 
-- Create a mock `datacube-web` application and show how SSO between the portal and the application works with ZITADEL.
+- Create a mock `datacube-web` application and show how SSO between the portal and the application works with Zitadel.
 - Implement a feature in the `Role Assignments` tab to assign roles directly from the customer portal.

@@ -1,10 +1,10 @@
 ---
-title: Google Workspace SSO with ZITADEL
-description: "Configure ZITADEL as the SAML 2.0 Identity Provider (IdP) for Single Sign-On (SSO) in Google Workspace."
+title: Google Workspace SSO with Zitadel
+description: "Configure Zitadel as the SAML 2.0 Identity Provider (IdP) for Single Sign-On (SSO) in Google Workspace."
 sidebar_label: Google Workspace
 ---
 
-This guide shows how to enable login with ZITADEL on Google Workspace.
+This guide shows how to enable login with Zitadel on Google Workspace.
 
 You can configure two types of SAML SSO on Google Workspace:
 
@@ -22,9 +22,9 @@ At this time Google supports SSO with OpenID Connect only for few providers.
 Prerequisites:
 
 - You need to have a domain registered with your Google Workspace account to configure SSO profiles
-- Make sure that you [verify the same domain also in your ZITADEL organization and set it as Organization Domain](/guides/manage/console/organizations-overview#organization-domain)
+- Make sure that you [verify the same domain also in your Zitadel organization and set it as Organization Domain](/guides/manage/console/organizations-overview#organization-domain)
 - A user in Google Workspace (eg, road.runner@acme.com)
-- A user in ZITADEL with the same username (eg, road.runner@acme.com); make sure you verify the domain to set the username. This is different than the user's email address
+- A user in Zitadel with the same username (eg, road.runner@acme.com); make sure you verify the domain to set the username. This is different than the user's email address
 
 ## SSO profile for your organization
 
@@ -34,7 +34,7 @@ Open the Google settings for [SSO with third-party IdP](https://admin.google.com
 
 ![](../../../../public/img/guides/integrate/services/google-workspace-sso-overview.png)
 
-Download the public certificate from your ZITADEL instance by requesting `${CUSTOM_DOMAIN}/saml/v2/certificate`
+Download the public certificate from your Zitadel instance by requesting `${CUSTOM_DOMAIN}/saml/v2/certificate`
 
 ```bash
  wget ${CUSTOM_DOMAIN}/saml/v2/certificate -O idp.crt
@@ -54,7 +54,7 @@ Use the following settings
 | Network masks | Leave blank|
 | Change password URL | `${CUSTOM_DOMAIN}`/ui/console/users/me?id=security |
 
-### Create a SAML application in ZITADEL
+### Create a SAML application in Zitadel
 
 Create a new .xml file with the following minimal SAML metadata contents:
 
@@ -82,7 +82,7 @@ Press the "+"-button to add an application
 Fill in a name for the application and chose the SAML type, then click "Continue".
 ![](../../../../public/img/saml/zitadel/application_saml.png)
 
-Either fill in the URL where ZITADEL can read the metadata from, or upload the metadata XML directly, then click "Continue".
+Either fill in the URL where Zitadel can read the metadata from, or upload the metadata XML directly, then click "Continue".
 ![](../../../../public/img/saml/zitadel/application_saml_metadata.png)
 
 Check your application, if everything is correct, press "Create".
@@ -112,7 +112,7 @@ Now you should be all set to verify your setup:
 
 ## Third-party SSO SAML profile
 
-Configure a third party SSO SAML profile and login users with ZITADEL to Google Workspace.
+Configure a third party SSO SAML profile and login users with Zitadel to Google Workspace.
 
 ### Add SAML profile on Google Workspace
 
@@ -120,7 +120,7 @@ Open the Google settings for [SSO with third-party IdP](https://admin.google.com
 
 ![](../../../../public/img/guides/integrate/services/google-workspace-sso-overview.png)
 
-Download the public certificate from your ZITADEL instance by requesting `${CUSTOM_DOMAIN}/saml/v2/certificate`
+Download the public certificate from your Zitadel instance by requesting `${CUSTOM_DOMAIN}/saml/v2/certificate`
 
 ```bash
  wget ${CUSTOM_DOMAIN}/saml/v2/certificate -O idp.crt
@@ -132,7 +132,7 @@ Use the following settings
 
 | Setting                  | Value                                              |
 |--------------------------|----------------------------------------------------|
-| SSO profile name         | ZITADEL SSO                                        |
+| SSO profile name         | Zitadel SSO                                        |
 | IDP entity ID            | `${CUSTOM_DOMAIN}`/saml/v2/metadata                |
 | Sign-in page URL         | `${CUSTOM_DOMAIN}`/saml/v2/SSO                     |
 | Sign-out page URL        | `${CUSTOM_DOMAIN}`/saml/v2/SLO                     |
@@ -143,7 +143,7 @@ Now go ahead and click *SAVE*
 
 ### Entity ID and ACS URL
 
-Open the Google settings for [SSO with third-party IdP](https://admin.google.com/u/1/ac/security/sso) and click on the SAML Profile *ZITADEL SSO*
+Open the Google settings for [SSO with third-party IdP](https://admin.google.com/u/1/ac/security/sso) and click on the SAML Profile *Zitadel SSO*
 
 ![](../../../../public/img/guides/integrate/services/google-workspace-sso-zitadel.png)
 
@@ -151,7 +151,7 @@ You can copy the "Entity ID" and "ACS URL" from the "SP details" section.
 
 ![](../../../../public/img/guides/integrate/services/google-workspace-zitadel-profile-configured.png)
 
-### Create a SAML application in ZITADEL
+### Create a SAML application in Zitadel
 
 Create a new .xml file with the following minimal SAML metadata contents:
 
@@ -179,7 +179,7 @@ Press the "+"-button to add an application
 Fill in a name for the application and chose the SAML type, then click "Continue".
 ![](../../../../public/img/saml/zitadel/application_saml.png)
 
-Either fill in the URL where ZITADEL can read the metadata from, or upload the metadata XML directly, then click "Continue".
+Either fill in the URL where Zitadel can read the metadata from, or upload the metadata XML directly, then click "Continue".
 ![](../../../../public/img/saml/zitadel/application_saml_metadata.png)
 
 Check your application, if everything is correct, press "Create".
@@ -189,7 +189,7 @@ Check your application, if everything is correct, press "Create".
 
 Make sure to enable the SSO profile.
 
-In the [domain-specific service URLs](https://admin.google.com/u/1/ac/security/sso/domain-specific-service-urls) settings select "Automatically redirect users to the third-party IdP in the following SSO profile" and select as SSO profile "ZITADEL SSO".
+In the [domain-specific service URLs](https://admin.google.com/u/1/ac/security/sso/domain-specific-service-urls) settings select "Automatically redirect users to the third-party IdP in the following SSO profile" and select as SSO profile "Zitadel SSO".
 
 ![](../../../../public/img/guides/integrate/services/google-workspace-zitadel-set-profile.png)
 

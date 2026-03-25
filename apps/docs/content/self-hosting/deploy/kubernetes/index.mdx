@@ -1,14 +1,14 @@
 ---
-title: Deploy ZITADEL on Kubernetes
+title: Deploy Zitadel on Kubernetes
 sidebar_label: Overview
-description: Deploy ZITADEL on Kubernetes using Helm — from a local 5-minute quickstart to a hardened production cluster.
+description: Deploy Zitadel on Kubernetes using Helm — from a local 5-minute quickstart to a hardened production cluster.
 ---
 
-This guide takes you from zero to a running ZITADEL instance on Kubernetes and then shows you how to harden it for production.
+This guide takes you from zero to a running Zitadel instance on Kubernetes and then shows you how to harden it for production.
 
 ## Stage 1 — Quickstart
 
-The ZITADEL chart ships with an optional PostgreSQL subchart so a single `helm install` deploys the database alongside ZITADEL. You still need an ingress controller running in your cluster.
+The Zitadel chart ships with an optional PostgreSQL subchart so a single `helm install` deploys the database alongside Zitadel. You still need an ingress controller running in your cluster.
 
 ### Prerequisites
 
@@ -62,12 +62,12 @@ The masterkey [encrypts sensitive data at rest](/concepts/architecture/secrets).
 ```bash
 tr -dc A-Za-z0-9 </dev/urandom | head -c 32
 ```
-Once ZITADEL has been initialized with a masterkey, it **cannot be changed** without losing access to encrypted data.
+Once Zitadel has been initialized with a masterkey, it **cannot be changed** without losing access to encrypted data.
 </Callout>
 
 <Callout type="info">
-The stack runs: your ingress controller → **ZITADEL API** (Go) + **ZITADEL Login** (Next.js) → **PostgreSQL** (bundled).
-See [HTTP/2](/self-hosting/manage/http2) for requirements on how the ingress controller must forward traffic to ZITADEL pods.
+The stack runs: your ingress controller → **Zitadel API** (Go) + **Zitadel Login** (Next.js) → **PostgreSQL** (bundled).
+See [HTTP/2](/self-hosting/manage/http2) for requirements on how the ingress controller must forward traffic to Zitadel pods.
 </Callout>
 
 ### Swap out components
@@ -76,7 +76,7 @@ The bundled PostgreSQL subchart is for quickstart use only. You can replace it i
 
 | Component | How to replace |
 |-----------|---------------|
-| **Database** | Set `postgresql.enabled: false` and configure `ZITADEL_DATABASE_POSTGRES_DSN` pointing to your own PostgreSQL. Use the `postgres` maintenance database so ZITADEL can create its own database during initialization |
+| **Database** | Set `postgresql.enabled: false` and configure `ZITADEL_DATABASE_POSTGRES_DSN` pointing to your own PostgreSQL. Use the `postgres` maintenance database so Zitadel can create its own database during initialization |
 | **Ingress controller** | Update `ingress.className` (and `login.ingress.className`) to match your controller's IngressClass |
 | **Caching** | Add Redis by configuring `zitadel.configmapConfig.Caches` (see [Caching](/self-hosting/deploy/kubernetes/caching)) |
 
@@ -92,11 +92,11 @@ For production you need:
 - Helm 3.x+
 
 <Callout type="warn">
-**PostgreSQL compatibility:** ZITADEL supports PostgreSQL **14–18**. When using **PostgreSQL 18**, ensure you run **ZITADEL v4.11.0 or newer**. For the most up-to-date compatibility matrix and configuration details, see [Database requirements](/self-hosting/manage/database).
+**PostgreSQL compatibility:** Zitadel supports PostgreSQL **14–18**. When using **PostgreSQL 18**, ensure you run **Zitadel v4.11.0 or newer**. For the most up-to-date compatibility matrix and configuration details, see [Database requirements](/self-hosting/manage/database).
 </Callout>
 
 <Callout type="warn">
-The ZITADEL management console [requires end-to-end HTTP/2 support](/self-hosting/manage/http2). Ensure your ingress controller is configured to forward HTTP/2 (h2c) traffic to ZITADEL pods.
+The Zitadel management console [requires end-to-end HTTP/2 support](/self-hosting/manage/http2). Ensure your ingress controller is configured to forward HTTP/2 (h2c) traffic to Zitadel pods.
 </Callout>
 
 ### Create secrets
@@ -218,4 +218,4 @@ Review the [Production Checklist](/self-hosting/manage/productionchecklist) befo
 | [Operations](/self-hosting/deploy/kubernetes/operations) | Upgrades, manual and automatic scaling, resource limits |
 | [Caching](/self-hosting/deploy/kubernetes/caching) | Redis/Valkey caching configuration |
 | [Observability](/self-hosting/deploy/kubernetes/observability) | Traces (OTLP), Prometheus metrics, and log collection |
-| [Uninstalling](/self-hosting/deploy/kubernetes/uninstalling) | Remove ZITADEL from your cluster |
+| [Uninstalling](/self-hosting/deploy/kubernetes/uninstalling) | Remove Zitadel from your cluster |

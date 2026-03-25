@@ -1,6 +1,6 @@
 ---
 title: Technical Advisory 10000
-description: "A-10000: ZITADEL's default login behavior changed to auto-authenticate with one active session in v2.32.0 affecting account selection prompts"
+description: "A-10000: Zitadel's default login behavior changed to auto-authenticate with one active session in v2.32.0 affecting account selection prompts"
 ---
 
 ## Date and Version
@@ -11,7 +11,7 @@ Date: Calendar Week 32
 
 ## Description
 
-Currently, by default, users are directed to the "Select Account Page" on the ZITADEL login.
+Currently, by default, users are directed to the "Select Account Page" on the Zitadel login.
 However, this can be modified by including a [prompt or a login hint](/apis/openidoauth/endpoints#additional-parameters) in the authentication request.
 
 As a result of this default behavior, users who already have an active session in one application and wish to log in to a second one will need to select their user account, even if no other session is active.

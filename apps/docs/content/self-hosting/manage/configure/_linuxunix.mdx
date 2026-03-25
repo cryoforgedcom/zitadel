@@ -36,7 +36,7 @@ wget https://raw.githubusercontent.com/zitadel/zitadel/main/apps/docs/content/se
 # Download and adjust the example configuration file containing database initialization configuration
 wget https://raw.githubusercontent.com/zitadel/zitadel/main/apps/docs/content/self-hosting/manage/configure/example-zitadel-init-steps.yaml
 
-# A single ZITADEL instance always needs the same 32 characters long masterkey
+# A single Zitadel instance always needs the same 32 characters long masterkey
 # If you haven't done so already, you can generate a new one
 # The key must be passed as argument
 ZITADEL_MASTERKEY="$(LC_ALL=C tr -dc '[:graph:]' </dev/urandom | head -c 32)"
@@ -55,12 +55,12 @@ The environment variable approach uses a single DSN string instead of the indivi
 
 ```bash
 # Set the PostgreSQL connection via a single DSN
-# Use the "postgres" maintenance database so ZITADEL can create its own database during initialization
+# Use the "postgres" maintenance database so Zitadel can create its own database during initialization
 export ZITADEL_DATABASE_POSTGRES_DSN=postgresql://my_zitadel_db_user:Secret_DB_User_Password@my.database:5432/postgres?sslmode=disable
 export ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME="root"
 export ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD="RootPassword1!"
 
-# A single ZITADEL instance always needs the same 32 bytes long masterkey
+# A single Zitadel instance always needs the same 32 bytes long masterkey
 # Generate one to a file if you haven't done so already and pass it as environment variable
 LC_ALL=C tr -dc '[:graph:]' </dev/urandom | head -c 32 > ./zitadel-masterkey
 

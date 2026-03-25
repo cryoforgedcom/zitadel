@@ -1,6 +1,6 @@
 ---
-title: B2B Multi-Tenant Authentication with ZITADEL
-description: "Implement multi-tenancy authentication and authorization for B2B applications using ZITADEL."
+title: B2B Multi-Tenant Authentication with Zitadel
+description: "Implement multi-tenancy authentication and authorization for B2B applications using Zitadel."
 sidebar_label: B2B
 ---
 
@@ -10,7 +10,7 @@ import { B2B } from "@/components/b2b";
 
 B2B describes the situation where an organization interacts with other organizations.
 This **multi-tenancy architecture** usually adds some form of complexity to an Identity and Access Management System.
-In ZITADEL an [organization](/guides/manage/console/organizations-overview) can represent a business partner or partner who typically has its own branding and has different access settings like an additional federated login for its users.
+In Zitadel an [organization](/guides/manage/console/organizations-overview) can represent a business partner or partner who typically has its own branding and has different access settings like an additional federated login for its users.
 
 B2B can be a simple scenario where an organization only shares one of its projects with another organization or has a more complex case where an organization is offering a portal application to all its partners with included (self)administration.
 
@@ -73,14 +73,14 @@ Bill, a user from the Octagon organization, is assigned the admin role for the P
 Dimitri and Michael are both part of the Pentagon organization and have been assigned the `writer` and `reader` roles, respectively.
 
 > Note: Roles are intended for your application's internal business logic and require separate validation.
-The users in this example cannot manage role assignments for other users unless they have an appropriate ZITADEL administrator role.
+The users in this example cannot manage role assignments for other users unless they have an appropriate Zitadel administrator role.
 
-If you build a dashboard for users to assign roles, you must use the Management API with the user's personal access token and not with a machine user's token. This ensures that all actions are properly recorded in the audit log. To enable this, the users performing these actions must be granted a ZITADEL manager role.
+If you build a dashboard for users to assign roles, you must use the Management API with the user's personal access token and not with a machine user's token. This ensures that all actions are properly recorded in the audit log. To enable this, the users performing these actions must be granted a Zitadel manager role.
 
 ### Noteworthy
 
-As ZITADEL includes unlimited users, projects, and applications and comes with all security features in the FREE tier, ZITADEL can be considered a great alternative to other SaaS IAM systems such as Auth0 or Okta.
-In such a case with this high potential of scalability where user counts can grow explosively, ZITADEL does not become the bottleneck and therefore is the valid choice. You can learn more on ZITADELs benefits and the pricing [here](https://zitadel.com/pricing).
+As Zitadel includes unlimited users, projects, and applications and comes with all security features in the FREE tier, Zitadel can be considered a great alternative to other SaaS IAM systems such as Auth0 or Okta.
+In such a case with this high potential of scalability where user counts can grow explosively, Zitadel does not become the bottleneck and therefore is the valid choice. You can learn more on Zitadels benefits and the pricing [here](https://zitadel.com/pricing).
 
 ### Learn more
 
