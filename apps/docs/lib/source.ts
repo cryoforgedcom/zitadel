@@ -2,6 +2,8 @@ import { docs, versions } from '../.source/server';
 import { type InferPageType, loader } from 'fumadocs-core/source';
 import { lucideIconsPlugin } from 'fumadocs-core/source/lucide-icons';
 
+const isDev = process.env.NODE_ENV === 'development';
+
 // See https://fumadocs.dev/docs/headless/source-api for more info
 export const source = loader({
   baseUrl: '/',
@@ -9,11 +11,18 @@ export const source = loader({
   plugins: [lucideIconsPlugin()],
 });
 
-export const versionSource = loader({
-  baseUrl: '/',
-  source: versions.toFumadocsSource(),
-  plugins: [lucideIconsPlugin()],
-});
+// In dev mode, skip loading versioned docs to save ~4GB of memory.
+// Versioned pages are static and never change during development.
+export const versionSource = isDev
+  ? loader({
+      baseUrl: '/',
+      source: { files: [], pageTree: { name: '', children: [] } },
+    })
+  : loader({
+      baseUrl: '/',
+      source: versions.toFumadocsSource(),
+      plugins: [lucideIconsPlugin()],
+    });
 
 export function getPage(slugs: string[] | undefined) {
   const safeSlugs = slugs || [];

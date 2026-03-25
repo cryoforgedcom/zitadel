@@ -11,7 +11,7 @@ function isMarkdownPreferred(request: NextRequest): boolean {
   return accept.includes('text/markdown') && !accept.includes('text/html');
 }
 
-export default function middleware(request: NextRequest) {
+export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Only apply to docs pages, not to API routes or static files
