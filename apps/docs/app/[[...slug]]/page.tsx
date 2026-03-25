@@ -1,4 +1,4 @@
-import { getPageImage, getPage, source, versionSource } from '@/lib/source';
+import { getPageImage, getPage, source } from '@/lib/source';
 import {
   DocsBody,
   DocsPage,
@@ -42,7 +42,7 @@ export const dynamicParams = true;
 export const revalidate = false;
 
 export async function generateStaticParams() {
-  return [...source.generateParams(), ...versionSource.generateParams()];
+  return source.generateParams();
 }
 
 export async function generateMetadata(
