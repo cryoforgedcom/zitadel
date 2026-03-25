@@ -28,7 +28,7 @@
         "cwd": "apps/docs"
       },
       "dependsOn": [
-        "generate-dev"
+        "generate"
       ]
     },
     "start": {
@@ -186,27 +186,6 @@
       },
       "dependsOn": [
         "build-mdx-source"
-      ]
-    },
-    "build-mdx-source-dev": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "FUMADOCS_DEV=1 pnpm build:mdx-source",
-        "cwd": "apps/docs"
-      },
-      "cache": false,
-      "dependsOn": [
-        "generate-index-pages"
-      ]
-    },
-    "generate-dev": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'Dev generation complete (API ref and versioned docs excluded)'",
-        "cwd": "apps/docs"
-      },
-      "dependsOn": [
-        "build-mdx-source-dev"
       ]
     },
     "check-links": {

@@ -17,7 +17,8 @@ export const versionSource = loader({
 
 export function getPage(slugs: string[] | undefined) {
   const safeSlugs = slugs || [];
-  // If the first slug matches a version pattern, try versionSource first
+  // If the first slug matches a known version pattern (e.g., starts with 'v' and is in our list), use versionSource
+  // For simplicity, we check if the page exists in versionSource first if it looks like a version
   if (safeSlugs.length > 0 && safeSlugs[0].startsWith('v')) {
     const page = versionSource.getPage(safeSlugs);
     if (page) return { page, source: versionSource };

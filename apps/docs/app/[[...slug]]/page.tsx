@@ -11,7 +11,6 @@ import { createRelativeLink } from 'fumadocs-ui/mdx';
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 import { Feedback } from '@/components/feedback';
-import { MarkdownCopyButton, ViewOptionsPopover } from '@/components/ai/page-actions';
 
 export default async function Page(props: any) {
   const params = await props.params;
@@ -34,13 +33,6 @@ export default async function Page(props: any) {
           })}
         />
       </DocsBody>
-      <div className="flex flex-row gap-2 items-center border-b pt-2 pb-6">
-        <MarkdownCopyButton markdownUrl={`${page.url}.mdx`} />
-        <ViewOptionsPopover
-          markdownUrl={`${page.url}.mdx`}
-          githubUrl={`https://github.com/zitadel/zitadel/blob/main/apps/docs/content/${page.slugs.join('/')}.mdx`}
-        />
-      </div>
       <Feedback />
     </DocsPage>
   );
