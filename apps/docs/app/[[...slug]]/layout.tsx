@@ -1,7 +1,7 @@
 import { source, versionSource } from '@/lib/source';
 import { ReactNode } from 'react';
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
-import { baseOptions } from '@/lib/layout.shared';
+import { baseOptions, SidebarFooter } from '@/lib/layout.shared';
 import { buildCustomTree } from '@/lib/custom-tree';
 import rawVersions from '@/content/versions.json';
  
@@ -72,6 +72,9 @@ export default async function Layout(props: { children: ReactNode; params: Promi
       sidebar={{
         banner: (
           <VersionSelector />
+        ),
+        footer: (
+          <SidebarFooter />
         ),
       }}
     >

@@ -236,10 +236,8 @@ export function buildCustomTree(originalTree: PageTree.Root, options?: { stripPr
     const indexNode = findPage('index');
     if (indexNode) newChildren.push(indexNode);
 
-    // ── GETTING STARTED ──
-    // Extract the first category from guidesSidebar ("Get Started")
-    const getStartedItems = guidesSidebar.slice(0, 1); // "Get Started" category
-    newChildren.push({ type: 'separator', name: 'Getting Started' } as PageTree.Separator);
+    // Get Started — no separator header, just build the first category directly
+    const getStartedItems = guidesSidebar.slice(0, 1);
     newChildren.push(...buildItems(getStartedItems));
 
     // ── GUIDES ──

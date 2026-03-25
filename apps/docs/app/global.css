@@ -469,4 +469,82 @@
     [data-theme] button:has(svg[data-lucide="moon"]) {
         display: none !important;
     }
+
+    /* SIDEBAR FOOTER — GitHub / Discord / Website links */
+    .sidebar-footer {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.75rem 0.25rem;
+        border-top: 1px solid #252528;
+    }
+
+    .sidebar-footer a {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        color: #9e9eb2;
+        font-size: 0.8125rem;
+        text-decoration: none;
+        transition: color 0.15s ease;
+    }
+
+    .sidebar-footer a:hover {
+        color: #f4f4f6;
+    }
+
+    .sidebar-footer a svg {
+        flex-shrink: 0;
+    }
+
+    /* ORANGE ACCENT — links and interactive elements */
+    a:not([data-active]):hover,
+    .fd-link:hover {
+        color: #f25543 !important;
+    }
+
+    /* VERSION SWITCHER — more prominent */
+    [data-sidebar] select,
+    aside select {
+        background-color: #252528 !important;
+        border: 1px solid #37373a !important;
+        color: #f4f4f6 !important;
+        font-size: 0.875rem !important;
+        padding: 0.375rem 0.5rem !important;
+        border-radius: 0.375rem !important;
+        width: 100% !important;
+    }
+
+    /* NAV LOGO — subtle hover animation */
+    .nav-logo {
+        transition: filter 0.3s ease, transform 0.2s ease;
+    }
+
+    .nav-logo:hover {
+        filter: drop-shadow(0 0 8px rgba(187, 165, 228, 0.5));
+        transform: scale(1.03);
+    }
+
+    /* TOC "On this page" heading — use body font, not heading font */
+    [data-toc] h3,
+    [data-toc] h4,
+    nav[aria-label="Table of Contents"] > h3,
+    nav[aria-label="Table of Contents"] > h4,
+    aside h3:first-child,
+    .fd-toc-title {
+        font-family: var(--font-sans, 'Arimo'), sans-serif !important;
+        font-size: 0.875rem !important;
+        font-weight: 600 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        color: #9e9eb2 !important;
+    }
+
+    /* Breadcrumb styling — consistent neutral size */
+    nav[aria-label="Breadcrumb"],
+    .fd-breadcrumb,
+    [data-breadcrumb] {
+        font-size: 0.8125rem;
+        color: #9e9eb2;
+    }
 }
