@@ -1,5 +1,4 @@
 
-
 import {
   defineConfig,
   defineDocs,
@@ -7,8 +6,11 @@ import {
   metaSchema,
 } from 'fumadocs-mdx/config';
 import { z } from 'zod';
+import type { BundledLanguage } from 'shiki';
 // @ts-ignore
 import remarkHeadingId from 'remark-heading-id';
+
+const isDev = process.env.NODE_ENV === 'development';
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
 // see https://fumadocs.dev/docs/mdx/collections
@@ -29,21 +31,32 @@ export const docs = defineDocs({
   },
 });
 
+// In dev mode, skip versioned docs entirely to save ~4GB of memory.
+// Versioned pages (v4.10, v4.11, etc.) are static and never change during development.
+// They are only needed for production builds.
 export const versions = defineDocs({
   dir: 'content',
   docs: {
     schema: frontmatterSchema.extend({
       sidebar_label: z.string().optional(),
     }),
-    files: ['v*/**/*.md', 'v*/**/*.mdx', '!**/_*'], // Include only versioned folders from content
-    // No includeProcessedMarkdown — versioned pages don't need LLM text,
-    // and storing processed text for 4,700+ pages wastes ~50-100MB.
+    files: isDev
+      ? ['!**/*'] // Match nothing in dev — skip all 4,700+ versioned files
+      : ['v*/**/*.md', 'v*/**/*.mdx', '!**/_*'],
   },
   meta: {
     schema: metaSchema,
-    files: ['v*/meta.json', 'v*/**/meta.json'],
+    files: isDev
+      ? ['!**/*']
+      : ['v*/meta.json', 'v*/**/meta.json'],
   },
 });
+
+
+// In dev mode, load fewer Shiki languages to reduce memory and startup time.
+const devLangs: BundledLanguage[] = ['json', 'yaml', 'bash', 'sh', 'go', 'typescript', 'javascript', 'tsx', 'jsx', 'css', 'html', 'sql', 'diff', 'markdown'];
+const prodLangs: BundledLanguage[] = ['json', 'yaml', 'bash', 'sh', 'shell', 'http', 'nginx', 'dockerfile', 'go', 'python', 'javascript', 'typescript', 'tsx', 'jsx', 'css', 'html', 'csharp', 'java', 'xml', 'sql', 'properties', 'ini', 'diff', 'markdown', 'mdx', 'dart', 'php', 'ruby', 'toml'];
+const shikiLangs = isDev ? devLangs : prodLangs;
 
 export default defineConfig({
   mdxOptions: {
@@ -53,7 +66,7 @@ export default defineConfig({
         light: 'github-dark',
         dark: 'github-dark',
       },
-      langs: ['json', 'yaml', 'bash', 'sh', 'shell', 'http', 'nginx', 'dockerfile', 'go', 'python', 'javascript', 'typescript', 'tsx', 'jsx', 'css', 'html', 'csharp', 'java', 'xml', 'sql', 'properties', 'ini', 'diff', 'markdown', 'mdx', 'dart', 'php', 'ruby', 'toml'],
+      langs: shikiLangs,
       langAlias: {
         'env': 'bash',
         'dotenv': 'bash',
