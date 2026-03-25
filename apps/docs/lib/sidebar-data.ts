@@ -676,11 +676,7 @@ export const guidesSidebar: readonly SidebarItem[] = [
     label: "Test & Debug",
     collapsed: true,
     items: [
-      {
-        type: "link",
-        label: "OIDC Playground",
-        href: "https://zitadel.com/playgrounds/oidc",
-      },
+      "apis/openidoauth/authrequest",
     ],
   },
   {
