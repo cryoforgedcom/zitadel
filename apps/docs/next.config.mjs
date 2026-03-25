@@ -1,5 +1,4 @@
 import { createMDX } from 'fumadocs-mdx/next';
-import { rehypeCode } from 'fumadocs-core/mdx-plugins';
 
 
 import { promises as fs } from 'fs';
@@ -138,27 +137,9 @@ const nextConfig = {
   },
 };
 
-const withMDX = createMDX({
-  mdxOptions: {
-    rehypePlugins: [
-      [
-        rehypeCode,
-        {
-          langs: [
-            'bash',
-            'yaml',
-            'json',
-            'go',
-            'typescript',
-            'javascript',
-            'sql',
-            'prometheus',
-            'promql',
-          ],
-        },
-      ],
-    ],
-  },
-});
+// Syntax highlighting is handled by source.config.ts rehypeCodeOptions
+// Do NOT add a second rehypeCode plugin here — it creates a duplicate
+// Shiki instance (~200MB) and causes OOM during builds.
+const withMDX = createMDX();
 
 export default withMDX(nextConfig);

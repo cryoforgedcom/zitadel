@@ -1,7 +1,4 @@
-// Suppress MaxListenersExceededWarning from fumadocs-mdx internal concurrency
-if (typeof process !== 'undefined') {
-  process.setMaxListeners(30);
-}
+
 
 import {
   defineConfig,
@@ -39,9 +36,8 @@ export const versions = defineDocs({
       sidebar_label: z.string().optional(),
     }),
     files: ['v*/**/*.md', 'v*/**/*.mdx', '!**/_*'], // Include only versioned folders from content
-    postprocess: {
-      includeProcessedMarkdown: true,
-    },
+    // No includeProcessedMarkdown — versioned pages don't need LLM text,
+    // and storing processed text for 4,700+ pages wastes ~50-100MB.
   },
   meta: {
     schema: metaSchema,
