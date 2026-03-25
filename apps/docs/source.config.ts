@@ -54,18 +54,22 @@ export default defineConfig({
     remarkPlugins: [[remarkHeadingId, { defaults: true }]],
     rehypeCodeOptions: {
       themes: {
-        light: 'github-light',
+        light: 'github-dark',
         dark: 'github-dark',
       },
-      langs: ['json', 'yaml', 'bash', 'sh', 'shell', 'http', 'nginx', 'dockerfile', 'go', 'python', 'javascript', 'typescript', 'tsx', 'jsx', 'css', 'html', 'csharp', 'java', 'xml', 'sql', 'properties', 'ini', 'diff', 'markdown', 'mdx'],
-      // Map unknown languages to text or similar
+      langs: ['json', 'yaml', 'bash', 'sh', 'shell', 'http', 'nginx', 'dockerfile', 'go', 'python', 'javascript', 'typescript', 'tsx', 'jsx', 'css', 'html', 'csharp', 'java', 'xml', 'sql', 'properties', 'ini', 'diff', 'markdown', 'mdx', 'dart', 'php', 'ruby', 'toml'],
       langAlias: {
         'env': 'bash',
+        'dotenv': 'bash',
         'curl': 'bash',
         'caddy': 'nginx',
         'conf': 'nginx',
+        'https': 'http',
         'HTTP': 'http',
         'JSON': 'json',
+        'twig': 'html',
+        'mermaid': 'markdown',
+        'text': 'bash',
       },
     },
   },
