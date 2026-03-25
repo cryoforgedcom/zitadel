@@ -35,6 +35,7 @@
     "fumadocs-openapi": "10.3.18",
     "fumadocs-ui": "16.6.15",
     "js-yaml": "^4.1.1",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^0.574.0",
     "mixpanel-browser": "^2.74.0",
     "next": "16.1.6",

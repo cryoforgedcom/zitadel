@@ -1,20 +1,11 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
-import Image from 'next/image';
+import { AnimatedLogo } from '@/components/animated-logo';
 
 export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
       title: (
-        <>
-          <Image
-            src="/docs/logos/zitadel-logo.svg"
-            alt="Zitadel"
-            width={89}
-            height={22}
-            className="block nav-logo"
-            priority
-          />
-        </>
+        <AnimatedLogo />
       ),
     },
     links: [],
