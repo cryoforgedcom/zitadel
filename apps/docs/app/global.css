@@ -525,26 +525,18 @@
         transform: scale(1.03);
     }
 
-    /* TOC "On this page" heading — use body font, not heading font */
-    [data-toc] h3,
-    [data-toc] h4,
-    nav[aria-label="Table of Contents"] > h3,
-    nav[aria-label="Table of Contents"] > h4,
-    aside h3:first-child,
-    .fd-toc-title {
+    /* TOC "On this page" heading — use body font, not APK Futural heading font */
+    #toc-title,
+    h3#toc-title {
         font-family: var(--font-sans, 'Arimo'), sans-serif !important;
-        font-size: 0.875rem !important;
+        font-size: 0.75rem !important;
         font-weight: 600 !important;
         text-transform: uppercase !important;
-        letter-spacing: 0.05em !important;
-        color: #9e9eb2 !important;
+        letter-spacing: 0.08em !important;
     }
 
-    /* Breadcrumb styling — consistent neutral size */
-    nav[aria-label="Breadcrumb"],
-    .fd-breadcrumb,
-    [data-breadcrumb] {
-        font-size: 0.8125rem;
-        color: #9e9eb2;
+    /* TOC popover trigger (mobile/smaller screens) */
+    [data-toc-popover-trigger] {
+        font-family: var(--font-sans, 'Arimo'), sans-serif !important;
     }
 }
