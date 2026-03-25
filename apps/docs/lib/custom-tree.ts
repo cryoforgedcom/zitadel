@@ -27,7 +27,7 @@ export function buildCustomTree(originalTree: PageTree.Root, options?: { stripPr
                 p = p.substring(prefix.length);
             }
         } else {
-            p = p.replace(/^\/|docs\/|\/$/g, '');
+            p = p.replace(/^\//, '').replace(/^docs\//, '').replace(/\/$/, '');
         }
 
         return p
@@ -211,16 +211,57 @@ export function buildCustomTree(originalTree: PageTree.Root, options?: { stripPr
         return null;
     }
 
+    /**
+     * 6. Build items from a sidebar array
+     */
+    function buildItems(sidebar: readonly SidebarItem[]): PageTree.Node[] {
+        const nodes: PageTree.Node[] = [];
+        for (const item of sidebar) {
+            const node = buildNode(item);
+            if (node && !Array.isArray(node)) {
+                nodes.push(node);
+            } else if (Array.isArray(node)) {
+                nodes.push(...node);
+            }
+        }
+        return nodes;
+    }
+
+    /**
+     * 7. Assemble the tree with separators between groups
+     */
     const newChildren: PageTree.Node[] = [];
 
+    // Home / index page
     const indexNode = findPage('index');
     if (indexNode) newChildren.push(indexNode);
 
-    guidesSidebar.forEach(item => {
-        const node = buildNode(item);
-        if (node && !Array.isArray(node)) newChildren.push(node);
-    });
+    // ── GETTING STARTED ──
+    // Extract the first category from guidesSidebar ("Get Started")
+    const getStartedItems = guidesSidebar.slice(0, 1); // "Get Started" category
+    newChildren.push({ type: 'separator', name: 'Getting Started' } as PageTree.Separator);
+    newChildren.push(...buildItems(getStartedItems));
 
+    // ── GUIDES ──
+    // The second category is "Integrate & Authenticate" — this is the core of the guides
+    const guideItems = guidesSidebar.slice(1, 2); // "Integrate & Authenticate"
+    const configItems = guidesSidebar.slice(2, 3); // "Configure Identity & Policies"
+    newChildren.push({ type: 'separator', name: 'Guides' } as PageTree.Separator);
+    newChildren.push(...buildItems(guideItems));
+    newChildren.push(...buildItems(configItems));
+
+    // ── MANAGE ──
+    // "Test & Debug", "Deploy & Operate"
+    const testItems = guidesSidebar.slice(3, 4); // "Test & Debug"
+    const deployItems = guidesSidebar.slice(4, 5); // "Deploy & Operate"
+    newChildren.push({ type: 'separator', name: 'Manage' } as PageTree.Separator);
+    newChildren.push(...buildItems(testItems));
+    newChildren.push(...buildItems(deployItems));
+
+    // ── REFERENCE ──
+    newChildren.push({ type: 'separator', name: 'Reference' } as PageTree.Separator);
+
+    // APIs
     const apisFolder = buildNode({
         type: 'category',
         label: 'APIs',
@@ -228,10 +269,19 @@ export function buildCustomTree(originalTree: PageTree.Root, options?: { stripPr
     });
     if (apisFolder && !Array.isArray(apisFolder)) newChildren.push(apisFolder);
 
-    legalSidebar.forEach(item => {
-        const node = buildNode(item);
-        if (node && !Array.isArray(node)) newChildren.push(node);
-    });
+    // Architecture & Concepts
+    const archItems = guidesSidebar.slice(5, 6); // "Architecture & Concepts"
+    newChildren.push(...buildItems(archItems));
+
+    // ── RESOURCES ──
+    newChildren.push({ type: 'separator', name: 'Resources' } as PageTree.Separator);
+
+    // Product, Releases & Support
+    const productItems = guidesSidebar.slice(6, 7);
+    newChildren.push(...buildItems(productItems));
+
+    // Legal
+    newChildren.push(...buildItems(legalSidebar as unknown as SidebarItem[]));
 
     const end = performance.now();
     const duration = end - start;

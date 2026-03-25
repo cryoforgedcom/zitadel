@@ -17,6 +17,17 @@ export function baseOptions(): BaseLayoutProps {
         </>
       ),
     },
-    links: [],
+    links: [
+      {
+        text: 'GitHub',
+        url: 'https://github.com/zitadel/zitadel',
+        external: true,
+      },
+      {
+        text: 'Discord',
+        url: 'https://zitadel.com/chat',
+        external: true,
+      },
+    ],
   };
 }
