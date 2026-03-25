@@ -81,6 +81,11 @@ const nextConfig = {
         source: '/pl/api/event',
         destination: 'https://plausible.io/api/event',
       },
+      // LLM integration: /docs/path/to/page.mdx → raw markdown content
+      {
+        source: '/:path*.mdx',
+        destination: '/llms.mdx/:path*',
+      },
     ];
   },
   async headers() {
