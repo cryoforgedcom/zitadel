@@ -18,13 +18,10 @@ export default async function Page(props: any) {
   const { page, source: pageSource } = getPage(params.slug);
   if (!page) notFound();
 
-  // Async mode: content is compiled on-demand when load() is called,
-  // not eagerly when the module is imported. This prevents the bundler
-  // from compiling all ~1,100 MDX files at once.
-  const { body: MDX, toc } = await page.data.load();
+  const MDX = page.data.body;
 
   return (
-    <DocsPage toc={toc} full={page.data.full}>
+    <DocsPage toc={page.data.toc} full={page.data.full}>
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsBody>
         <MDX

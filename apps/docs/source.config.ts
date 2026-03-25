@@ -10,7 +10,9 @@ import type { BundledLanguage } from 'shiki';
 // @ts-ignore
 import remarkHeadingId from 'remark-heading-id';
 
-const isDev = process.env.NODE_ENV === 'development';
+// FUMADOCS_DEV is set by NX build-mdx-source-dev target (used during `nx run dev`).
+// NODE_ENV is unreliable during fumadocs-mdx CLI execution.
+const isDev = process.env.FUMADOCS_DEV === '1';
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
 // see https://fumadocs.dev/docs/mdx/collections
@@ -20,13 +22,12 @@ export const docs = defineDocs({
     schema: frontmatterSchema.extend({
       sidebar_label: z.string().optional(),
     }),
-    // Enable async mode for on-demand compilation.
-    // Without this, .source/server.ts uses static `import *` for every MDX file,
-    // forcing the bundler to compile ALL ~1,100 pages at once for the [[...slug]] route.
-    // With async: true, it uses dynamic `import()` so pages are compiled only when requested.
-    // See https://fumadocs.dev/docs/mdx/async
-    async: true,
-    files: ['**/*.md', '**/*.mdx', '!v*/**/*', '!**/_*'],
+    // In dev mode, exclude versioned docs (handled by versions collection)
+    // and auto-generated API reference pages (788 files).
+    // This reduces .source/server.ts from ~1,100 imports to ~320.
+    files: isDev
+      ? ['**/*.md', '**/*.mdx', '!v*/**/*', '!**/_*', '!reference/api/**/*']
+      : ['**/*.md', '**/*.mdx', '!v*/**/*', '!**/_*'],
     postprocess: {
       includeProcessedMarkdown: true,
     },
@@ -37,17 +38,15 @@ export const docs = defineDocs({
   },
 });
 
-// Versioned docs: skip entirely in dev mode to save memory.
-// Versioned pages (v4.10, v4.11, etc.) are static and never change during development.
 export const versions = defineDocs({
   dir: 'content',
   docs: {
     schema: frontmatterSchema.extend({
       sidebar_label: z.string().optional(),
     }),
-    async: true,
+    // In dev mode, skip all 4,700+ versioned files entirely.
     files: isDev
-      ? ['!**/*'] // Match nothing in dev — skip all 4,700+ versioned files
+      ? ['!**/*']
       : ['v*/**/*.md', 'v*/**/*.mdx', '!**/_*'],
   },
   meta: {
@@ -60,9 +59,10 @@ export const versions = defineDocs({
 
 
 // In dev mode, load fewer Shiki languages to reduce memory and startup time.
+const shikiDev = process.env.NODE_ENV === 'development';
 const devLangs: BundledLanguage[] = ['json', 'yaml', 'bash', 'sh', 'go', 'typescript', 'javascript', 'tsx', 'jsx', 'css', 'html', 'sql', 'diff', 'markdown'];
 const prodLangs: BundledLanguage[] = ['json', 'yaml', 'bash', 'sh', 'shell', 'http', 'nginx', 'dockerfile', 'go', 'python', 'javascript', 'typescript', 'tsx', 'jsx', 'css', 'html', 'csharp', 'java', 'xml', 'sql', 'properties', 'ini', 'diff', 'markdown', 'mdx', 'dart', 'php', 'ruby', 'toml'];
-const shikiLangs = isDev ? devLangs : prodLangs;
+const shikiLangs = shikiDev ? devLangs : prodLangs;
 
 export default defineConfig({
   mdxOptions: {
