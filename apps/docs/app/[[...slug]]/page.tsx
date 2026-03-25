@@ -39,7 +39,7 @@ export default async function Page(props: any) {
 }
 
 export const dynamicParams = true;
-export const revalidate = 3600;
+export const revalidate = false;
 
 export async function generateStaticParams() {
   return source.generateParams();
