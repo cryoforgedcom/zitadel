@@ -2,8 +2,6 @@ import { docs, versions } from '../.source/server';
 import { type InferPageType, loader } from 'fumadocs-core/source';
 import { lucideIconsPlugin } from 'fumadocs-core/source/lucide-icons';
 
-const isDev = process.env.NODE_ENV === 'development';
-
 // See https://fumadocs.dev/docs/headless/source-api for more info
 export const source = loader({
   baseUrl: '/',
@@ -11,23 +9,15 @@ export const source = loader({
   plugins: [lucideIconsPlugin()],
 });
 
-// In dev mode, skip loading versioned docs to save ~4GB of memory.
-// Versioned pages are static and never change during development.
-export const versionSource = isDev
-  ? loader({
-      baseUrl: '/',
-      source: { files: [], pageTree: { name: '', children: [] } },
-    })
-  : loader({
-      baseUrl: '/',
-      source: versions.toFumadocsSource(),
-      plugins: [lucideIconsPlugin()],
-    });
+export const versionSource = loader({
+  baseUrl: '/',
+  source: versions.toFumadocsSource(),
+  plugins: [lucideIconsPlugin()],
+});
 
 export function getPage(slugs: string[] | undefined) {
   const safeSlugs = slugs || [];
-  // If the first slug matches a known version pattern (e.g., starts with 'v' and is in our list), use versionSource
-  // For simplicity, we check if the page exists in versionSource first if it looks like a version
+  // If the first slug matches a version pattern, try versionSource first
   if (safeSlugs.length > 0 && safeSlugs[0].startsWith('v')) {
     const page = versionSource.getPage(safeSlugs);
     if (page) return { page, source: versionSource };

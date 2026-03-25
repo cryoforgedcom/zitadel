@@ -10,9 +10,7 @@ import type { BundledLanguage } from 'shiki';
 // @ts-ignore
 import remarkHeadingId from 'remark-heading-id';
 
-// NODE_ENV isn't reliably set when fumadocs-mdx CLI runs.
-// Use FUMADOCS_DEV=1 to enable dev optimizations (set in package.json dev script).
-const isDev = process.env.FUMADOCS_DEV === '1' || process.env.NODE_ENV === 'development';
+const isDev = process.env.NODE_ENV === 'development';
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
 // see https://fumadocs.dev/docs/mdx/collections
@@ -22,11 +20,15 @@ export const docs = defineDocs({
     schema: frontmatterSchema.extend({
       sidebar_label: z.string().optional(),
     }),
-    files: isDev
-      ? ['**/*.md', '**/*.mdx', '!v*/**/*', '!**/_*', '!reference/api/**/*'] // Exclude 788 API reference pages in dev
-      : ['**/*.md', '**/*.mdx', '!v*/**/*', '!**/_*'],
+    // Enable async mode for on-demand compilation.
+    // Without this, .source/server.ts uses static `import *` for every MDX file,
+    // forcing the bundler to compile ALL ~1,100 pages at once for the [[...slug]] route.
+    // With async: true, it uses dynamic `import()` so pages are compiled only when requested.
+    // See https://fumadocs.dev/docs/mdx/async
+    async: true,
+    files: ['**/*.md', '**/*.mdx', '!v*/**/*', '!**/_*'],
     postprocess: {
-      includeProcessedMarkdown: !isDev, // Skip processed markdown in dev to save memory
+      includeProcessedMarkdown: true,
     },
   },
   meta: {
@@ -35,15 +37,15 @@ export const docs = defineDocs({
   },
 });
 
-// In dev mode, skip versioned docs entirely to save ~4GB of memory.
+// Versioned docs: skip entirely in dev mode to save memory.
 // Versioned pages (v4.10, v4.11, etc.) are static and never change during development.
-// They are only needed for production builds.
 export const versions = defineDocs({
   dir: 'content',
   docs: {
     schema: frontmatterSchema.extend({
       sidebar_label: z.string().optional(),
     }),
+    async: true,
     files: isDev
       ? ['!**/*'] // Match nothing in dev — skip all 4,700+ versioned files
       : ['v*/**/*.md', 'v*/**/*.mdx', '!**/_*'],
