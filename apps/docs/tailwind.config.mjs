@@ -16,7 +16,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-lato)", "sans-serif"],
+        sans: ["var(--font-sans)", "Arimo", "Arial", "Helvetica", "sans-serif"],
+        mono: ["var(--font-mono)", "Azeret Mono", "ui-monospace", "monospace"],
+        heading: ["var(--font-heading)", "APK Futural", "Arial", "sans-serif"],
       },
     },
   },

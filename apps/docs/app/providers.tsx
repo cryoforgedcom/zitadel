@@ -12,6 +12,10 @@ const SearchDialog = dynamic(() => import("@/components/inkeep-search"));
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <RootProvider
+      theme={{
+        defaultTheme: 'dark',
+        forcedTheme: 'dark',
+      }}
       search={{
         enabled: true,
         SearchDialog: SearchDialog as any,

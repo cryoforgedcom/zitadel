@@ -1,73 +1,34 @@
 @font-face {
-  font-family: Lato;
+  font-family: 'APK Futural';
   font-style: normal;
   font-weight: 400;
-  src: url(/docs/fonts/lato/Lato-Regular.ttf) format("truetype");
-}
-
-@font-face {
-  font-family: Lato;
-  font-style: normal;
-  font-weight: 700;
-  src: url(/docs/fonts/lato/Lato-Bold.ttf) format("truetype");
-}
-
-@font-face {
-  font-family: Lato;
-  font-style: italic;
-  font-weight: 400;
-  src: url(/docs/fonts/lato/Lato-Italic.ttf) format("truetype");
-}
-
-@font-face {
-  font-family: Lato;
-  font-style: italic;
-  font-weight: 700;
-  src: url(/docs/fonts/lato/Lato-BoldItalic.ttf) format("truetype");
+  src: url(/docs/fonts/apk-futural/APK-Futural-Regular.woff2) format("woff2"),
+       url(/docs/fonts/apk-futural/APK-Futural-Regular.woff) format("woff");
+  font-display: swap;
 }
 
 /* Custom Zitadel Variables */
 :root {
-  --font-family-base: "Lato", sans-serif;
+  --font-family-base: "Arimo", sans-serif;
+  --font-family-heading: "APK Futural", "Arimo", sans-serif;
 
-  /* Custom Gradients/Colors used in utility classes */
-  --get-started: #ff2069;
-  --get-started-bg-hover: #7e21ce;
-
-  --apiauthbackground: linear-gradient(40deg, #a9d9ca 30%, #b4d5cb);
-  --apimgmtbackground: linear-gradient(40deg, #c6d7f3 30%, #c7c6e3);
-  --apiadminbackground: linear-gradient(40deg, #c192c790, #c192c790);
-  --apisystembackground: linear-gradient(40deg, #c7a6928e, #c7a6928e);
-  --apiassetbackground: linear-gradient(40deg, #e4eaf1, #eef2f9);
-  --overlaycolor: #6c90b420;
-  --gigibannerbackground: white;
-  --gigibannerforeground: black;
-  --footer-border: rgba(0, 0, 0, 0.12);
-  --card-border: rgba(135, 149, 161, 0.2);
-  --card-border-hover: #ff2069;
-
-  --font-color-strong: #000000;
-}
-
-:root[class~="dark"],
-[data-theme="dark"] {
-  --get-started: #ff1f69;
-  --get-started-bg: #dddddd;
-  /* approximated from previous var(--ifm-font-color-base) */
+  /* Brand Colors */
+  --get-started: #bba5e4;
+  --get-started-bg-hover: #9b87c4;
 
   --apiauthbackground: linear-gradient(40deg, #506e6e90 30%, #506e6e90);
   --apimgmtbackground: linear-gradient(40deg, #595d8090 30%, #595d8090);
   --apiadminbackground: linear-gradient(40deg, #6a506e90, #6a506e90);
   --apisystembackground: linear-gradient(40deg, #6e695090, #6e695090);
   --apiassetbackground: linear-gradient(40deg, #3c4257, #3c4257);
-  --overlaycolor: #ffffff15;
-  --gigibannerbackground: #7e21ce;
-  --gigibannerforeground: white;
-  --footer-border: rgba(255, 255, 255, 0.12);
-  --card-border: rgba(135, 149, 161, 0.2);
-  --card-border-hover: #ffffff;
+  --overlaycolor: rgba(255, 255, 255, 0.05);
+  --gigibannerbackground: #bba5e4;
+  --gigibannerforeground: #0f0f11;
+  --footer-border: rgba(255, 255, 255, 0.08);
+  --card-border: #484a57;
+  --card-border-hover: #bba5e4;
 
-  --font-color-strong: #ffffff;
+  --font-color-strong: #f4f4f6;
 }
 
 /* Utilities */
@@ -83,13 +44,12 @@
   border-radius: 50vw;
   border: 2px solid var(--get-started);
   background-color: var(--get-started);
-  color: white;
-  /* Fixed white for better contrast on pink */
+  color: #0f0f11;
 }
 
 .get-started:hover {
   background-color: var(--get-started-bg-hover);
-  color: white;
+  color: #0f0f11;
 }
 
 .apicard-right {
@@ -141,11 +101,11 @@
 .custom-rounded-email,
 .custom-rounded-storage,
 .custom-rounded-service {
-  background: linear-gradient(40deg, #ff2069 30%, #cc1a54);
+  background: linear-gradient(40deg, #bba5e4 30%, #9b87c4);
 }
 
 .custom-rounded-split {
-  background: linear-gradient(40deg, #ff2069, #cc1a54);
+  background: linear-gradient(40deg, #bba5e4, #9b87c4);
 }
 
 .custom-rounded-texts,
@@ -158,7 +118,7 @@
 .custom-rounded-apis,
 .custom-rounded-policy,
 .custom-rounded-instance {
-  background: linear-gradient(40deg, #1f2937, #111827);
+  background: linear-gradient(40deg, #252528, #0f0f11);
 }
 
 /* B2B styles */
@@ -221,27 +181,10 @@ p strong {
   color: var(--font-color-strong);
 }
 
-/* API Method Colors - Adapted for Fumadocs if needed, or keeping as utility classes */
+/* API Method Colors */
 .api-method {
   display: inline-flex;
   align-items: center;
-}
-
-/* Helper classes for light/dark mode visibility */
-.hideondark {
-  display: block !important;
-}
-
-:root[class~="dark"] .hideondark {
-  display: none !important;
-}
-
-.hideonlight {
-  display: none !important;
-}
-
-:root[class~="dark"] .hideonlight {
-  display: block !important;
 }
 
 /* Player wrapper */
@@ -267,9 +210,8 @@ p strong {
   position: absolute;
   top: 10px;
   right: 10px;
-  background-color: #ef444420;
-  /* fallback danger color */
-  color: #ef4444;
+  background-color: rgba(242, 85, 67, 0.15);
+  color: #f25543;
   font-size: 12px;
   font-weight: 600;
   padding: 0.25rem 0.5rem;
