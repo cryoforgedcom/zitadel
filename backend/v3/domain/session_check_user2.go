@@ -16,7 +16,7 @@ import (
 // --------------------------------------
 
 type CheckSessionUserSubCommand struct {
-	parent checkSessionUserParent
+	parent CheckSessionUserParent
 
 	instanceID string
 
@@ -42,6 +42,19 @@ func WithCheckSessionUserSubCommand(instanceID string, userID, loginName *string
 	}
 }
 
+func NewCheckSessionUserCommand(parent CheckSessionUserParent, userID, loginName *string) *CheckSessionUserSubCommand {
+	cmd := &CheckSessionUserSubCommand{
+		parent:    parent,
+		UserID:    userID,
+		LoginName: loginName,
+	}
+	if createSession, ok := parent.(*CreateSessionCommand); ok {
+		cmd.ApplyOnCreateSessionCommand(createSession)
+	}
+
+	return cmd
+}
+
 // ApplyOnCreateSessionCommand implements [SessionCommandOption].
 func (cmd *CheckSessionUserSubCommand) ApplyOnCreateSessionCommand(parent *CreateSessionCommand) {
 	cmd.parent = parent
@@ -54,8 +67,8 @@ var (
 	_ Commander            = (*CheckSessionUserSubCommand)(nil)
 )
 
-type checkSessionUserParent interface {
-	setUserCondition(database.Condition) error
+type CheckSessionUserParent interface {
+	setUserCondition(condition database.Condition) error
 	user(ctx context.Context, opts *InvokeOpts) (*User, error)
 }
 
@@ -136,7 +149,7 @@ func (u *CheckSessionUserSubCommand) checkResult() SessionFactor {
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 
 type CheckSessionPasswordSubCommand struct {
-	parent   checkSessionPasswordParent
+	parent   CheckSessionPasswordParent
 	password string
 
 	tarpitFunc tarpitFn
@@ -154,6 +167,18 @@ func WithCheckSessionPasswordSubCommand(password string) *CheckSessionPasswordSu
 	return &CheckSessionPasswordSubCommand{
 		password: password,
 	}
+}
+
+func NewCheckSessionPasswordCommand(parent CheckSessionPasswordParent, password string) *CheckSessionPasswordSubCommand {
+	cmd := &CheckSessionPasswordSubCommand{
+		parent:   parent,
+		password: password,
+	}
+	if createSession, ok := parent.(*CreateSessionCommand); ok {
+		cmd.ApplyOnCreateSessionCommand(createSession)
+	}
+
+	return cmd
 }
 
 // ApplyOnCreateSessionCommand implements [SessionCommandOption].
@@ -249,9 +274,9 @@ var (
 	_ Querier[error]       = (*CheckSessionPasswordSubCommand)(nil)
 )
 
-type checkSessionPasswordParent interface {
-	user() (*User, error)
-	reloadUser() (*User, error)
+type CheckSessionPasswordParent interface {
+	user(ctx context.Context, opts *InvokeOpts) (*User, error)
+	reloadUser(ctx context.Context, opts *InvokeOpts) (*User, error)
 }
 
 func (cmd *CheckSessionPasswordSubCommand) checkResult() SessionFactor {

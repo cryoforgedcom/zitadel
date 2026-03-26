@@ -26,7 +26,7 @@ type CreateSessionCommand struct {
 	fetchedUser func() (*User, error)
 }
 
-func NewCreateSessionCommand(instanceID, creatorID string, userAgent *SessionUserAgent, opts ...CreateSessionOption) Commander {
+func NewCreateSessionCommand(instanceID, creatorID string, userAgent *SessionUserAgent, opts ...CreateSessionOption) *CreateSessionCommand {
 	cmd := &CreateSessionCommand{
 		instanceID: instanceID,
 		creatorID:  creatorID,
@@ -52,6 +52,24 @@ type sessionCheckSubCommand interface {
 type sessionChallengeSubCommand interface {
 	Commander
 	challengeResult() SessionChallenge
+}
+
+func (c *CreateSessionCommand) PreValidation(ctx context.Context, opts *InvokeOpts) error {
+	for _, check := range c.checks {
+		if preValidator, ok := check.(PreValidator); ok {
+			if err := preValidator.PreValidate(ctx, opts); err != nil {
+				return err
+			}
+		}
+	}
+	for _, challenge := range c.challenges {
+		if preValidator, ok := challenge.(PreValidator); ok {
+			if err := preValidator.PreValidate(ctx, opts); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // Events implements [Commander].
@@ -114,9 +132,11 @@ func (c *CreateSessionCommand) Validate(ctx context.Context, opts *InvokeOpts) (
 	return nil
 }
 
-var _ Commander = (*CreateSessionCommand)(nil)
-
-var _ checkSessionUserParent = (*CreateSessionCommand)(nil)
+var (
+	_ Commander                  = (*CreateSessionCommand)(nil)
+	_ CheckSessionUserParent     = (*CreateSessionCommand)(nil)
+	_ CheckSessionPasswordParent = (*CreateSessionCommand)(nil)
+)
 
 func (cmd *CreateSessionCommand) identifierCheck() SessionCheckUserIdentifier {
 	for _, check := range cmd.checks {

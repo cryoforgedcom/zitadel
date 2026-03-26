@@ -1,25 +1,37 @@
 package domain
 
-// import (
-// 	"context"
-// 	"sync"
+import (
+	"context"
 
-// 	"github.com/zitadel/zitadel/backend/v3/storage/database"
-// 	"github.com/zitadel/zitadel/internal/zerrors"
-// )
+	"github.com/zitadel/zitadel/backend/v3/storage/database"
+)
 
-// type SetSessionCommand struct {
-// 	InstanceID string
-// 	SessionID  string
+type SetSessionCommand struct {
+	InstanceID string
+	SessionID  string
 
-// 	identifierCheck Commander
+	identifierCheck Commander
 
-// 	// fetchSession  func(ctx context.Context, opts *InvokeOpts) (*Session, error)
-// 	userCondition database.Condition
+	// fetchSession  func(ctx context.Context, opts *InvokeOpts) (*Session, error)
+	userCondition database.Condition
 
-// 	fetchUser    func(ctx context.Context, opts *InvokeOpts) (*User, error)
-// 	fetchSession func(ctx context.Context, opts *InvokeOpts) (*Session, error)
-// }
+	fetchUser    func(ctx context.Context, opts *InvokeOpts) (*User, error)
+	fetchSession func(ctx context.Context, opts *InvokeOpts) (*Session, error)
+}
+
+// setUserCondition implements [checkSessionUserParent].
+func (s *SetSessionCommand) setUserCondition(database.Condition) error {
+	panic("unimplemented")
+}
+
+// user implements [checkSessionUserParent].
+func (s *SetSessionCommand) user(ctx context.Context, opts *InvokeOpts) (*User, error) {
+	panic("unimplemented")
+}
+
+var (
+	_ CheckSessionUserParent = (*SetSessionCommand)(nil)
+)
 
 // func newSetSessionCommand(instanceID, sessionID string) *SetSessionCommand {
 // 	session := &SetSessionCommand{
