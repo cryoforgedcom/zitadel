@@ -5,6 +5,7 @@ import (
 
 	"github.com/zitadel/zitadel/backend/v3/storage/database"
 	"github.com/zitadel/zitadel/backend/v3/storage/eventstore"
+	"github.com/zitadel/zitadel/internal/id"
 )
 
 type InvokeOpt func(*InvokeOpts)
@@ -116,6 +117,7 @@ type InvokeOpts struct {
 	sessionRepo            SessionRepository
 	userRepo               UserRepository
 	idpIntentRepo          IDPIntentRepository
+	idGenerator            id.Generator
 
 	// Settings repos
 	lockoutSettingRepo LockoutSettingsRepository
@@ -144,6 +146,17 @@ func (o *InvokeOpts) Invoke(ctx context.Context, executor Executor) error {
 	return o.Invoker.Invoke(ctx, executor, o)
 }
 
+func (o *InvokeOpts) MustNewID() string {
+	if o.idGenerator == nil {
+		o.idGenerator = id.SonyFlakeGenerator()
+	}
+	id, err := o.idGenerator.Next()
+	if err != nil {
+		panic("failed to generate id: " + err.Error())
+	}
+	return id
+}
+
 func DefaultOpts(invoker Invoker) *InvokeOpts {
 	if invoker == nil {
 		invoker = &noopInvoker{}
@@ -152,5 +165,6 @@ func DefaultOpts(invoker Invoker) *InvokeOpts {
 		Invoker:               invoker,
 		Permissions:           &noopPermissionChecker{}, // prevent panics for now
 		sessionTokenDecryptor: sessionTokenDecryptor,
+		idGenerator:           id.SonyFlakeGenerator(),
 	}
 }
