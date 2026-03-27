@@ -2,7 +2,7 @@
 
 export type ThemeRoundness = "edgy" | "mid" | "full";
 export type ThemeLayout = "side-by-side" | "top-to-bottom";
-export type ThemeAppearance = "flat" | "material" | "glass";
+export type ThemeAppearance = "flat" | "material" | "glass" | "zitadel";
 export type ThemeSpacing = "regular" | "compact";
 
 export interface ComponentRoundnessConfig {
@@ -150,5 +150,14 @@ export const APPEARANCE_STYLES = {
       "backdrop-blur-sm bg-white/20 dark:bg-black/20 border border-white/30 dark:border-white/20 shadow-lg hover:shadow-xl", // Glass effect for IDP buttons
     typography: "font-medium",
     background: "bg-transparent", // Transparent background to show blur effect
+  },
+  zitadel: {
+    card: "bg-white/[0.03] border border-white/10 backdrop-blur-sm", // Subtle translucent card for form area
+    button: "border border-white/20", // Clean border style on dark background
+    "idp-button": "border border-white/20 hover:bg-white/10", // Subtle hover for IDP buttons
+    typography: "font-medium",
+    background: "bg-[#0e0e10]", // Always dark background
+    gradientCard:
+      "bg-[linear-gradient(60deg,rgba(0,0,0,1)_0%,rgba(79,28,24,0.3)_100%)] border border-white/10", // Exact admin register gradient
   },
 } as const;

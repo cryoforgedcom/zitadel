@@ -2,6 +2,7 @@
 
 import { Logo } from "@/components/logo";
 import { useResponsiveLayout } from "@/lib/theme-hooks";
+import { APPEARANCE_STYLES, getThemeConfig } from "@/lib/theme";
 import { BrandingSettings } from "@zitadel/proto/zitadel/settings/v2/branding_settings_pb";
 import React, { Children, ReactNode } from "react";
 import { Card } from "./card";
@@ -18,6 +19,10 @@ import { ThemeWrapper } from "./theme-wrapper";
  *
  * For top-to-bottom layout:
  * - All children rendered in traditional centered layout
+ *
+ * For zitadel appearance:
+ * - Side-by-side: gradient card on left with logo/title, form fields on right
+ * - Non-side-by-side / mobile: everything wrapped in gradient card
  */
 export function DynamicTheme({
   branding,
@@ -27,6 +32,8 @@ export function DynamicTheme({
   branding?: BrandingSettings;
 }) {
   const { isSideBySide } = useResponsiveLayout();
+  const themeConfig = getThemeConfig();
+  const isZitadelAppearance = themeConfig.appearance === "zitadel";
 
   // Resolve children immediately to avoid passing functions through React
   const actualChildren: ReactNode = React.useMemo(() => {
@@ -35,6 +42,99 @@ export function DynamicTheme({
     }
     return children;
   }, [children, isSideBySide]);
+
+  // ZITADEL appearance: gradient card layout inspired by admin register page
+  if (isZitadelAppearance) {
+    const childArray = Children.toArray(actualChildren);
+    const leftContent = childArray[0] || null;
+    const rightContent = childArray[1] || null;
+    const hasLeftRightStructure = childArray.length === 2;
+    const gradientClasses =
+      APPEARANCE_STYLES.zitadel.gradientCard;
+
+    if (isSideBySide) {
+      // Side-by-side: gradient card on left, form on right
+      return (
+        <ThemeWrapper branding={branding}>
+          <div className="relative mx-auto flex w-full max-w-[67.5rem] flex-col items-center justify-center gap-10 px-4 py-8 md:px-8 md:py-16 lg:flex-row lg:items-stretch lg:px-0 xl:gap-16 2xl:gap-28">
+            {/* Left: Gradient card with logo + title */}
+            <div
+              className={`flex w-full flex-col justify-between overflow-hidden rounded-2xl p-3 lg:w-[57%] lg:self-stretch lg:p-4 ${gradientClasses} min-h-[220px] lg:min-h-[560px]`}
+            >
+              <div /> {/* Spacer for top */}
+              <div className="flex flex-col gap-2 p-3 lg:p-4">
+                {branding && (
+                  <div className="mb-6">
+                    <Logo
+                      lightSrc={branding.lightTheme?.logoUrl}
+                      darkSrc={branding.darkTheme?.logoUrl}
+                      height={80}
+                      width={200}
+                    />
+                  </div>
+                )}
+                {hasLeftRightStructure && (
+                  <div className="space-y-4 [&_h1]:text-left [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:leading-tight [&_h1]:tracking-tight [&_h1]:text-white [&_h1]:md:text-5xl [&_p]:text-left [&_p]:text-sm [&_p]:leading-5 [&_p]:text-gray-300 [&_p]:md:text-xl [&_p]:md:leading-8">
+                    {leftContent}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right: Form area */}
+            <div className="flex w-full flex-col items-center justify-center gap-6 px-4 md:px-0 lg:w-[43%] lg:items-end lg:self-stretch 2xl:gap-10">
+              <div className="flex w-full max-w-[440px] flex-col gap-4">
+                <div className="space-y-6 text-white [&_.ztdl-p]:text-gray-400">
+                  {hasLeftRightStructure ? rightContent : leftContent}
+                </div>
+              </div>
+            </div>
+          </div>
+        </ThemeWrapper>
+      );
+    }
+
+    // Non-side-by-side / mobile: everything wrapped in gradient card
+    return (
+      <ThemeWrapper branding={branding}>
+        <div className="relative mx-auto w-full max-w-[440px] px-4 py-4">
+          <div
+            className={`overflow-hidden rounded-2xl p-6 py-8 ${gradientClasses}`}
+          >
+            <div className="mx-auto flex flex-col items-center space-y-8">
+              <div className="relative -mb-4 flex flex-row items-center justify-center">
+                {branding && (
+                  <Logo
+                    lightSrc={branding.lightTheme?.logoUrl}
+                    darkSrc={branding.darkTheme?.logoUrl}
+                    height={150}
+                    width={150}
+                  />
+                )}
+              </div>
+
+              {hasLeftRightStructure ? (
+                <>
+                  <div className="mb-4 flex w-full flex-col items-center text-center text-white [&_.ztdl-p]:text-gray-400">
+                    {leftContent}
+                  </div>
+                  <div className="w-full text-white [&_.ztdl-p]:text-gray-400">
+                    {rightContent}
+                  </div>
+                </>
+              ) : (
+                <div className="w-full text-white [&_.ztdl-p]:text-gray-400">
+                  {actualChildren}
+                </div>
+              )}
+
+              <div className="flex flex-row justify-between"></div>
+            </div>
+          </div>
+        </div>
+      </ThemeWrapper>
+    );
+  }
 
   return (
     <ThemeWrapper branding={branding}>

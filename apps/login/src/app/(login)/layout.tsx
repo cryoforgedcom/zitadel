@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import ThemeSwitch from "@/components/theme-switch";
 import { LANGS, getLanguage } from "@/lib/i18n";
 import { getServiceConfig } from "@/lib/service-url";
+import { getThemeConfig } from "@/lib/theme";
 import { getAllowedLanguages } from "@/lib/zitadel";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import type { Metadata } from "next";
@@ -30,6 +31,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const _headers = await headers();
   const { serviceConfig } = getServiceConfig(_headers);
 
+  const themeConfig = getThemeConfig();
+  const isZitadelAppearance = themeConfig.appearance === "zitadel";
+
+  // For zitadel appearance, force dark background
+  const backgroundClasses = isZitadelAppearance
+    ? "relative flex min-h-screen flex-col justify-center bg-[#0e0e10]"
+    : `relative flex min-h-screen flex-col justify-center bg-background-light-600 dark:bg-background-dark-600`;
+
   let languages = LANGS;
   try {
     const settings = await getAllowedLanguages({ serviceConfig });
@@ -43,15 +52,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <html className={`${lato.className}`} suppressHydrationWarning>
+    <html className={`${lato.className}${isZitadelAppearance ? " dark" : ""}`} suppressHydrationWarning>
       <head />
-      <body>
+      <body className={isZitadelAppearance ? "zitadel-appearance" : ""}>
         <ThemeProvider>
           <Tooltip.Provider>
             <Suspense
               fallback={
                 <BackgroundWrapper
-                  className={`relative flex min-h-screen flex-col justify-center bg-background-light-600 dark:bg-background-dark-600`}
+                  className={backgroundClasses}
                 >
                   <div className="relative mx-auto w-full max-w-[440px] py-8">
                     <Skeleton>
@@ -66,13 +75,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             >
               <LanguageProvider>
                 <BackgroundWrapper
-                  className={`relative flex min-h-screen flex-col justify-center bg-background-light-600 dark:bg-background-dark-600`}
+                  className={backgroundClasses}
                 >
                   <div className="relative mx-auto w-full max-w-[1100px] py-8">
                     <div>{children}</div>
                     <div className="mx-auto flex max-w-[440px] flex-row items-center justify-end space-x-4 px-4 py-4 md:max-w-full md:px-8">
                       <LanguageSwitcher languages={languages} />
-                      <ThemeSwitch />
+                      {!isZitadelAppearance && <ThemeSwitch />}
                     </div>
                   </div>
                 </BackgroundWrapper>
@@ -84,3 +93,4 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     </html>
   );
 }
+

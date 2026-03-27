@@ -330,10 +330,11 @@ describe("Theme Configuration", () => {
   });
 
   describe("APPEARANCE_STYLES", () => {
-    it("should have flat, material, and glass appearance options", () => {
+    it("should have flat, material, glass, and zitadel appearance options", () => {
       expect(APPEARANCE_STYLES).toHaveProperty("flat");
       expect(APPEARANCE_STYLES).toHaveProperty("material");
       expect(APPEARANCE_STYLES).toHaveProperty("glass");
+      expect(APPEARANCE_STYLES).toHaveProperty("zitadel");
     });
 
     it("should have required properties for each appearance", () => {
@@ -371,6 +372,19 @@ describe("Theme Configuration", () => {
 
       expect(APPEARANCE_STYLES.glass["idp-button"]).toBeDefined();
       expect(typeof APPEARANCE_STYLES.glass["idp-button"]).toBe("string");
+
+      expect(APPEARANCE_STYLES.zitadel["idp-button"]).toBeDefined();
+      expect(typeof APPEARANCE_STYLES.zitadel["idp-button"]).toBe("string");
+    });
+
+    it("should have gradientCard property for zitadel appearance", () => {
+      expect(APPEARANCE_STYLES.zitadel).toHaveProperty("gradientCard");
+      expect(typeof APPEARANCE_STYLES.zitadel.gradientCard).toBe("string");
+      expect(APPEARANCE_STYLES.zitadel.gradientCard.length).toBeGreaterThan(0);
+    });
+
+    it("should have dark background for zitadel appearance", () => {
+      expect(APPEARANCE_STYLES.zitadel.background).toContain("bg-");
     });
   });
 
@@ -390,9 +404,9 @@ describe("Theme Configuration", () => {
     });
 
     it("should accept valid ThemeAppearance values", () => {
-      const validValues: ThemeAppearance[] = ["flat", "material", "glass"];
+      const validValues: ThemeAppearance[] = ["flat", "material", "glass", "zitadel"];
       validValues.forEach((value) => {
-        expect(["flat", "material", "glass"]).toContain(value);
+        expect(["flat", "material", "glass", "zitadel"]).toContain(value);
       });
     });
 
