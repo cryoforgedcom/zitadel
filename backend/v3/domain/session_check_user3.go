@@ -2,9 +2,13 @@ package domain
 
 import (
 	"context"
+	"time"
+
+	"golang.org/x/text/language"
 
 	"github.com/zitadel/zitadel/backend/v3/storage/database"
 	"github.com/zitadel/zitadel/internal/eventstore"
+	"github.com/zitadel/zitadel/internal/repository/session"
 	"github.com/zitadel/zitadel/internal/zerrors"
 )
 
@@ -13,54 +17,90 @@ type CheckUserCommand struct {
 
 	userID    *string
 	loginName *string
+
+	user *User
 }
 
-// PreValidate implements [PreValidator].
-func (cmd *CheckUserCommand) PreValidate(ctx context.Context, opts *InvokeOpts) (err error) {
-	var cond database.Condition
-	if cmd.userID != nil {
-		cond = opts.userRepo.IDCondition(*cmd.userID)
-	} else if cmd.loginName != nil {
-		cond = opts.userRepo.LoginNameCondition(database.TextOperationEqualIgnoreCase, *cmd.loginName)
+func NewCheckUserCommand(parent CheckUserParent, userID, loginName *string) *CheckUserCommand {
+	cmd := &CheckUserCommand{
+		parent:    parent,
+		userID:    userID,
+		loginName: loginName,
 	}
-	if cond == nil {
-		return zerrors.ThrowInvalidArgument(nil, "DOMAI-D0UTe", "neither login name nor id provided")
-	}
-
-	return cmd.parent.setUserCondition(database.And(opts.userRepo.InstanceIDCondition(cmd.instanceID), cond))
+	cmd.parent.setUserConditionProvider(cmd.userCondition)
+	return cmd
 }
 
 // Events implements [Commander].
-func (c *CheckUserCommand) Events(ctx context.Context, opts *InvokeOpts) ([]eventstore.Command, error) {
-	panic("unimplemented")
+func (cmd *CheckUserCommand) Events(ctx context.Context, opts *InvokeOpts) ([]eventstore.Command, error) {
+	var preferredLanguage *language.Tag
+	if cmd.user.Human != nil && !cmd.user.Human.PreferredLanguage.IsRoot() {
+		preferredLanguage = &cmd.user.Human.PreferredLanguage
+	}
+	return []eventstore.Command{
+		session.NewUserCheckedEvent(
+			ctx,
+			&session.NewAggregate(cmd.parent.ID(), cmd.parent.InstanceID()).Aggregate,
+			cmd.user.ID,
+			cmd.user.OrganizationID,
+			time.Now(), //TODO(adlerhurst): use a consistent time source
+			preferredLanguage,
+		),
+	}, nil
 }
 
 // Execute implements [Commander].
-func (c *CheckUserCommand) Execute(ctx context.Context, opts *InvokeOpts) (err error) {
-	panic("unimplemented")
+func (cmd *CheckUserCommand) Execute(ctx context.Context, opts *InvokeOpts) (err error) {
+	cmd.user, err = cmd.parent.user(ctx, opts)
+	return err
 }
 
 // String implements [Commander].
-func (c *CheckUserCommand) String() string {
-	panic("unimplemented")
+func (cmd *CheckUserCommand) String() string {
+	return "CheckUserCommand"
 }
 
 // Validate implements [Commander].
-func (c *CheckUserCommand) Validate(ctx context.Context, opts *InvokeOpts) (err error) {
-	panic("unimplemented")
+func (cmd *CheckUserCommand) Validate(ctx context.Context, opts *InvokeOpts) (err error) {
+	if cmd.userID == nil && cmd.loginName == nil {
+		return zerrors.ThrowInvalidArgument(nil, "DOMAI-D0UTe", "neither login name nor id provided")
+	}
+	return nil
+}
+
+func (cmd *CheckUserCommand) userCondition(ctx context.Context, opts *InvokeOpts) (condition database.Condition) {
+	if cmd.userID != nil {
+		return opts.userRepo.IDCondition(*cmd.userID)
+	}
+	return opts.userRepo.LoginNameCondition(database.TextOperationEqualIgnoreCase, *cmd.loginName)
+}
+
+// checkResult implements [sessionCheckSubCommand].
+func (cmd *CheckUserCommand) checkResult() SessionFactor {
+	return &SessionFactorUser{
+		UserID:         cmd.user.ID,
+		LastVerifiedAt: time.Now(),
+	}
 }
 
 var (
-	_ Commander    = (*CheckUserCommand)(nil)
-	_ PreValidator = (*CheckUserCommand)(nil)
+	_ Commander              = (*CheckUserCommand)(nil)
+	_ sessionCheckSubCommand = (*CheckUserCommand)(nil)
 )
 
 type CheckUserParent interface {
-	// setUserCondition is used to set the condition for fetching the user.
-	setUserCondition(condition database.Condition) error
+	// setUserConditionProvider is used to set the user condition provider for the command.
+	setUserConditionProvider(provider userConditionProvider)
+
+	// ID returns the session ID for the command.
+	ID() string
+	// InstanceID returns the instance ID for the command.
+	InstanceID() string
 	// user is used to fetch the user based on the condition set by setUserCondition.
 	// It might get called multiple times, so it should be implemented with caching in mind.
 	user(ctx context.Context, opts *InvokeOpts) (user *User, err error)
 	// reloadUser is used refresh the user data, if it has been changed during the execution of the command.
 	reloadUser(ctx context.Context, opts *InvokeOpts) (user *User, err error)
 }
+
+type userConditionProvider func(ctx context.Context, opts *InvokeOpts) (condition database.Condition)
