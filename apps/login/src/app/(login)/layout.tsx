@@ -13,13 +13,38 @@ import { getAllowedLanguages } from "@/lib/zitadel";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { Lato } from "next/font/google";
+import { Arimo, Lato } from "next/font/google";
+import localFont from "next/font/local";
 import { headers } from "next/headers";
 import React, { Suspense } from "react";
 
 const lato = Lato({
   weight: ["400", "700", "900"],
   subsets: ["latin"],
+});
+
+const arimo = Arimo({
+  variable: "--font-sans",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
+const apkFutural = localFont({
+  src: [
+    {
+      path: "../../../public/fonts/APK-Futural-Regular.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../../../public/fonts/APK-Futural-Regular.woff",
+      weight: "400",
+      style: "normal",
+    },
+  ],
+  variable: "--font-heading",
+  display: "swap",
 });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -51,10 +76,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     console.error("Failed to load supported languages", e);
   }
 
+  const fontClassName = isZitadelAppearance
+    ? `${arimo.variable} ${apkFutural.variable} ${arimo.className}`
+    : lato.className;
+
   return (
-    <html className={`${lato.className}${isZitadelAppearance ? " dark" : ""}`} suppressHydrationWarning>
+    <html className={`${fontClassName}${isZitadelAppearance ? " dark" : ""}`} suppressHydrationWarning>
       <head />
-      <body className={isZitadelAppearance ? "zitadel-appearance" : ""}>
+      <body>
         <ThemeProvider>
           <Tooltip.Provider>
             <Suspense

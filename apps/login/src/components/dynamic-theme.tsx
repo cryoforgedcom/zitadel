@@ -77,7 +77,7 @@ export function DynamicTheme({
               <BrandingLogo branding={branding} height={80} width={200} />
             </div>
             {hasTwoChildren && (
-              <div className="space-y-4 [&_h1]:text-left [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:leading-tight [&_h1]:tracking-tight [&_h1]:text-white [&_h1]:md:text-5xl [&_p]:text-left [&_p]:text-sm [&_p]:leading-5 [&_p]:text-gray-300 [&_p]:md:text-xl [&_p]:md:leading-8">
+              <div className="space-y-4 [&_h1]:font-[family-name:var(--font-heading)] [&_h1]:text-left [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:leading-tight [&_h1]:tracking-tight [&_h1]:text-white [&_h1]:md:text-5xl [&_p]:text-left [&_p]:text-sm [&_p]:leading-5 [&_p]:text-gray-300 [&_p]:md:text-xl [&_p]:md:leading-8">
                 {titleContent}
               </div>
             )}
@@ -106,7 +106,7 @@ export function DynamicTheme({
 
             {hasTwoChildren ? (
               <>
-                <div className="mb-4 flex w-full flex-col items-center text-center text-white [&_.ztdl-p]:text-gray-400">
+                <div className="mb-4 flex w-full flex-col items-center text-center text-white [&_.ztdl-p]:text-gray-400 [&_h1]:font-[family-name:var(--font-heading)]">
                   {titleContent}
                 </div>
                 <div className="w-full text-white [&_.ztdl-p]:text-gray-400">{formContent}</div>
