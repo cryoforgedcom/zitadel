@@ -8,11 +8,11 @@ import (
 )
 
 var (
-	pool database.Pool
-	legacyEventstore  eventstore.LegacyEventstore
-	sysConfig         systemdefaults.SystemDefaults
-	passwordHasher    *crypto.Hasher
-	idpEncryptionAlgo crypto.EncryptionAlgorithm
+	pool                  database.Pool
+	legacyEventstore      eventstore.LegacyEventstore
+	sysConfig             systemdefaults.SystemDefaults
+	passwordHasher        *crypto.Hasher
+	idpEncryptionAlgo     crypto.EncryptionAlgorithm
 	sessionTokenDecryptor SessionTokenDecryptor
 )
 

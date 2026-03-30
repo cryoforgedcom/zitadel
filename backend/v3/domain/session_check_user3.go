@@ -21,6 +21,11 @@ type CheckUserCommand struct {
 	user *User
 }
 
+// Result implements [Querier].
+func (cmd *CheckUserCommand) Result() *SessionCheckError {
+	panic("unimplemented")
+}
+
 func NewCheckUserCommand(parent CheckUserParent, userID, loginName *string) *CheckUserCommand {
 	cmd := &CheckUserCommand{
 		parent:    parent,
@@ -43,7 +48,7 @@ func (cmd *CheckUserCommand) Events(ctx context.Context, opts *InvokeOpts) ([]ev
 			&session.NewAggregate(cmd.parent.ID(), cmd.parent.InstanceID()).Aggregate,
 			cmd.user.ID,
 			cmd.user.OrganizationID,
-			time.Now(), //TODO(adlerhurst): use a consistent time source
+			time.Now(), // TODO(adlerhurst): use a consistent time source
 			preferredLanguage,
 		),
 	}, nil
@@ -51,7 +56,7 @@ func (cmd *CheckUserCommand) Events(ctx context.Context, opts *InvokeOpts) ([]ev
 
 // Execute implements [Commander].
 func (cmd *CheckUserCommand) Execute(ctx context.Context, opts *InvokeOpts) (err error) {
-	cmd.user, err = cmd.parent.user(ctx, opts)
+	cmd.user, err = cmd.parent.fetchUser(ctx, opts)
 	return err
 }
 
@@ -79,13 +84,14 @@ func (cmd *CheckUserCommand) userCondition(ctx context.Context, opts *InvokeOpts
 func (cmd *CheckUserCommand) checkResult() SessionFactor {
 	return &SessionFactorUser{
 		UserID:         cmd.user.ID,
-		LastVerifiedAt: time.Now(),
+		LastVerifiedAt: time.Now(), // TODO(adlerhurst): use a consistent time source
 	}
 }
 
 var (
-	_ Commander              = (*CheckUserCommand)(nil)
-	_ sessionCheckSubCommand = (*CheckUserCommand)(nil)
+	_ Commander                   = (*CheckUserCommand)(nil)
+	_ Querier[*SessionCheckError] = (*CheckUserCommand)(nil)
+	_ sessionCheckSubCommand      = (*CheckUserCommand)(nil)
 )
 
 type CheckUserParent interface {
@@ -93,12 +99,15 @@ type CheckUserParent interface {
 	setUserConditionProvider(provider userConditionProvider)
 
 	// ID returns the session ID for the command.
+	// It is used to generate the events.
 	ID() string
 	// InstanceID returns the instance ID for the command.
+	// It is used to generate the events.
 	InstanceID() string
-	// user is used to fetch the user based on the condition set by setUserCondition.
+
+	// fetchUser is used to fetch the user based on the condition set by setUserConditionProvider.
 	// It might get called multiple times, so it should be implemented with caching in mind.
-	user(ctx context.Context, opts *InvokeOpts) (user *User, err error)
+	fetchUser(ctx context.Context, opts *InvokeOpts) (user *User, err error)
 	// reloadUser is used refresh the user data, if it has been changed during the execution of the command.
 	reloadUser(ctx context.Context, opts *InvokeOpts) (user *User, err error)
 }

@@ -21,33 +21,7 @@ type CreateSessionCommand struct {
 	lifetime   *time.Duration
 	metadata   []*SessionMetadata
 
-	userCond    func(ctx context.Context, opts *InvokeOpts) database.Condition
-	fetchedUser func() (*User, error)
-}
-
-type lacyUserFetcher struct {
-	instanceID string
-	cond       func(ctx context.Context, opts *InvokeOpts) database.Condition
-	wasFetched bool
-	user       *User
-	err        error
-}
-
-func (f *lacyUserFetcher) fetch(ctx context.Context, opts *InvokeOpts) (*User, error) {
-	if f.wasFetched {
-		return f.user, f.err
-	}
-	f.wasFetched = true
-	f.user, f.err = opts.userRepo.Get(ctx, opts.DB(), database.WithCondition(database.And(
-		opts.userRepo.InstanceIDCondition(f.instanceID),
-		f.cond(ctx, opts),
-	)))
-	return f.user, f.err
-}
-
-func (f *lacyUserFetcher) reload(ctx context.Context, opts *InvokeOpts) (*User, error) {
-	f.wasFetched = false
-	return f.fetch(ctx, opts)
+	user lazyGetter[*User]
 }
 
 type CreateSessionOption interface {
@@ -75,7 +49,16 @@ func (c *CreateSessionCommand) Events(ctx context.Context, opts *InvokeOpts) ([]
 
 // Execute implements [Commander].
 func (c *CreateSessionCommand) Execute(ctx context.Context, opts *InvokeOpts) (err error) {
-	panic("unimplemented")
+	c.sessionID = opts.MustNewID()
+	session := &Session{
+		InstanceID: c.instanceID,
+		ID:         c.sessionID,
+		CreatorID:  c.creatorID,
+	}
+	if c.lifetime != nil && *c.lifetime > 0 {
+		session.Lifetime = *c.lifetime
+	}
+	return opts.sessionRepo.Create(ctx, opts.DB(), session)
 }
 
 // String implements [Commander].
@@ -104,24 +87,32 @@ func (c *CreateSessionCommand) InstanceID() string {
 	return c.instanceID
 }
 
-// reloadUser implements [CheckUserParent].
-func (c *CreateSessionCommand) reloadUser(ctx context.Context, opts *InvokeOpts) (user *User, err error) {
-	panic("unimplemented")
-}
-
 // setUserConditionProvider implements [CheckUserParent].
 func (c *CreateSessionCommand) setUserConditionProvider(provider userConditionProvider) {
-	c.userCond = provider
+	c.user = lazyGetter[*User]{
+		get: func(ctx context.Context, opts *InvokeOpts) (*User, error) {
+			return opts.userRepo.Get(ctx, opts.DB(), database.WithCondition(database.And(
+				opts.userRepo.InstanceIDCondition(c.instanceID),
+				provider(ctx, opts),
+			)))
+		},
+	}
 }
 
 // user implements [CheckUserParent].
-func (c *CreateSessionCommand) user(ctx context.Context, opts *InvokeOpts) (user *User, err error) {
-	panic("unimplemented")
+func (c *CreateSessionCommand) fetchUser(ctx context.Context, opts *InvokeOpts) (user *User, err error) {
+	return c.user.fetch(ctx, opts)
+}
+
+// reloadUser implements [CheckUserParent].
+func (c *CreateSessionCommand) reloadUser(ctx context.Context, opts *InvokeOpts) (user *User, err error) {
+	return c.user.reload(ctx, opts)
 }
 
 var (
-	_ Commander       = (*CreateSessionCommand)(nil)
-	_ CheckUserParent = (*CreateSessionCommand)(nil)
+	_ Commander           = (*CreateSessionCommand)(nil)
+	_ CheckUserParent     = (*CreateSessionCommand)(nil)
+	_ CheckPasswordParent = (*CreateSessionCommand)(nil)
 )
 
 type sessionCheckSubCommand interface {

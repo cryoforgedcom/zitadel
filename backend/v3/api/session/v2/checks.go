@@ -8,8 +8,8 @@ import (
 )
 
 type sessionCommand interface {
-	domain.CheckSessionUserParent
-	domain.CheckSessionPasswordParent
+	domain.CheckUserParent
+	domain.CheckPasswordParent
 }
 
 func checksToCommands[P sessionCommand](parent P, checks *session.Checks) []domain.Commander {
@@ -35,9 +35,9 @@ func userCheckToCommand[P sessionCommand](parent P, check *session.CheckUser) do
 			loginName = &trimmed
 		}
 	}
-	return domain.NewCheckSessionUserCommand(parent, userID, loginName)
+	return domain.NewCheckUserCommand(parent, userID, loginName)
 }
 
 func passwordCheckToCommand[P sessionCommand](parent P, check *session.CheckPassword) domain.Commander {
-	return domain.NewCheckSessionPasswordCommand(parent, check.GetPassword())
+	return domain.NewCheckPasswordCommand2(parent, check.GetPassword())
 }

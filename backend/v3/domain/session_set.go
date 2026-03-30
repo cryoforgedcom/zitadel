@@ -29,10 +29,6 @@ func (s *SetSessionCommand) user(ctx context.Context, opts *InvokeOpts) (*User, 
 	panic("unimplemented")
 }
 
-var (
-	_ CheckSessionUserParent = (*SetSessionCommand)(nil)
-)
-
 // func newSetSessionCommand(instanceID, sessionID string) *SetSessionCommand {
 // 	session := &SetSessionCommand{
 // 		InstanceID: instanceID,
