@@ -110,3 +110,4 @@ CLAUDE.md
 .gemini/*
 
 docs_old
+apps/docs/package-lock.json
