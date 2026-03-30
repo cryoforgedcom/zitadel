@@ -20,18 +20,18 @@ type InstanceFeatures struct {
 	OIDCSingleV1SessionTermination *bool
 	LoginV2                        *feature.LoginV2
 	PermissionCheckV2              *bool
-	ManagementConsoleUseV2UserApi  *bool
+	ManagementConsoleUseV2UserApi  *bool `mapstructure:"ConsoleUseV2UserApi"` // for backwards compatibility we need to change this back to the old config name
 }
 
 func (m *InstanceFeatures) isEmpty() bool {
-	return m.LoginDefaultOrg == nil &&
+	return m == nil || (m.LoginDefaultOrg == nil &&
 		m.UserSchema == nil &&
 		// nil check to allow unset improvements
 		m.ImprovedPerformance == nil &&
 		m.DebugOIDCParentError == nil &&
 		m.OIDCSingleV1SessionTermination == nil &&
 		m.LoginV2 == nil &&
-		m.PermissionCheckV2 == nil && m.ManagementConsoleUseV2UserApi == nil
+		m.PermissionCheckV2 == nil && m.ManagementConsoleUseV2UserApi == nil)
 }
 
 func (c *Commands) SetInstanceFeatures(ctx context.Context, f *InstanceFeatures) (*domain.ObjectDetails, error) {
