@@ -37,6 +37,7 @@ import { createLogger } from "./logger";
 import { otelGrpcInterceptor } from "@/lib/grpc/interceptors/otel";
 import { Interceptor } from "@connectrpc/connect";
 import { createServiceForHost } from "./service";
+import { PromiseCache } from "./cache";
 
 const logger = createLogger("zitadel");
 
@@ -75,29 +76,21 @@ function instanceCacheKey(serviceConfig: ServiceConfig, key: string): string {
   return `${serviceConfig.instanceHost || "default"}:${key}`;
 }
 
-const promiseCache = new Map<string, { promise: Promise<any>; expiresAt: number }>();
+const promiseCache = new PromiseCache(Number(cacheConfig.maxSize) || 100);
 
 /**
  * A stale-while-revalidate in-memory cache to keep data fresh and deduplicate concurrent requests.
  * We cache the Promise, so concurrent requests share the exact same execution.
+ *
+ * The cache is bounded and periodically swept for expired entries
+ * to prevent unbounded memory growth.
  */
 function freshCache<T>(key: string, fetcher: () => Promise<T>, ttlMs: number): Promise<T> {
   if (!useCache) {
     return fetcher();
   }
 
-  const now = Date.now();
-  const cached = promiseCache.get(key);
-  if (cached && now < cached.expiresAt) {
-    return cached.promise;
-  }
-
-  const promise = fetcher();
-  promiseCache.set(key, { promise, expiresAt: now + ttlMs });
-
-  promise.catch(() => promiseCache.delete(key));
-
-  return promise;
+  return promiseCache.getOrFetch(key, fetcher, ttlMs);
 }
 
 export async function getHostedLoginTranslation({
