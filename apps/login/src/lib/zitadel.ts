@@ -36,8 +36,8 @@ import { createLogger } from "./logger";
 
 import { otelGrpcInterceptor } from "@/lib/grpc/interceptors/otel";
 import { Interceptor } from "@connectrpc/connect";
-import { createServiceForHost } from "./service";
 import { PromiseCache } from "./cache";
+import { createServiceForHost } from "./service";
 
 const logger = createLogger("zitadel");
 

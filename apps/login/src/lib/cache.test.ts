@@ -110,10 +110,14 @@ describe("PromiseCache", () => {
 
       // "a" should have been evicted — re-fetching should call a new fetcher
       let refetched = false;
-      await cache.getOrFetch("a", () => {
-        refetched = true;
-        return Promise.resolve(10);
-      }, 60_000);
+      await cache.getOrFetch(
+        "a",
+        () => {
+          refetched = true;
+          return Promise.resolve(10);
+        },
+        60_000,
+      );
       expect(refetched).toBe(true);
     });
 
@@ -136,10 +140,14 @@ describe("PromiseCache", () => {
 
         // "b" should still be cached (not evicted)
         let bRefetched = false;
-        await cache.getOrFetch("b", () => {
-          bRefetched = true;
-          return Promise.resolve(20);
-        }, 60_000);
+        await cache.getOrFetch(
+          "b",
+          () => {
+            bRefetched = true;
+            return Promise.resolve(20);
+          },
+          60_000,
+        );
         expect(bRefetched).toBe(false);
       } finally {
         vi.useRealTimers();
@@ -157,10 +165,14 @@ describe("PromiseCache", () => {
 
       // Only "b" should remain
       let aRefetched = false;
-      await cache.getOrFetch("a", () => {
-        aRefetched = true;
-        return Promise.resolve(10);
-      }, 60_000);
+      await cache.getOrFetch(
+        "a",
+        () => {
+          aRefetched = true;
+          return Promise.resolve(10);
+        },
+        60_000,
+      );
       expect(aRefetched).toBe(true);
     });
   });
