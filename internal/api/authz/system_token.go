@@ -120,7 +120,7 @@ func (s *SystemAPIUser) readKey() (*SystemAPIPublicKey, error) {
 		return nil, zerrors.ThrowInternal(err, "AUTHZ-64nMHP", "Errors.SystemApiUser.CertParseFailed")
 	}
 
-	key, ok := cert.PublicKey.(*crypto.PublicKey)
+	key, ok := cert.PublicKey.(crypto.PublicKey)
 	if !ok {
 		return nil, zerrors.ThrowInternal(err, "AUTHZ-PNKOMf", "Errors.SystemApiUser.UnsupportedPublicKey")
 	}
