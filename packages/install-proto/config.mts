@@ -81,8 +81,8 @@ export class Config {
 
     if (
       !("installProto" in packageJson) ||
-      (typeof packageJson.installProto !== "object" &&
-        packageJson.installProto === null)
+      typeof packageJson.installProto !== "object" ||
+      packageJson.installProto === null
     ) {
       throw new Error("installProto config not found in package.json");
     }

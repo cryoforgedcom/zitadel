@@ -12,8 +12,7 @@ export const createNodesV2: CreateNodesV2<{}> = [
   "**/package.json",
   async (configFiles, options, context) => {
     return await createNodesFromFiles(
-      (configFile, _, _context) =>
-        createNodesInternal(configFile),
+      (configFile, _, _context) => createNodesInternal(configFile),
       configFiles,
       options,
       context,
