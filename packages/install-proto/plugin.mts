@@ -38,7 +38,7 @@ async function createNodesInternal(
 
   const outputs = config.packages
     .map((pkg) => pkg.extract.split("/").at(-1))
-    .map((file) => `{workspaceRoot}.artifacts/bin/${goos}/${goarch}/${file}`);
+    .map((file) => `{workspaceRoot}/.artifacts/bin/${goos}/${goarch}/${file}`);
 
   return {
     projects: {
