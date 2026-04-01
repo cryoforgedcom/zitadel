@@ -95,6 +95,21 @@ export class ProviderNextService {
     );
   }
 
+  jwtCallbackUrls(): Observable<CopyUrl[]> {
+    return this.env.env.pipe(
+      map((env) => [
+        {
+          label: 'Login V1 Callback URL',
+          url: `${env.issuer}/ui/login/login/jwt/authorize`,
+        },
+        {
+          label: 'Login V2 Callback URL',
+          url: `${env.issuer}/idps/jwt`,
+        },
+      ]),
+    );
+  }
+
   expandWhatNow(
     id$: Observable<string | null>,
     activateLink$: Observable<string>,
