@@ -11,10 +11,9 @@ export const name = "install-proto";
 export const createNodesV2: CreateNodesV2<{}> = [
   "**/package.json",
   async (configFiles, options, context) => {
-    const { goos, goarch } = await import("./goenv.mts");
     return await createNodesFromFiles(
       (configFile, _, _context) =>
-        createNodesInternal(configFile, goos, goarch),
+        createNodesInternal(configFile),
       configFiles,
       options,
       context,
@@ -24,8 +23,6 @@ export const createNodesV2: CreateNodesV2<{}> = [
 
 async function createNodesInternal(
   configFile: string,
-  goos: string,
-  goarch: string,
 ): Promise<CreateNodesResult> {
   const projectRoot = dirname(configFile);
 
@@ -38,7 +35,7 @@ async function createNodesInternal(
 
   const outputs = config.packages
     .map((pkg) => pkg.extract.split("/").at(-1))
-    .map((file) => `{workspaceRoot}/.artifacts/bin/${goos}/${goarch}/${file}`);
+    .map((file) => `{workspaceRoot}/.artifacts/bin/${file}`);
 
   return {
     projects: {

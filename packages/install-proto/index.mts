@@ -8,13 +8,10 @@ import { createWriteStream } from "node:fs";
 import { chmod, mkdir } from "node:fs/promises";
 import { once } from "node:events";
 import path from "node:path";
-import { goos, goarch } from "./goenv.mts";
 
 const outputDir = path.resolve(
   process.env.NX_WORKSPACE_ROOT ?? "",
   ".artifacts/bin",
-  goos,
-  goarch,
 );
 const inputDir = path.resolve(process.argv[2]);
 
