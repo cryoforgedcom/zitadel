@@ -4,7 +4,11 @@ const logger = createLogger("cache");
 
 interface CacheEntry<T = any> {
   promise: Promise<T>;
+  /** Last successfully resolved value – undefined until first resolve. */
+  value?: T;
   expiresAt: number;
+  /** True while a background revalidation fetch is in-flight. */
+  isRevalidating: boolean;
 }
 
 /**
@@ -12,6 +16,7 @@ interface CacheEntry<T = any> {
  *
  * Features:
  * - Deduplicates concurrent requests by caching the Promise itself
+ * - Serves stale data immediately while revalidating in the background
  * - Bounded to `maxSize` entries to prevent unbounded memory growth
  * - Sweeps expired entries and evicts oldest (FIFO) when over capacity
  */
@@ -19,26 +24,68 @@ export class PromiseCache {
   private readonly cache = new Map<string, CacheEntry>();
   private readonly maxSize: number;
 
-  constructor(maxSize = 100) {
+  constructor(maxSize = 100_000) {
     this.maxSize = Math.max(1, maxSize);
   }
 
   /**
    * Get a cached value or execute the fetcher and cache its promise.
+   *
+   * After the first successful fetch, expired entries return the stale
+   * value immediately and trigger a background revalidation (SWR).
+   * Only the very first call for a key (or after eviction/error) blocks
+   * on the fetch.
    */
   getOrFetch<T>(key: string, fetcher: () => Promise<T>, ttlMs: number): Promise<T> {
     const now = Date.now();
-    const cached = this.cache.get(key);
+    const cached = this.cache.get(key) as CacheEntry<T> | undefined;
+
+    // Still fresh → return cached promise
     if (cached && now < cached.expiresAt) {
       return cached.promise;
     }
 
+    // Expired but has a stale value → return stale immediately (SWR)
+    if (cached?.value !== undefined) {
+      // Trigger background revalidation only if one isn't already in-flight
+      if (!cached.isRevalidating) {
+        cached.isRevalidating = true;
+        const bgPromise = fetcher();
+        bgPromise
+          .then((value) => {
+            this.cache.set(key, {
+              promise: Promise.resolve(value),
+              value,
+              expiresAt: Date.now() + ttlMs,
+              isRevalidating: false,
+            });
+          })
+          .catch(() => {
+            // Revalidation failed — keep stale entry, allow retry next call
+            cached.isRevalidating = false;
+          });
+      }
+
+      // Return stale value immediately, whether or not we just started revalidation
+      return Promise.resolve(cached.value);
+    }
+
+    // ③ No stale value (first call ever or evicted) → blocking fetch
     const promise = fetcher();
-    this.cache.set(key, { promise, expiresAt: now + ttlMs });
+    const entry: CacheEntry<T> = {
+      promise,
+      expiresAt: now + ttlMs,
+      isRevalidating: false,
+    };
+    this.cache.set(key, entry);
 
     this.evictIfNeeded();
 
-    promise.catch(() => this.cache.delete(key));
+    promise
+      .then((value) => {
+        entry.value = value;
+      })
+      .catch(() => this.cache.delete(key));
 
     return promise;
   }

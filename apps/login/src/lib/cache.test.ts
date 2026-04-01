@@ -42,7 +42,93 @@ describe("PromiseCache", () => {
       expect(callCount).toBe(1);
     });
 
-    test("should re-fetch after TTL expires", async () => {
+    test("should return stale value immediately after TTL expires (SWR)", async () => {
+      cache = new PromiseCache(10);
+      let callCount = 0;
+      let resolveRevalidation: ((v: string) => void) | undefined;
+
+      const fetcher = () => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve("value-1");
+        }
+        // Second call: return a promise we control
+        return new Promise<string>((resolve) => {
+          resolveRevalidation = resolve;
+        });
+      };
+
+      vi.useFakeTimers();
+      try {
+        // First call — blocks on fetch
+        const first = await cache.getOrFetch("key1", fetcher, 100);
+        expect(first).toBe("value-1");
+        expect(callCount).toBe(1);
+
+        // Expire the entry
+        vi.advanceTimersByTime(101);
+
+        // Second call after expiry — should get stale value immediately
+        const second = await cache.getOrFetch("key1", fetcher, 100);
+        expect(second).toBe("value-1"); // stale value, not blocking
+        expect(callCount).toBe(2); // revalidation was triggered
+
+        // Third call while revalidation is in-flight — also gets stale value
+        const third = await cache.getOrFetch("key1", fetcher, 100);
+        expect(third).toBe("value-1"); // stale value
+        expect(callCount).toBe(2); // no additional fetch (already revalidating)
+
+        // Resolve the background revalidation and flush the .then() chain
+        resolveRevalidation!("value-2");
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // Now we should get the fresh value
+        const fourth = await cache.getOrFetch("key1", fetcher, 100);
+        expect(fourth).toBe("value-2");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    test("should keep stale value when revalidation fails", async () => {
+      cache = new PromiseCache(10);
+      let callCount = 0;
+
+      const fetcher = () => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve("value-1");
+        }
+        return Promise.reject(new Error("network error"));
+      };
+
+      vi.useFakeTimers();
+      try {
+        const first = await cache.getOrFetch("key1", fetcher, 100);
+        expect(first).toBe("value-1");
+
+        vi.advanceTimersByTime(101);
+
+        // After TTL: returns stale, triggers failing revalidation
+        const second = await cache.getOrFetch("key1", fetcher, 100);
+        expect(second).toBe("value-1");
+        expect(callCount).toBe(2);
+
+        // Flush the rejected promise's .catch() handler
+        await vi.advanceTimersByTimeAsync(0);
+
+        // isRevalidating should be reset, so next call can retry
+        vi.advanceTimersByTime(1);
+        const third = await cache.getOrFetch("key1", fetcher, 100);
+        expect(third).toBe("value-1"); // still stale
+        expect(callCount).toBe(3); // retried
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    test("should re-fetch after TTL expires when no stale value exists (first fetch failed then evicted)", async () => {
       cache = new PromiseCache(10);
       let callCount = 0;
       const fetcher = () => {
@@ -55,7 +141,8 @@ describe("PromiseCache", () => {
         const first = await cache.getOrFetch("key1", fetcher, 100);
         expect(first).toBe("value-1");
 
-        vi.advanceTimersByTime(101);
+        // Evict the entry manually
+        cache.clear();
 
         const second = await cache.getOrFetch("key1", fetcher, 100);
         expect(second).toBe("value-2");
@@ -65,7 +152,7 @@ describe("PromiseCache", () => {
       }
     });
 
-    test("should remove entry from cache on fetcher rejection", async () => {
+    test("should remove entry from cache on first-fetch rejection", async () => {
       cache = new PromiseCache(10);
       const failingFetcher = () => Promise.reject(new Error("fail"));
 
