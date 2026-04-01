@@ -37,40 +37,61 @@ Field names follow the Go `slog` conventions.
 | `time` | string (RFC 3339) | Timestamp when the log record was created |
 | `level` | string | Log severity: `DEBUG`, `INFO`, `WARN`, or `ERROR` |
 | `msg` | string | Human-readable log message |
+| `stream` | string | Logical log stream category (e.g., `runtime`, `request`) |
+| `version` | string | ZITADEL build version |
 | `source` | object | Source file location where the log was emitted (when `AddSource: true`) |
 | `source.function` | string | Go function name |
 | `source.file` | string | Source file path |
 | `source.line` | number | Line number in the source file |
 
-### Request log fields
-
-Log records in the `request` stream include additional fields for HTTP and gRPC requests:
+When tracing is active and a span exists in the context, additional fields are injected:
 
 | Field | Type | Description |
 |---|---|---|
-| `protocol` | string | `http` or `grpc` |
-| `method` | string | HTTP method (e.g., `GET`, `POST`) or gRPC method path |
-| `host` | string | Request host header |
-| `path` | string | Request path |
-| `status` | number | HTTP status code or gRPC status code |
-| `duration` | number | Request processing time in milliseconds |
-| `request_id` | string | Unique request identifier |
-| `instance_id` | string | ZITADEL instance that handled the request |
-| `auth_method` | string | Authentication method used, if applicable |
+| `TraceID` | string | OpenTelemetry trace identifier |
+| `SpanID` | string | OpenTelemetry span identifier |
+
+### Request log fields
+
+Log records in the `request` stream include additional fields for HTTP, gRPC, and Connect requests.
+
+**Top-level request attributes** (emitted directly by the log interceptors):
+
+| Field | Type | Description |
+|---|---|---|
+| `protocol` | string | `http`, `grpc`, or `connect` |
+| `service` | string | Name of the service handling the request |
+| `http_method` | string | HTTP method (e.g., `GET`, `POST`). gRPC always uses `POST`. |
+| `path` | string | Request path (HTTP) or gRPC/Connect method path |
+| `status` | number | HTTP status code (HTTP protocol only) |
+| `code` | number | gRPC or Connect status code (gRPC and Connect protocols only) |
+| `duration` | duration | Request processing time (Go duration format) |
+
+**Request details group** (injected from request context):
+
+| Field | Type | Description |
+|---|---|---|
+| `request.id` | string | Unique request identifier |
+| `request.instance_host` | string | Instance host that received the request |
+| `request.public_host` | string | Public host header (when set, e.g., by login v2) |
+| `request.instance_id` | string | ZITADEL instance that handled the request |
+| `request.user_id` | string | Authenticated user ID (when available) |
 
 ### Error fields
 
-When an error is logged, additional fields provide diagnostic context:
+When an error is logged, additional fields are grouped under the `err` key to provide diagnostic context:
 
 | Field | Type | Description |
 |---|---|---|
-| `error` | string | Error message |
-| `error.id` | string | ZITADEL error identifier (e.g., `USER-Gsj9q`) |
-| `error.location` | object | Source location where the error was created (when `ReportLocation: true`) |
-| `error.location.file` | string | Source file |
-| `error.location.line` | number | Line number |
-| `error.location.function` | string | Function name |
-| `error.stack_trace` | string | Full stack trace (when `StackTrace: true`) |
+| `err.kind` | string | Classification of the error (e.g., `NotFound`, `PermissionDenied`) |
+| `err.message` | string | Error message |
+| `err.id` | string | ZITADEL error identifier (e.g., `USER-Gsj9q`) |
+| `err.parent` | any | Parent error, if the error wraps another |
+| `err.reportLocation` | object | Source location where the error was created (when `ReportLocation: true`) |
+| `err.reportLocation.file` | string | Source file |
+| `err.reportLocation.line` | number | Line number |
+| `err.reportLocation.function` | string | Function name |
+| `err.stackTrace` | string | Full stack trace (when `StackTrace: true`) |
 
 ### Event handler fields
 
@@ -148,26 +169,34 @@ Instrumentation:
 {
   "time": "2025-01-15T10:30:45.123Z",
   "level": "INFO",
-  "msg": "request completed",
+  "msg": "request served",
+  "stream": "request",
+  "version": "3.0.0",
   "source": {
-    "function": "github.com/zitadel/zitadel/internal/api.(*Server).Handle",
-    "file": "internal/api/server.go",
-    "line": 142
+    "function": "github.com/zitadel/zitadel/internal/api/http/middleware.LogHandler.func1.1",
+    "file": "internal/api/http/middleware/log_interceptor.go",
+    "line": 28
+  },
+  "TraceID": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+  "SpanID": "a1b2c3d4e5f6a1b2",
+  "request": {
+    "id": "cv6l5m5g5ekg00a0v3fg",
+    "instance_host": "my-instance.zitadel.cloud",
+    "instance_id": "123456789012345678"
   },
   "protocol": "http",
-  "method": "POST",
+  "service": "OIDC",
+  "http_method": "POST",
   "path": "/oauth/v2/token",
   "status": 200,
-  "duration": 12.5,
-  "request_id": "abc123",
-  "instance_id": "123456789"
+  "duration": "12.5ms"
 }
 ```
 
 ### Text format
 
 ```
-time=2025-01-15T10:30:45.123Z level=INFO msg="request completed" source.file=internal/api/server.go source.line=142 protocol=http method=POST path=/oauth/v2/token status=200 duration=12.5
+time=2025-01-15T10:30:45.123Z level=INFO msg="request served" stream=request version=3.0.0 source.file=internal/api/http/middleware/log_interceptor.go source.line=28 request.id=cv6l5m5g5ekg00a0v3fg request.instance_host=my-instance.zitadel.cloud request.instance_id=123456789012345678 protocol=http service=OIDC http_method=POST path=/oauth/v2/token status=200 duration=12.5ms
 ```
 
 ## OTEL log export
