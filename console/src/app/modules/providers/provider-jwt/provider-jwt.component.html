@@ -19,13 +19,13 @@
 
     <cnsl-provider-next
       [configureProvider]="(justCreated$ | async) === ''"
-      [configureTitle]="'DESCRIPTIONS.SETTINGS.IDPS.CALLBACK.TITLE' | translate: { provider: 'JWT' }"
-      [configureDescription]="'DESCRIPTIONS.SETTINGS.IDPS.CALLBACK.DESCRIPTION' | translate: { provider: 'JWT' }"
+      [configureTitle]="'DESCRIPTIONS.SETTINGS.IDPS.JWT.TITLE' | translate"
+      [configureDescription]="'DESCRIPTIONS.SETTINGS.IDPS.JWT.DESCRIPTION' | translate"
       configureLink="https://zitadel.com/docs/guides/integrate/identity-providers/jwt_idp"
       [autofillLink]="autofillLink$ | async"
       [activateLink]="activateLink$ | async"
-      [copyUrls]="copyUrls$ | async"
       [expanded]="!!(expandWhatNow$ | async)"
+      [copyUrls]="copyUrls$ | async"
       (activate)="activate()"
     ></cnsl-provider-next>
 
