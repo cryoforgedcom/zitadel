@@ -334,6 +334,8 @@ service SettingsService {
   //
   // Deprecated: use GetLinkSettings instead
   rpc GetLegalAndSupportSettings (GetLegalAndSupportSettingsRequest) returns (GetLegalAndSupportSettingsResponse) {
+    option deprecated = true;
+
     option (google.api.http) = {
       get: "/v2/settings/legal_support"
     };
@@ -345,6 +347,7 @@ service SettingsService {
     };
 
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      deprecated: true,
       responses: {
         key: "200"
         value: {
