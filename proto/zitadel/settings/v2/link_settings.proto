@@ -42,6 +42,7 @@ message Link {
   string translation_key = 3 [
     (validate.rules).string = {
       min_len: 1;
+      ignore_empty: true;
     }
   ];
   LinkTarget target = 4;

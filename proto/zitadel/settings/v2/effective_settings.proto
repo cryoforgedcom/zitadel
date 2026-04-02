@@ -23,7 +23,7 @@ message GetEffectiveSettingsRequest {
   optional string organization_id = 1;
   optional string project_id = 2;
   optional string application_id = 3;
-  repeated SettingsType types = 4;  // omit = return all
+  repeated SettingsType types = 4;  // empty or omitted = return all
 }
 
 message GetEffectiveSettingsResponse {
