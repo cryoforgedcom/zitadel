@@ -112,7 +112,7 @@ message SetLinkSettingsRequest {
 }
 
 message SetLinkSettingsResponse {
-  google.protobuf.Timestamp change_date = 1;
+  LinkSettings settings = 1;
 }
 
 // ============================================================================
@@ -127,5 +127,5 @@ message ResetLinkSettingsRequest {
 }
 
 message ResetLinkSettingsResponse {
-  google.protobuf.Timestamp change_date = 1;
+  LinkSettings settings = 1;
 }
