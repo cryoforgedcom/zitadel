@@ -100,7 +100,7 @@ export class ProviderNextService {
       map((env) => [
         {
           label: 'Login V1 Callback URL',
-          url: `${env.issuer}/ui/login/login/jwt/authorize`,
+          url: `${env.issuer}/ui/login/idps/jwt`,
         },
         {
           label: 'Login V2 Callback URL',
