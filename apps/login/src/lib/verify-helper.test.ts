@@ -525,7 +525,7 @@ describe("checkEmailVerified", () => {
     expect(result?.redirect).toContain("userId=user-123");
   });
 
-    // removed send=true test
+  // removed send=true test
 
   it("should include organization in redirect", async () => {
     const humanUser: any = {
@@ -622,7 +622,7 @@ describe("checkEmailVerification", () => {
     expect(result).toBeUndefined();
   });
 
-    // removed send=true test
+  // removed send=true test
 
   it("should include organization in redirect", async () => {
     process.env.EMAIL_VERIFICATION = "true";

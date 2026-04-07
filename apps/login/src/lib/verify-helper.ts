@@ -43,7 +43,12 @@ export function checkPasswordChangeRequired(
   }
 }
 
-export async function checkEmailVerified(session: Session, humanUser?: HumanUser, organization?: string, requestId?: string) {
+export async function checkEmailVerified(
+  session: Session,
+  humanUser?: HumanUser,
+  organization?: string,
+  requestId?: string,
+) {
   if (!humanUser?.email?.isVerified) {
     await initialSendVerification({
       userId: session.factors?.user?.id as string,
@@ -70,7 +75,12 @@ export async function checkEmailVerified(session: Session, humanUser?: HumanUser
   }
 }
 
-export async function checkEmailVerification(session: Session, humanUser?: HumanUser, organization?: string, requestId?: string) {
+export async function checkEmailVerification(
+  session: Session,
+  humanUser?: HumanUser,
+  organization?: string,
+  requestId?: string,
+) {
   if (!humanUser?.email?.isVerified && process.env.EMAIL_VERIFICATION === "true") {
     await initialSendVerification({
       userId: session.factors?.user?.id as string,

@@ -25,8 +25,8 @@ import {
   startIdentityProviderFlow,
 } from "../zitadel";
 import { createSessionAndUpdateCookie } from "./cookie";
-import { initialSendVerification } from "./verify";
 import { getPublicHost } from "./host";
+import { initialSendVerification } from "./verify";
 
 const logger = createLogger("loginname");
 

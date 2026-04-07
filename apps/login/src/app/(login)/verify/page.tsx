@@ -34,7 +34,6 @@ export default async function Page(props: { searchParams: Promise<any> }) {
   let id: string | undefined;
   let loginSettings: LoginSettings | undefined;
 
-
   const autoSubmitCode = process.env.NEXT_PUBLIC_AUTO_SUBMIT_CODE === "true";
 
   if ("loginName" in searchParams) {
