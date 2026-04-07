@@ -5,7 +5,7 @@ import { handleServerActionResponse } from "@/lib/client-utils";
 import { UNKNOWN_USER_ID } from "@/lib/constants";
 import { initialSendVerification, resendVerification, sendVerification } from "@/lib/server/verify";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { AutoSubmitForm } from "./auto-submit-form";
@@ -32,6 +32,8 @@ type Props = {
 
 export function VerifyForm({ userId, loginName, organization, requestId, code, isInvite, submit, doSend }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const { register, handleSubmit, formState } = useForm<Inputs>({
     mode: "onChange",
@@ -55,6 +57,14 @@ export function VerifyForm({ userId, loginName, organization, requestId, code, i
     if (doSend && userId && userId !== UNKNOWN_USER_ID && !initialSendDone.current) {
       initialSendDone.current = true;
       setError("");
+
+      // Remove send=true from the URL so it won't trigger again on remounts/refreshes
+      const params = new URLSearchParams(searchParams.toString());
+      if (params.get("send") === "true") {
+        params.delete("send");
+        router.replace(`${pathname}?${params.toString()}`);
+      }
+
       initialSendVerification({ userId, isInvite, requestId })
         .then(() => {
           setCodeSent(true);
