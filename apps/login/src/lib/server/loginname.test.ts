@@ -210,7 +210,6 @@ describe("sendLoginname", () => {
       expect(result).toHaveProperty("redirect");
       expect((result as any).redirect).toMatch(/^\/verify\?/);
       expect((result as any).redirect).toContain("loginName=user%40example.com");
-      expect((result as any).redirect).toContain("send=false");
       expect((result as any).redirect).toContain("invite=true");
       expect((result as any).redirect).toContain("requestId=req123");
     });
@@ -232,7 +231,6 @@ describe("sendLoginname", () => {
       expect(result).toHaveProperty("redirect");
       expect((result as any).redirect).toMatch(/^\/verify\?/);
       expect((result as any).redirect).toContain("loginName=user%40example.com");
-      expect((result as any).redirect).toContain("send=true");
       expect((result as any).redirect).toContain("invite=true");
       expect((result as any).redirect).toContain("requestId=req123");
     });

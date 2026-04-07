@@ -8,6 +8,7 @@ import crypto from "crypto";
 import moment from "moment";
 import { cookies } from "next/headers";
 import { getFingerprintIdCookie } from "./fingerprint";
+import { initialSendVerification } from "./server/verify";
 import { getUserByID, ServiceConfig } from "./zitadel";
 
 export function checkPasswordChangeRequired(
@@ -42,12 +43,19 @@ export function checkPasswordChangeRequired(
   }
 }
 
-export function checkEmailVerified(session: Session, humanUser?: HumanUser, organization?: string, requestId?: string) {
+export async function checkEmailVerified(session: Session, humanUser?: HumanUser, organization?: string, requestId?: string) {
   if (!humanUser?.email?.isVerified) {
+    await initialSendVerification({
+      userId: session.factors?.user?.id as string,
+      isInvite: false,
+      requestId,
+    }).catch((err) => {
+      console.error("Failed to send initial verification email", err);
+    });
+
     const paramsVerify = new URLSearchParams({
       loginName: session.factors?.user?.loginName as string,
       userId: session.factors?.user?.id as string, // verify needs user id
-      send: "true", // we request a new email code once the page is loaded
     });
 
     if (organization || session.factors?.user?.organizationId) {
@@ -62,11 +70,18 @@ export function checkEmailVerified(session: Session, humanUser?: HumanUser, orga
   }
 }
 
-export function checkEmailVerification(session: Session, humanUser?: HumanUser, organization?: string, requestId?: string) {
+export async function checkEmailVerification(session: Session, humanUser?: HumanUser, organization?: string, requestId?: string) {
   if (!humanUser?.email?.isVerified && process.env.EMAIL_VERIFICATION === "true") {
+    await initialSendVerification({
+      userId: session.factors?.user?.id as string,
+      isInvite: false,
+      requestId,
+    }).catch((err) => {
+      console.error("Failed to send initial verification email", err);
+    });
+
     const params = new URLSearchParams({
       loginName: session.factors?.user?.loginName as string,
-      send: "true", // set this to true as we dont expect old email codes to be valid anymore
     });
 
     if (requestId) {

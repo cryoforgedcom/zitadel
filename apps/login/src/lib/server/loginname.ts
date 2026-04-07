@@ -25,6 +25,7 @@ import {
   startIdentityProviderFlow,
 } from "../zitadel";
 import { createSessionAndUpdateCookie } from "./cookie";
+import { initialSendVerification } from "./verify";
 import { getPublicHost } from "./host";
 
 const logger = createLogger("loginname");
@@ -341,12 +342,21 @@ export async function sendLoginname(command: SendLoginnameCommand) {
 
       // If the user's email is not verified, they likely already have a code from the
       // initial verification email. Auto-sending a new one here invalidates their existing code
-      // and causes confusion. Only auto-send (`send=true`) if the email is already verified.
+      // and causes confusion. Only auto-send if the email is already verified.
       const shouldSend = humanUser?.email?.isVerified === true;
+
+      if (shouldSend) {
+        await initialSendVerification({
+          userId: session?.factors?.user?.id ?? user.userId,
+          isInvite: true,
+          requestId: command.requestId,
+        }).catch((err: any) => {
+          console.error("Failed to send initial verification email during loginname", err);
+        });
+      }
 
       const params = new URLSearchParams({
         loginName: (session?.factors?.user?.loginName ?? user.preferredLoginName) as string,
-        send: shouldSend ? "true" : "false",
         invite: "true", // always send invite code if user has no primary auth method
       });
 
