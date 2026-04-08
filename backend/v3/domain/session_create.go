@@ -3,36 +3,40 @@ package domain
 import (
 	"context"
 	"strings"
-	"time"
 
 	"github.com/zitadel/zitadel/backend/v3/storage/database"
+	"github.com/zitadel/zitadel/internal/activity"
+	"github.com/zitadel/zitadel/internal/domain"
 	"github.com/zitadel/zitadel/internal/eventstore"
+	"github.com/zitadel/zitadel/internal/repository/session"
 	"github.com/zitadel/zitadel/internal/zerrors"
 )
 
 type CreateSessionCommand struct {
-	instanceID string
-	creatorID  string
-	sessionID  string
+	session *Session
 
 	checks     []sessionCheckSubCommand
 	challenges []sessionChallengeSubCommand
-	userAgent  *SessionUserAgent
-	lifetime   *time.Duration
-	metadata   []*SessionMetadata
 
 	user lazyGetter[*User]
 }
 
+// Result implements [Querier].
+func (cmd *CreateSessionCommand) Result() *Session {
+	return cmd.session
+}
+
 type CreateSessionOption interface {
-	ApplyOnCreateSessionCommand(parent *CreateSessionCommand)
+	ApplyOnCreateSessionCommand(cmd *CreateSessionCommand)
 }
 
 func NewCreateSessionCommand(instanceID, creatorID string, userAgent *SessionUserAgent, opts ...CreateSessionOption) *CreateSessionCommand {
 	cmd := &CreateSessionCommand{
-		instanceID: instanceID,
-		creatorID:  creatorID,
-		userAgent:  userAgent,
+		session: &Session{
+			InstanceID: instanceID,
+			CreatorID:  creatorID,
+			UserAgent:  userAgent,
+		},
 	}
 
 	for _, opt := range opts {
@@ -43,208 +47,99 @@ func NewCreateSessionCommand(instanceID, creatorID string, userAgent *SessionUse
 }
 
 // Events implements [Commander].
-func (c *CreateSessionCommand) Events(ctx context.Context, opts *InvokeOpts) ([]eventstore.Command, error) {
-	panic("unimplemented")
+func (cmd *CreateSessionCommand) Events(ctx context.Context, opts *InvokeOpts) ([]eventstore.Command, error) {
+	var userAgent *domain.UserAgent
+	if cmd.session.UserAgent != nil {
+		userAgent = &domain.UserAgent{
+			FingerprintID: cmd.session.UserAgent.FingerprintID,
+			IP:            cmd.session.UserAgent.IP,
+			Description:   cmd.session.UserAgent.Description,
+			Header:        cmd.session.UserAgent.Header,
+		}
+	}
+	aggregate := &session.NewAggregate(cmd.session.ID, cmd.session.InstanceID).Aggregate
+	commands := []eventstore.Command{
+		session.NewAddedEvent(ctx,
+			aggregate,
+			userAgent,
+		),
+		session.NewTokenSetEvent(ctx, aggregate, cmd.session.TokenID),
+	}
+
+	activity.TriggerWithoutOrg(ctx, cmd.session.UserID, activity.SessionAPI)
+	if len(cmd.session.Metadata) == 0 {
+		return commands, nil
+	}
+	metadata := make(map[string][]byte, len(cmd.session.Metadata))
+	for _, md := range cmd.session.Metadata {
+		metadata[md.Key] = md.Value
+	}
+	return append(commands, session.NewMetadataSetEvent(ctx, aggregate, metadata)), nil
 }
 
 // Execute implements [Commander].
-func (c *CreateSessionCommand) Execute(ctx context.Context, opts *InvokeOpts) (err error) {
-	c.sessionID = opts.MustNewID()
-	session := &Session{
-		InstanceID: c.instanceID,
-		ID:         c.sessionID,
-		CreatorID:  c.creatorID,
+func (cmd *CreateSessionCommand) Execute(ctx context.Context, opts *InvokeOpts) (err error) {
+	if cmd.session.ID == "" {
+		cmd.session.ID = opts.MustNewID()
 	}
-	if c.lifetime != nil && *c.lifetime > 0 {
-		session.Lifetime = *c.lifetime
+	for _, check := range cmd.checks {
+		cmd.session.Factors = append(cmd.session.Factors, check.checkResult())
 	}
-	return opts.sessionRepo.Create(ctx, opts.DB(), session)
+	for _, challenge := range cmd.challenges {
+		cmd.session.Challenges = append(cmd.session.Challenges, challenge.challengeResult())
+	}
+	return opts.sessionRepo.Create(ctx, opts.DB(), cmd.session)
 }
 
 // String implements [Commander].
-func (c *CreateSessionCommand) String() string {
+func (cmd *CreateSessionCommand) String() string {
 	return "CreateSessionCommand"
 }
 
 // Validate implements [Commander].
-func (c *CreateSessionCommand) Validate(ctx context.Context, opts *InvokeOpts) (err error) {
-	if c.instanceID = strings.TrimSpace(c.instanceID); c.instanceID == "" {
+func (cmd *CreateSessionCommand) Validate(ctx context.Context, opts *InvokeOpts) (err error) {
+	if cmd.session.InstanceID = strings.TrimSpace(cmd.session.InstanceID); cmd.session.InstanceID == "" {
 		return zerrors.ThrowInvalidArgument(nil, "DOM-9n8sdf", "invalid instance ID")
 	}
-	if c.creatorID = strings.TrimSpace(c.creatorID); c.creatorID == "" {
+	if cmd.session.CreatorID = strings.TrimSpace(cmd.session.CreatorID); cmd.session.CreatorID == "" {
 		return zerrors.ThrowInvalidArgument(nil, "DOM-9n8sdf", "invalid creator ID")
 	}
 	return nil
 }
 
-// ID implements [CheckUserParent].
-func (c *CreateSessionCommand) ID() string {
-	return c.sessionID
-}
-
-// InstanceID implements [CheckUserParent].
-func (c *CreateSessionCommand) InstanceID() string {
-	return c.instanceID
-}
-
 // setUserConditionProvider implements [CheckUserParent].
-func (c *CreateSessionCommand) setUserConditionProvider(provider userConditionProvider) {
-	c.user = lazyGetter[*User]{
+func (cmd *CreateSessionCommand) setUserConditionProvider(provider userConditionProvider) {
+	cmd.user = lazyGetter[*User]{
 		get: func(ctx context.Context, opts *InvokeOpts) (*User, error) {
 			return opts.userRepo.Get(ctx, opts.DB(), database.WithCondition(database.And(
-				opts.userRepo.InstanceIDCondition(c.instanceID),
+				opts.userRepo.InstanceIDCondition(cmd.session.InstanceID),
 				provider(ctx, opts),
 			)))
 		},
 	}
 }
 
-// user implements [CheckUserParent].
-func (c *CreateSessionCommand) fetchUser(ctx context.Context, opts *InvokeOpts) (user *User, err error) {
-	return c.user.fetch(ctx, opts)
+// fetchSession implements [CheckPasswordParent] and [CheckUserParent].
+func (cmd *CreateSessionCommand) fetchSession(ctx context.Context, opts *InvokeOpts) (session *Session, err error) {
+	if cmd.session.ID == "" {
+		cmd.session.ID = opts.MustNewID()
+	}
+	return cmd.session, nil
+}
+
+// fetchUser implements [CheckUserParent].
+func (cmd *CreateSessionCommand) fetchUser(ctx context.Context, opts *InvokeOpts) (user *User, err error) {
+	return cmd.user.fetch(ctx, opts)
 }
 
 // reloadUser implements [CheckUserParent].
-func (c *CreateSessionCommand) reloadUser(ctx context.Context, opts *InvokeOpts) (user *User, err error) {
-	return c.user.reload(ctx, opts)
+func (cmd *CreateSessionCommand) reloadUser(ctx context.Context, opts *InvokeOpts) (user *User, err error) {
+	return cmd.user.reload(ctx, opts)
 }
 
 var (
 	_ Commander           = (*CreateSessionCommand)(nil)
 	_ CheckUserParent     = (*CreateSessionCommand)(nil)
 	_ CheckPasswordParent = (*CreateSessionCommand)(nil)
+	_ Querier[*Session]   = (*CreateSessionCommand)(nil)
 )
-
-type sessionCheckSubCommand interface {
-	Commander
-	checkResult() SessionFactor
-}
-
-type sessionChallengeSubCommand interface {
-	Commander
-	challengeResult() SessionChallenge
-}
-
-// func (c *CreateSessionCommand) PreValidation(ctx context.Context, opts *InvokeOpts) error {
-// 	for _, check := range c.checks {
-// 		if preValidator, ok := check.(PreValidator); ok {
-// 			if err := preValidator.PreValidate(ctx, opts); err != nil {
-// 				return err
-// 			}
-// 		}
-// 	}
-// 	for _, challenge := range c.challenges {
-// 		if preValidator, ok := challenge.(PreValidator); ok {
-// 			if err := preValidator.PreValidate(ctx, opts); err != nil {
-// 				return err
-// 			}
-// 		}
-// 	}
-// 	return nil
-// }
-
-// // Events implements [Commander].
-// func (c *CreateSessionCommand) Events(ctx context.Context, opts *InvokeOpts) ([]eventstore.Command, error) {
-// 	// TODO(adlerhurst): add create session event
-// 	var events []eventstore.Command
-// 	for _, check := range c.checks {
-// 		subEvents, err := check.Events(ctx, opts)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		events = append(events, subEvents...)
-// 	}
-// 	return events, nil
-// }
-
-// // Execute implements [Commander].
-// func (c *CreateSessionCommand) Execute(ctx context.Context, opts *InvokeOpts) (err error) {
-// 	session := &Session{
-// 		ID:         opts.MustNewID(),
-// 		InstanceID: c.instanceID,
-// 		CreatorID:  c.creatorID,
-// 		Metadata:   c.metadata,
-// 		UserAgent:  c.userAgent,
-// 	}
-// 	if c.lifetime != nil {
-// 		session.Lifetime = *c.lifetime
-// 	}
-
-// 	for _, check := range c.checks {
-// 		if err := opts.Invoke(ctx, check); err != nil {
-// 			return err
-// 		}
-// 		session.Factors = append(session.Factors, check.checkResult())
-// 	}
-
-// 	for _, challenge := range c.challenges {
-// 		if err := opts.Invoke(ctx, challenge); err != nil {
-// 			return err
-// 		}
-// 		session.Challenges = append(session.Challenges, challenge.challengeResult())
-// 	}
-
-// 	return opts.sessionRepo.Create(ctx, opts.DB(), session)
-// }
-
-// // String implements [Commander].
-// func (c *CreateSessionCommand) String() string {
-// 	return "CreateSessionCommand"
-// }
-
-// // Validate implements [Commander].
-// func (c *CreateSessionCommand) Validate(ctx context.Context, opts *InvokeOpts) (err error) {
-// 	if c.instanceID = strings.TrimSpace(c.instanceID); c.instanceID == "" {
-// 		return zerrors.ThrowInvalidArgument(nil, "DOM-9n8sdf", "invalid instance ID")
-// 	}
-// 	if c.creatorID = strings.TrimSpace(c.creatorID); c.creatorID == "" {
-// 		return zerrors.ThrowInvalidArgument(nil, "DOM-9n8sdf", "invalid creator ID")
-// 	}
-// 	return nil
-// }
-
-// var (
-// 	_ Commander                  = (*CreateSessionCommand)(nil)
-// 	_ CheckSessionUserParent     = (*CreateSessionCommand)(nil)
-// 	_ CheckSessionPasswordParent = (*CreateSessionCommand)(nil)
-// )
-
-// func (cmd *CreateSessionCommand) identifierCheck() SessionCheckUserIdentifier {
-// 	for _, check := range cmd.checks {
-// 		if userIdentifier, ok := check.(SessionCheckUserIdentifier); ok {
-// 			return userIdentifier
-// 		}
-// 	}
-// 	return nil
-// }
-
-// func (cmd *CreateSessionCommand) user(ctx context.Context, opts *InvokeOpts) (user *User, err error) {
-// 	if cmd.fetchedUser != nil {
-// 		return cmd.fetchedUser()
-// 	}
-// 	cmd.fetchedUser = sync.OnceValues(func() (*User, error) {
-// 		user, err := opts.userRepo.Get(ctx, opts.DB(), database.WithCondition(cmd.userCondition(ctx, opts)))
-// 		if err != nil {
-// 			if errors.Is(err, &database.NoRowFoundError{}) {
-// 				return nil, zerrors.ThrowNotFound(err, "DOM-lcZeXI", "user not found")
-// 			}
-// 			return nil, zerrors.ThrowInternal(err, "DOM-Y846I0", "failed fetching user")
-// 		}
-// 		return user, nil
-// 	})
-// 	return cmd.fetchedUser()
-// }
-
-// func (cmd *CreateSessionCommand) userCondition(ctx context.Context, opts *InvokeOpts) database.Condition {
-// 	if cmd.userCond != nil {
-// 		return cmd.userCond
-// 	}
-// 	identifierCheck := cmd.identifierCheck()
-// 	if identifierCheck == nil {
-// 		return nil
-// 	}
-// 	if err := identifierCheck.PreValidation(ctx, opts); err != nil {
-// 		return nil
-// 	}
-// 	return cmd.userCond
-// }

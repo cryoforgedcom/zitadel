@@ -167,6 +167,30 @@ func (o *InvokeOpts) StartTransaction(ctx context.Context, opts *database.Transa
 	return o.StartTransactionFromDB(ctx, o.DB(), opts)
 }
 
+// ensureIsolated ensures that [InvokeOpts.DB] returns a isolated [database.QueryExecutor]
+// which does not cause the parent to fail if one of the following operations fail.
+//
+// the close function ends the transaction and resets [InvokeOpts].db.
+// The caller is responsible to call the returned function to end the transaction.
+// If no new transaction is started, the returned function is a no-op and still safe to call.
+func (o *InvokeOpts) ensureIsolated(ctx context.Context) (close func(err error) error, err error) {
+	tx, ok := o.DB().(database.Transaction)
+	if !ok {
+		// if the current DB is not a transaction, we can be sure that it's isolated and we don't need to start a new transaction.
+		return func(err error) error { return err }, nil
+	}
+
+	sub, err := tx.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	o.db = sub
+	return func(err error) error {
+		o.db = tx
+		return sub.End(ctx, err)
+	}, nil
+}
+
 func (o *InvokeOpts) LegacyEventstore() eventstore.LegacyEventstore {
 	if o.legacyEventstore != nil {
 		return o.legacyEventstore

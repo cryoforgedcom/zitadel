@@ -18,12 +18,13 @@ type CheckUserCommand struct {
 	userID    *string
 	loginName *string
 
-	user *User
+	user   *User
+	factor *SessionFactorUser
 }
 
 // Result implements [Querier].
-func (cmd *CheckUserCommand) Result() *SessionCheckError {
-	panic("unimplemented")
+func (cmd *CheckUserCommand) Result() *User {
+	return cmd.user
 }
 
 func NewCheckUserCommand(parent CheckUserParent, userID, loginName *string) *CheckUserCommand {
@@ -42,13 +43,17 @@ func (cmd *CheckUserCommand) Events(ctx context.Context, opts *InvokeOpts) ([]ev
 	if cmd.user.Human != nil && !cmd.user.Human.PreferredLanguage.IsRoot() {
 		preferredLanguage = &cmd.user.Human.PreferredLanguage
 	}
+	fetchedSession, err := cmd.parent.fetchSession(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
 	return []eventstore.Command{
 		session.NewUserCheckedEvent(
 			ctx,
-			&session.NewAggregate(cmd.parent.ID(), cmd.parent.InstanceID()).Aggregate,
+			&session.NewAggregate(fetchedSession.ID, fetchedSession.InstanceID).Aggregate,
 			cmd.user.ID,
 			cmd.user.OrganizationID,
-			time.Now(), // TODO(adlerhurst): use a consistent time source
+			cmd.factor.LastVerifiedAt,
 			preferredLanguage,
 		),
 	}, nil
@@ -56,8 +61,30 @@ func (cmd *CheckUserCommand) Events(ctx context.Context, opts *InvokeOpts) ([]ev
 
 // Execute implements [Commander].
 func (cmd *CheckUserCommand) Execute(ctx context.Context, opts *InvokeOpts) (err error) {
+	close, err := opts.ensureIsolated(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = close(err)
+	}()
 	cmd.user, err = cmd.parent.fetchUser(ctx, opts)
-	return err
+	if err != nil && zerrors.IsNotFound(err) {
+		return nil
+	}
+	session, err := cmd.parent.fetchSession(ctx, opts)
+	if err != nil {
+		return err
+	}
+	if session.UserID != "" && cmd.user.ID != "" && session.UserID != cmd.user.ID {
+		return zerrors.ThrowInvalidArgument(nil, "DOM-78g1TV", "user change not possible")
+	}
+	cmd.factor = &SessionFactorUser{
+		UserID:         cmd.user.ID,
+		LastVerifiedAt: time.Now(), // TODO(adlerhurst): use a consistent time source
+	}
+
+	return nil
 }
 
 // String implements [Commander].
@@ -82,34 +109,23 @@ func (cmd *CheckUserCommand) userCondition(ctx context.Context, opts *InvokeOpts
 
 // checkResult implements [sessionCheckSubCommand].
 func (cmd *CheckUserCommand) checkResult() SessionFactor {
-	return &SessionFactorUser{
-		UserID:         cmd.user.ID,
-		LastVerifiedAt: time.Now(), // TODO(adlerhurst): use a consistent time source
-	}
+	return cmd.factor
 }
 
 var (
-	_ Commander                   = (*CheckUserCommand)(nil)
-	_ Querier[*SessionCheckError] = (*CheckUserCommand)(nil)
-	_ sessionCheckSubCommand      = (*CheckUserCommand)(nil)
+	_ Commander      = (*CheckUserCommand)(nil)
+	_ Querier[*User] = (*CheckUserCommand)(nil)
 )
 
 type CheckUserParent interface {
 	// setUserConditionProvider is used to set the user condition provider for the command.
 	setUserConditionProvider(provider userConditionProvider)
 
-	// ID returns the session ID for the command.
-	// It is used to generate the events.
-	ID() string
-	// InstanceID returns the instance ID for the command.
-	// It is used to generate the events.
-	InstanceID() string
-
+	// fetchSession is used to fetch the session.
+	fetchSession(ctx context.Context, opts *InvokeOpts) (session *Session, err error)
 	// fetchUser is used to fetch the user based on the condition set by setUserConditionProvider.
 	// It might get called multiple times, so it should be implemented with caching in mind.
 	fetchUser(ctx context.Context, opts *InvokeOpts) (user *User, err error)
-	// reloadUser is used refresh the user data, if it has been changed during the execution of the command.
-	reloadUser(ctx context.Context, opts *InvokeOpts) (user *User, err error)
 }
 
 type userConditionProvider func(ctx context.Context, opts *InvokeOpts) (condition database.Condition)

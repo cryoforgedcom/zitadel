@@ -20,6 +20,24 @@ func checksToCommands[P sessionCommand](parent P, checks *session.Checks) []doma
 	if checks.GetPassword() != nil {
 		cmds = append(cmds, passwordCheckToCommand(parent, checks.GetPassword()))
 	}
+	// if checks.GetWebAuthN() != nil {
+	// 	cmds = append(cmds, webAuthNCheckToCommand(parent, checks.GetWebAuthN()))
+	// }
+	// if checks.GetIdpIntent() != nil {
+	// 	cmds = append(cmds, idpIntentCheckToCommand(parent, checks.GetIdpIntent()))
+	// }
+	// if checks.GetTotp() != nil {
+	// 	cmds = append(cmds, totpCheckToCommand(parent, checks.GetTotp()))
+	// }
+	// if checks.GetOtpSms() != nil {
+	// 	cmds = append(cmds, otpSMSCheckToCommand(parent, checks.GetOtpSms()))
+	// }
+	// if checks.GetOtpEmail() != nil {
+	// 	cmds = append(cmds, otpEmailCheckToCommand(parent, checks.GetOtpEmail()))
+	// }
+	// if checks.GetRecoveryCode() != nil {
+	// 	cmds = append(cmds, recoveryCodeCheckToCommand(parent, checks.GetRecoveryCode()))
+	// }
 	return cmds
 }
 
@@ -39,5 +57,5 @@ func userCheckToCommand[P sessionCommand](parent P, check *session.CheckUser) do
 }
 
 func passwordCheckToCommand[P sessionCommand](parent P, check *session.CheckPassword) domain.Commander {
-	return domain.NewCheckPasswordCommand2(parent, check.GetPassword())
+	return domain.NewCheckPasswordCommand(parent, check.GetPassword())
 }

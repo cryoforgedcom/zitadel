@@ -6,9 +6,11 @@ import (
 	"net/http"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/zitadel/zitadel/backend/v3/domain"
 	"github.com/zitadel/zitadel/internal/api/authz"
+	"github.com/zitadel/zitadel/pkg/grpc/object/v2"
 	"github.com/zitadel/zitadel/pkg/grpc/session/v2"
 )
 
@@ -19,9 +21,9 @@ func CreateSession(ctx context.Context, request *connect.Request[session.CreateS
 // CreateSession implements [sessionconnect.SessionServiceHandler].
 func (s *server) CreateSession(ctx context.Context, request *connect.Request[session.CreateSessionRequest]) (*connect.Response[session.CreateSessionResponse], error) {
 	instanceID := authz.GetInstance(ctx).InstanceID()
-	userID := authz.GetCtxData(ctx).UserID
+	creatorID := authz.GetCtxData(ctx).UserID
 
-	create := createSessionRequestToCommand(instanceID, userID, request.Msg)
+	create := createSessionRequestToCommand(instanceID, creatorID, request.Msg)
 	checks := checksToCommands(create, request.Msg.GetChecks())
 
 	batch := domain.BatchExecutors(create)
@@ -33,11 +35,19 @@ func (s *server) CreateSession(ctx context.Context, request *connect.Request[ses
 		return nil, err
 	}
 
-	return connect.NewResponse(&session.CreateSessionResponse{}), nil
+	return connect.NewResponse(&session.CreateSessionResponse{
+		SessionId:    create.Result().ID,
+		SessionToken: create.Result().TokenID, // TODO(adlerhurst): return the correct value
+		Details: &object.Details{
+			ResourceOwner: create.Result().InstanceID,
+			CreationDate:  timestamppb.New(create.Result().CreatedAt),
+		},
+		Challenges: &session.Challenges{}, // TODO(adlerhurst): return the correct values
+	}), nil
 }
 
 func createSessionRequestToCommand(instanceID, userID string, request *session.CreateSessionRequest) *domain.CreateSessionCommand {
-	createOpts := make([]domain.CreateSessionOption, 0, 2)
+	opts := make([]domain.CreateSessionOption, 0, 2)
 	if len(request.GetMetadata()) > 0 {
 		metadata := make([]*domain.SessionMetadata, 0, len(request.GetMetadata()))
 		for key, value := range request.GetMetadata() {
@@ -49,18 +59,17 @@ func createSessionRequestToCommand(instanceID, userID string, request *session.C
 				},
 			})
 		}
-		createOpts = append(createOpts, domain.WithSessionMetadata(metadata...))
+		opts = append(opts, domain.WithSessionMetadata(metadata...))
 	}
 	if request.GetLifetime().IsValid() {
-		createOpts = append(createOpts, domain.WithSessionLifetime(request.GetLifetime().AsDuration()))
+		opts = append(opts, domain.WithSessionLifetime(request.GetLifetime().AsDuration()))
 	}
-	create := domain.NewCreateSessionCommand(
+	return domain.NewCreateSessionCommand(
 		instanceID,
 		userID,
 		userAgentToDomain(request.GetUserAgent()),
-		createOpts...,
+		opts...,
 	)
-	return create
 }
 
 func userAgentToDomain(userAgent *session.UserAgent) *domain.SessionUserAgent {

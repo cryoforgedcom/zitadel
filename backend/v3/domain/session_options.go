@@ -4,6 +4,7 @@ import "time"
 
 type SessionCommandOption interface {
 	CreateSessionOption
+	SetSessionOption
 }
 
 func WithSessionMetadata(metadata ...*SessionMetadata) SessionCommandOption {
@@ -14,13 +15,22 @@ type sessionMetadataOption struct {
 	metadata []*SessionMetadata
 }
 
-func (smo sessionMetadataOption) ApplyOnCreateSessionCommand(cmd *CreateSessionCommand) {
-	cmd.metadata = append(cmd.metadata, smo.metadata...)
+// ApplyOnSetSessionCommand implements [SetSessionOption].
+func (opt sessionMetadataOption) ApplyOnSetSessionCommand(cmd *SetSessionCommand) {
+	cmd.metadata = append(cmd.metadata, opt.metadata...)
 }
 
-var _ CreateSessionOption = sessionMetadataOption{}
+// ApplyOnCreateSessionCommand implements [CreateSessionOption].
+func (opt sessionMetadataOption) ApplyOnCreateSessionCommand(cmd *CreateSessionCommand) {
+	cmd.session.Metadata = append(cmd.session.Metadata, opt.metadata...)
+}
 
-func WithSessionUserAgent(userAgent *SessionUserAgent) SessionCommandOption {
+var (
+	_ CreateSessionOption = sessionMetadataOption{}
+	_ SetSessionOption    = sessionMetadataOption{}
+)
+
+func WithSessionUserAgent(userAgent *SessionUserAgent) CreateSessionOption {
 	return sessionUserAgentOption{userAgent: userAgent}
 }
 
@@ -28,8 +38,8 @@ type sessionUserAgentOption struct {
 	userAgent *SessionUserAgent
 }
 
-func (sua sessionUserAgentOption) ApplyOnCreateSessionCommand(cmd *CreateSessionCommand) {
-	cmd.userAgent = sua.userAgent
+func (opt sessionUserAgentOption) ApplyOnCreateSessionCommand(cmd *CreateSessionCommand) {
+	cmd.session.UserAgent = opt.userAgent
 }
 
 var _ CreateSessionOption = sessionUserAgentOption{}
@@ -42,28 +52,17 @@ type sessionLifetimeOption struct {
 	lifetime time.Duration
 }
 
-func (slo sessionLifetimeOption) ApplyOnCreateSessionCommand(cmd *CreateSessionCommand) {
-	cmd.lifetime = &slo.lifetime
+// ApplyOnSetSessionCommand implements [SetSessionOption].
+func (opt sessionLifetimeOption) ApplyOnSetSessionCommand(cmd *SetSessionCommand) {
+	cmd.lifetime = &opt.lifetime
 }
-
-var _ CreateSessionOption = sessionLifetimeOption{}
-
-type SessionCheckOption func(*CreateSessionCommand) Commander
 
 // ApplyOnCreateSessionCommand implements [CreateSessionOption].
-func (s SessionCheckOption) ApplyOnCreateSessionCommand(cmd *CreateSessionCommand) {
-	// cmd.checks = append(cmd.checks, s)
-	panic("unimplemented")
+func (opt sessionLifetimeOption) ApplyOnCreateSessionCommand(cmd *CreateSessionCommand) {
+	cmd.session.Lifetime = opt.lifetime
 }
 
-var _ CreateSessionOption = SessionCheckOption(nil)
-
-type SessionChallengeOption func(*CreateSessionCommand) Commander
-
-// ApplyOnCreateSessionCommand implements [CreateSessionOption].
-func (s SessionChallengeOption) ApplyOnCreateSessionCommand(cmd *CreateSessionCommand) {
-	// cmd.challenges = append(cmd.challenges, s)
-	panic("unimplemented")
-}
-
-var _ CreateSessionOption = SessionChallengeOption(nil)
+var (
+	_ CreateSessionOption = sessionLifetimeOption{}
+	_ SetSessionOption    = sessionLifetimeOption{}
+)
