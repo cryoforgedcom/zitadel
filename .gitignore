@@ -107,3 +107,7 @@ CLAUDE.md
 
 docs_old
 apps/docs/package-lock.json
+
+.nx/polygraph
+.claude/worktrees
+.claude/settings.local.json
