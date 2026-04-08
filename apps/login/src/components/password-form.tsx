@@ -120,8 +120,8 @@ export function PasswordForm({ loginSettings, loginName, organization, defaultOr
             {...register("password", { required: t("verify.required.password") })}
             label={t("verify.labels.password")}
             data-testid="password-text-input"
-          />
-          {!loginSettings?.hidePasswordReset && (
+          /></div>
+          <div className="w-full text-center mt-2">{!loginSettings?.hidePasswordReset && (
             <button
               className="text-sm transition-all hover:text-primary-light-500 dark:hover:text-primary-dark-500"
               onClick={() => resetPasswordAndContinue()}

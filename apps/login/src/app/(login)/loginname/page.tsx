@@ -48,7 +48,7 @@ export default async function Page(props: { searchParams: Promise<Record<string 
   return (
     <DynamicTheme branding={branding}>
       <div className="flex flex-col space-y-4">
-        <h1>
+        <h1 className="text-2xl font-bold">
           <Translated i18nKey="title" namespace="loginname" />
         </h1>
         <p className="ztdl-p">

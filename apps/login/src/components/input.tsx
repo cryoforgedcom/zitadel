@@ -21,8 +21,8 @@ export type TextInputProps = DetailedHTMLProps<InputHTMLAttributes<HTMLInputElem
 const styles = (error: boolean, disabled: boolean, roundnessClasses: string = "rounded-md") =>
   clsx(
     {
-      "h-[40px] mb-[2px] p-[7px] bg-input-light-background dark:bg-input-dark-background transition-colors duration-300 grow": true,
-      "border border-input-light-border dark:border-input-dark-border hover:border-black hover:dark:border-white focus:border-primary-light-500 focus:dark:border-primary-dark-500": true,
+      "h-[44px] mb-[2px] p-3 bg-input-light-background dark:bg-input-dark-background transition-colors duration-300 grow": true,
+      "border border-input-light-border dark:border-[#334155] hover:border-black hover:dark:border-white focus:border-primary-light-500 focus:dark:border-primary-dark-500": true,
       "focus:outline-none focus:ring-0 text-base text-black dark:text-white placeholder:italic placeholder-gray-700 dark:placeholder-gray-700": true,
       "border border-warn-light-500 dark:border-warn-dark-500 hover:border-warn-light-500 hover:dark:border-warn-dark-500 focus:border-warn-light-500 focus:dark:border-warn-dark-500":
         error,
@@ -59,8 +59,8 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
     const actualRoundness = roundness || getDefaultInputRoundness();
 
     return (
-      <label className="relative flex flex-col text-12px text-input-light-label dark:text-input-dark-label">
-        <span className={`mb-1 leading-3 ${error ? "text-warn-light-500 dark:text-warn-dark-500" : ""}`}>
+      <label className="relative flex flex-col text- text-input-light-label dark:text-input-dark-label">
+        <span className={`mb-2 leading-3 ${error ? "text-warn-light-500 dark:text-warn-dark-500" : ""}`}>
           {label} {required && "*"}
         </span>
         <input

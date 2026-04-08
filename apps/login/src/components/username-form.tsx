@@ -112,10 +112,11 @@ export function UsernameForm({
             label={inputLabel}
             data-testid="username-text-input"
             suffix={suffix}
-          />
+          /></div>
+          <div className="w-full text-center">
           {allowRegister && (
             <button
-              className="text-sm transition-all hover:text-primary-light-500 dark:hover:text-primary-dark-500"
+              className="text-sm transition-all hover:text-primary-light-500 dark:hover:text-primary-dark-500 dark:text-primary-light-500 text-center mt-4 font-semibold"
               onClick={() => {
                 const registerParams = new URLSearchParams();
                 if (organization) {
@@ -131,7 +132,7 @@ export function UsernameForm({
               disabled={loading}
               data-testid="register-button"
             >
-              <Translated i18nKey="register" namespace="loginname" />
+              <span className="hover:text-black text-black dark:text-white font-normal">New here? </span><Translated i18nKey="register" namespace="loginname" />
             </button>
           )}
         </div>
