@@ -1,6 +1,12 @@
 services:
   devcontainer:
     image: mcr.microsoft.com/devcontainers/typescript-node:22-bookworm
+    extra_hosts:
+      - "db:host-gateway"
+      - "api:host-gateway"
+      - "login:host-gateway"
+      - "db-api-integration:host-gateway"
+      - "db-functional-ui:host-gateway"
     volumes:
       - ../:/workspaces/zitadel:cached
     command: sleep infinity
@@ -29,7 +35,7 @@ services:
     volumes:
       - db-data-dev:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready", "-U", "postgres"]
+      test: [ "CMD-SHELL", "pg_isready", "-U", "postgres" ]
       interval: "10s"
       timeout: "30s"
       retries: 5
@@ -45,7 +51,7 @@ services:
       PGPORT: 5433
     command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all -c shared_buffers=1GB -c work_mem=16MB -c effective_io_concurrency=100 -c wal_level=minimal -c archive_mode=off -c max_wal_senders=0
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready", "-U", "postgres"]
+      test: [ "CMD-SHELL", "pg_isready", "-U", "postgres" ]
       interval: "10s"
       timeout: "30s"
       retries: 5
@@ -65,7 +71,7 @@ services:
     environment:
       PGPORT: 5434
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready", "-U", "postgres"]
+      test: [ "CMD-SHELL", "pg_isready", "-U", "postgres" ]
       interval: "10s"
       timeout: "30s"
       retries: 5
