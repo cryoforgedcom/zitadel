@@ -27,6 +27,20 @@
         ]
     },
     "targets": {
+        "dev": {
+            "description": "Runs the Go-based API backend in development mode",
+            "continuous": true,
+            "dependsOn": [
+                "build"
+            ],
+            "executor": "nx:run-commands",
+            "options": {
+                "parallel": false,
+                "commands": [
+                    " ./env.sh ./.artifacts/bin/$(go env GOOS)/$(go env GOARCH)/${ZITADEL_BINARY:-zitadel.local} start-from-init --masterkey MasterkeyNeedsToHave32Characters"
+                ]
+            }
+        },
         "prod": {
             "description": "Runs the Go-based API backend in production mode",
             "continuous": true,
