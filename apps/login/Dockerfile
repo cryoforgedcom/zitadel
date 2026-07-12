@@ -1,4 +1,5 @@
 FROM node:24-alpine
+ARG NEXT_PUBLIC_BASE_PATH
 WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
@@ -15,8 +16,9 @@ ENV HOSTNAME="::" \
     SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt" \
     ZITADEL_TLS_ENABLED="false" \
     OTEL_SERVICE_NAME="zitadel-login" \
-    OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
+    OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf" \
+    NEXT_PUBLIC_BASE_PATH="${NEXT_PUBLIC_BASE_PATH}"
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD ["/usr/local/bin/node", "/app/healthcheck.mjs", "/ui/v2/login/ready"]
+    CMD ["/usr/local/bin/node", "/app/healthcheck.mjs"]
 ENTRYPOINT ["/app/entrypoint.sh", "node", "apps/login/server.js"]
